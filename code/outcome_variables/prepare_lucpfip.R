@@ -144,11 +144,11 @@ prepare_pixel_lucpfip <- function(island){
   ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
   #### Prepare loss layer from GFC data  ####
   
-    # Import gfc data prepare (Downloaded, extracted, thresholded with gfcanalysis package in prepare_gfc.R)
+    # Import gfc data prepared (Downloaded, extracted, thresholded with gfcanalysis package in prepare_gfc.R)
     thed_gfc_data <- brick(file.path(paste0("temp_data/processed_lu/gfc_data_Indonesia_30th.tif"))) 
 
     
-    ### Select the loss layer (15 ad 40 are arbitrary, the max value of loss layer is an integer corresponding 
+    ### Select the loss layer (15 and 40 are arbitrary, the max value of loss layer is an integer corresponding 
     # to the latest year after 2000 when loss is observed. We need a GFC version with this year being at least 2015. 
     # and we do not want to select a layer with percentage and values up to 100. 
     
@@ -888,6 +888,7 @@ for(Island in IslandS){
     CR <- CR + 20000
   }
 }
+
 
 #### Gather the lucfip variables for each parcel_size and catchment_radius combinations. ####
 PS <- 3000  

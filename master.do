@@ -268,6 +268,12 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
 		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
 
+	*** prepare parcel maps of annual LUC from primary forest to small and medium size plantations (LUCPFSP) 
+		rsource using "code/outcome_variables/prepare_lucpfsp"
+		* input: 		
+
+
+
 
 	*** prepare parcel maps and dataframes of baseline forest extents according to different definitions
 	rsource using "code/outcome_variables/prepare_2000_forest_extents.R"
