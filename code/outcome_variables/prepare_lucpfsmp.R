@@ -687,19 +687,19 @@ for(Island in IslandS){
 }
 
 ### For that Island and for each aggregation factor, extract panels of parcels within different catchment area sizes 
-# (radius of 30km and 50km)
+# (radius of 10km, 30km and 50km)
 PS <- 3000
 IslandS <- c("Sumatra", "Kalimantan", "Papua")
 for(Island in IslandS){
-  CR <- 30000 # i.e. 30km radius
-  while(CR < 60000){
+  CR <- 10000 # i.e. 10km radius
+  #while(CR < 60000){
    
     to_panel_within_CR(island = Island,
                        parcel_size = PS,
                        catchment_radius = CR)
     
-    CR <- CR + 20000
-  }
+  #  CR <- CR + 20000
+  #}
 }
 
 
@@ -708,7 +708,7 @@ for(Island in IslandS){
 PS <- 3000  
 sampleS <- c("IBS", "UML")
 for(sample in sampleS){
-  CR <- 30000 # i.e. 30km radius
+  CR <- 10000 # i.e. 10km radius
   while(CR < 60000){
     
     # For each Island, join columns of plantation type variable 

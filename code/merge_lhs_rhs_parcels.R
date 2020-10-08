@@ -61,17 +61,32 @@ lucpfip <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_"
 
 lucfip <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfip_panel_",
                                     parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
+
+lucpfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",
+                                     parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
+
 # keep only year before 2015 (after they mean nothing since we plantation data are from 2015)
 lucpfip <- lucpfip[lucpfip$year<=2015,] # now runs from 2001-1998
 lucfip <- lucfip[lucfip$year<=2015,] # now runs from 2001-1998
+lucpfsmp <- lucpfsmp[lucpfsmp$year<=2015,] # now runs from 2001-1998
 
 # remove coordinates, they are already in RHS
 lucpfip <- dplyr::select(lucpfip, -lat, -lon)
 lucfip <- dplyr::select(lucfip, -lat, -lon)
+lucpfsmp <- dplyr::select(lucpfsmp, -lat, -lon)
 
 
 nrow(lucpfip)==nrow(lucfip)
 LHS <- base::merge(lucpfip, lucfip, by = c("parcel_id", "year"))
+LHS <- base::merge(LHS, lucpfsmp, by = c("parcel_id", "year"))
+
+# make variable that counts lucfp events on both small and medium sized plantations 
+LHS$lucpfsmp_pixelcount_total <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
+LHS$lucpfsmp_ha_total <- LHS$lucpfsp_ha_total + LHS$lucpfmp_ha_total
+
+LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
+LHS$lucfsmp_ha_30th <- LHS$lucfsp_ha_30th + LHS$lucfmp_ha_30th
+
 
 # explicative variables (runs from 1998-2015)
 RHS <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
@@ -92,8 +107,8 @@ parcels <- base::merge(LHS, RHS, by = c("parcel_id", "year"), all = FALSE)
 #                        "lucfip_ha_30th", "lucfip_ha_60th", "lucfip_ha_90th", 
 #                        "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th")
 
-# retirer cette ligne à la fin, mais pour l'instant ça fait gagner du temps, on a pas besoin de toutes les autres
-outcome_variables <- "lucpfip_pixelcount_total"
+# retirer cette ligne a la fin, mais pour l'instant fait gagner du temps, on a pas besoin de toutes les autres
+outcome_variables <- c("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total", "lucpfmp_pixelcount_total", "lucpfsp_pixelcount_total")
 
 for(voi in outcome_variables){
   ## different lags
@@ -146,7 +161,15 @@ for(voi in outcome_variables){
   }
 }
 
-  
+
+### PRICE LOGARITHMS
+# select prices for which it's relevant/useful to compute the log
+price_variables <- names(d)[grepl(pattern = "price_", x = names(d)) &
+                            !grepl(pattern = "pko", x = names(d)) &
+                            !grepl(pattern = "dev", x = names(d)) &
+                            !grepl(pattern = "yoyg", x = names(d))]
+
+
 ## some arrangements
 parcels <- dplyr::arrange(parcels, parcel_id, year)
 row.names(parcels) <- seq(1,nrow(parcels))
@@ -185,6 +208,9 @@ write.dta(toc, file.path(paste0("temp_data/panel_parcels_ip_final_",
                                 parcel_size/1000,"km_",
                                 catchment_radius/1000,"CR.dta")))
 }
+
+
+
 #### TESTING ZONE #### 
 # names(LHS)  
 # names(RHS)  

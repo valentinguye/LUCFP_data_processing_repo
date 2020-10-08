@@ -536,7 +536,17 @@ parcels$wa_prex_cpo_imp2 <- parcels$wa_prex_cpo_imp2/100
     
     }
   }  
-
+  
+  # remove some variables that were only temporarily necessary
+  vars_torm <- names(parcels)[grepl(pattern = "price_", x = names(parcels)) &
+                              (grepl(pattern = "_lag2", x = names(parcels)) |
+                              grepl(pattern = "_lag3", x = names(parcels)) |
+                              grepl(pattern = "_lag4", x = names(parcels)) |
+                              grepl(pattern = "_lag5", x = names(parcels)))]
+  
+  parcels <- parcels[,!(names(parcels) %in% vars_torm)]
+  
+  
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
                                     parcel_size/1000,"km_",
                                     catchment_radius/1000,"CR.rds")))  
