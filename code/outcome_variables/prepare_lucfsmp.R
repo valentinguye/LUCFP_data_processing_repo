@@ -1,7 +1,7 @@
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 # 
 # 
-#       BUILDING PANEL DATAFRAMES OF LAND USE CHANGE FROM PRIMARY FOREST TO INDUSTRIAL PLANTATION (lucpfsmp)
+#       BUILDING PANEL DATAFRAMES OF LAND USE CHANGE FROM PRIMARY FOREST TO INDUSTRIAL PLANTATION (lucfsmp)
 # 
 #   Inputs:   * Island polygons 
 #             ---> temp_data/processed_indonesia_spatial/island_sf 
@@ -18,13 +18,13 @@
 #             * Georeferenced mills (from georeferencing works)                                           
 #             ---> IBS_UML_panel.dta
 #
-#   Main outputs:  panel dataframes of lucpfsmp pixel-event count in parcels of a given size, from 2001 to 2018,  
+#   Main outputs:  panel dataframes of lucfsmp pixel-event count in parcels of a given size, from 2001 to 2018,  
 #                 for the whole Indonesia (Sumatra, Kalimantan, Papua "row-binded"), 
 #                 for 3 forest definitions (30% canopy closure in intact, degraded, and intact or degraded (total) primary forest).
 #             
 #             There is one such dataframe for each combination of parcel size (only 3x3km for now) and catchment radius (10, 30, 50km)
-#             ---> lucpfsmp_panel_3km_30CR.rds 
-#             ---> lucpfsmp_panel_3km_50CR.rds
+#             ---> lucfsmp_panel_3km_30CR.rds 
+#             ---> lucfsmp_panel_3km_50CR.rds
 # 
 #   
 #   Actions:  This script consists of mainly three functions.  
@@ -33,9 +33,9 @@
 #                             considering that this script executes parallel functions using parallel::detectCores() - 1
 #                             It is recommended to not change default memory raster options. 
 #
-#             1. prepare_pixel_lucpfsmp(island)
+#             1. prepare_pixel_lucfsmp(island)
 # 
-#             2. aggregate_lucpfsmp(island, parcel_size)
+#             2. aggregate_lucfsmp(island, parcel_size)
 # 
 #             3. to_panel_within_CR(island, parcel_size, catchment_radius)
 #
@@ -160,174 +160,161 @@ rm(smop, sop, mop)
 
 
 
-# so, among small and medium size indonesian oil palm plantations,  >~ 2Mha are in oil palm mix, and >~1Mha are oil palm. 
-# anyways. 
-
-
-# So, steps are: 
-# 1 melt all shapes of small and all shapes of medium plantations. 
-# read in loss and primary forest rasters
-# overlay as in prepare_lucfip but without industrial plantations
-# then overlay with the prepared polygons. 
-# then replicate steps of prepare_lucfip but with new names 
-# in particular, let's prepare only total primary forest and 30th 
-
-
-
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
-##### 1. PREPARE 30m PIXEL-LEVEL MAPS OF LUCPFSMP ##### 
+##### 1. PREPARE 30m PIXEL-LEVEL MAPS OF lucfsmp ##### 
 
-prepare_pixel_lucpfsmp <- function(island){
+prepare_pixel_lucfsmp <- function(island){
   
-#### Overlay forest loss, primary forest, and small and medium sized oil palm plantations ####
-
-### First step: keep forest loss pixels only within primary forest. 
-
-# We do this only for total primary forest type: 
-# Thus, we define only one overlay function.
-overlay_total    <- function(rs){rs[[1]]*(rs[[2]] != 0)}
-# multiplies a cell of forest loss (rs[[1]]) by 0 if it something else than either 
-# intact or degraded primary forest in 2000 (overlay_total)
-
-## Read necessary layers and stack them 
-
-# GFC loss layer (rs[[1]])
-loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
-
-# primary forest (rs[[2]])
-pf <- raster(file.path(paste0("temp_data/processed_lu/margono_primary_forest_",island,"_aligned.tif")))
-
-# stack is necessary for clusterR
-rs <- raster::stack(loss, pf)
-
-# note that using calc below is equivalent to using overlay but more appropriate to the input being a stack, 
-# which is necessary to pass several raster layers to the first argument of clusterR
-
-# run the computation in parallel with clusterR, as cells are processed one by one independently.
-beginCluster() # uses by default detectedCores() - 1
-# For total primary forest
-clusterR(rs,
-         fun = calc, 
-         args = list(overlay_total),
-         filename = file.path(paste0("temp_data/processed_lu/loss_in_totalpf_",island,".tif")),
-         datatype = "INT1U",
-         overwrite = TRUE )
-
-endCluster()
-
-rm(loss, pf, overlay_total)
-removeTmpFiles(h=0)
-
-
-print(paste0("complete ", "temp_data/processed_lu/loss_in_totalpf_",island,".tif"))
-
-
-### Second step: mask this raster of forest loss within primary forest with polygons of small and medium sized plantations
-
-loss_pf <- raster(file.path(paste0("temp_data/processed_lu/loss_in_totalpf_",island,".tif")))
-
-# all cells that are not covered by the Spatial object are set to updatevalue
-
-# small sized plantations
-mask(loss_pf,
-     sop_sp,
-     updatevalue = 0, 
-     filename = file.path(paste0("temp_data/processed_lu/lucpfsp_",island,"_total.tif")),
-     datatype = "INT1U",
-     overwrite = TRUE)
-
-# medium sized plantations
-mask(loss_pf,
-     mop_sp,
-     updatevalue = 0, 
-     filename = file.path(paste0("temp_data/processed_lu/lucpfmp_",island,"_total.tif")),
-     datatype = "INT1U",
-     overwrite = TRUE)
-
-removeTmpFiles(h=0)
-
-
-### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
-#### Split LUCFP to annual layers ####
-
-### Function description
-# parallel_split has for input a single lucpfsmp layer where each pixel has a value corresponding to the year when a lucpfsmp event occured;
-# it outputs annual layers in each of which pixels are either 1 if a lucpfsmp event occured that year, and 0 else.
-# the tasks are year specific and independent across years, therefore they are executed parallely over years.
-parallel_split <- function(plant_type, ncores){
+  #### Overlay forest loss, primary forest, and small and medium sized oil palm plantations ####
   
-  ## sequence over which to execute the task.
-  # We attribute the tasks to CPU "workers" at the annual level and not at the plantation type level.
-  # Hence, if a worker is done with its annual task before the others it can move on to the next one and workers' labor is maximized wrt.
-  # attributing tasks at the plantation type level.
-  years <- seq(from = 2001, to = 2018, by = 1)
+  ### First step: keep forest loss pixels only OUTSIDE INDUSTRIAL PLANTATIONS 
   
-  ## read the input to the task
-  # is done within each task because it is each time different here.
+  # We do this only for 30th forest type: 
+  # Thus, we define only one overlay function.
+  # overlay function
+  overlay_maps <- function(rs){rs[[1]]*(1-rs[[2]])}
+  # multiplies a cell of forest loss (rs[[1]]) by 0 (i.e. "removes" it) if it is a plantation in 2000 (rs[[2]])
   
-  ## define the task
-  annual_split <- function(time){
-    # define process (island, plant_type) we are in 
-    process <- file.path(paste0("temp_data/processed_lu/lucpf",plant_type,"p_",island,"_total.tif"))
-    
-    # #set temp directory
-    dir.create(paste0(process,"_Tmp"), showWarnings = FALSE)
-    rasterOptions(tmpdir=file.path(paste0(process,"_Tmp")))
-    
-    # read in the input
-    lucpfsmp_prj <- raster(process)
-    
-    # define output file name 
-    output_filename <- file.path(paste0("temp_data/processed_lu/annual_maps/lucpf",plant_type,"p_",island,"_total_", years[time],".tif"))
-    
-    # split it into annual binary layers
-    calc(lucpfsmp_prj,
-         fun = function(x){if_else(x == time, true = 1, false = 0)},
-         filename = output_filename,
-         datatype = "INT1U",
-         overwrite = TRUE )
-    # remove process temporary files
-    unlink(file.path(paste0(process,"_Tmp")), recursive = TRUE)
-  }
+  ## Read necessary layers and stack them 
   
-  ## register cluster
-  registerDoParallel(cores = ncores)
+  # GFC loss layer (rs[[1]])
+  loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
   
-  ## define foreach object.
-  foreach(t = 1:length(years),
-          # .combine combine the outputs as a mere character list (by default)
-          .inorder = FALSE, # we don't care that the results be combine in the same order they were submitted
-          .multicombine = TRUE,
-          .export = c("island"),
-          .packages = c("dplyr", "raster", "rgdal")
-  ) %dopar%  annual_split(time = t)
-}
-
-### Execute it for each primary forest type
-
-plant_typeS <- c("s", "m")
-for(plant_type in plant_typeS){
+  # 2000 industrial plantations (rs[[2]])
+  ioppm2000 <- raster(file.path(paste0("temp_data/processed_lu/austin_ioppm_2000_",island,"_aligned.tif")))
   
-  parallel_split(plant_type = plant_type, detectCores() - 1) # ~500 seconds / annual layer
+  # stack is necessary for clusterR
+  rs <- raster::stack(loss, ioppm2000)
+  
+  # note that using calc below is equivalent to using overlay but more appropriate to the input being a stack, 
+  # which is necessary to pass several raster layers to the first argument of clusterR
+  
+  # run the computation in parallel with clusterR, as cells are processed one by one independently.
+  beginCluster() # uses by default detectedCores() - 1
+  # For 30th forest
+  clusterR(rs,
+           fun = calc, 
+           args = list(overlay_maps),
+           filename = file.path(paste0("temp_data/processed_lu/loss_out_30th_",island,".tif")),
+           datatype = "INT1U",
+           overwrite = TRUE )
+  
+  endCluster()
+  
+  rm(loss, ioppm2000, overlay_maps)
+  removeTmpFiles(h=0)
+  
+  
+  print(paste0("complete ", "temp_data/processed_lu/loss_out_30th_",island,".tif"))
+  
+  
+  ### Second step: mask this raster of forest loss within primary forest with polygons of small and medium sized plantations
+  
+  loss_30th <- raster(file.path(paste0("temp_data/processed_lu/loss_out_30th_",island,".tif")))
+  
+  # all cells that are not covered by the Spatial object are set to updatevalue
+  
+  # small sized plantations
+  mask(loss_30th,
+       sop_sp,
+       updatevalue = 0, 
+       filename = file.path(paste0("temp_data/processed_lu/lucfsp_",island,"_30th.tif")),
+       datatype = "INT1U",
+       overwrite = TRUE)
+  
+  # medium sized plantations
+  mask(loss_30th,
+       mop_sp,
+       updatevalue = 0, 
+       filename = file.path(paste0("temp_data/processed_lu/lucfmp_",island,"_30th.tif")),
+       datatype = "INT1U",
+       overwrite = TRUE)
   
   removeTmpFiles(h=0)
-}
-
-rasterOptions(tmpdir = "temp_data/raster_tmp")  
-
-return(print(paste0("complete prepare_lucpfsmp ", island)))
+  
+  
+  ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+  #### Split LUCFP to annual layers ####
+  
+  ### Function description
+  # parallel_split has for input a single lucfsmp layer where each pixel has a value corresponding to the year when a lucfsmp event occured;
+  # it outputs annual layers in each of which pixels are either 1 if a lucfsmp event occured that year, and 0 else.
+  # the tasks are year specific and independent across years, therefore they are executed parallely over years.
+  parallel_split <- function(plant_type, ncores){
+    
+    ## sequence over which to execute the task.
+    # We attribute the tasks to CPU "workers" at the annual level and not at the plantation type level.
+    # Hence, if a worker is done with its annual task before the others it can move on to the next one and workers' labor is maximized wrt.
+    # attributing tasks at the plantation type level.
+    years <- seq(from = 2001, to = 2018, by = 1)
+    
+    ## read the input to the task
+    # is done within each task because it is each time different here.
+    
+    ## define the task
+    annual_split <- function(time){
+      # define process (island, plant_type) we are in 
+      process <- file.path(paste0("temp_data/processed_lu/lucf",plant_type,"p_",island,"_30th.tif"))
+      
+      # #set temp directory
+      dir.create(paste0(process,"_Tmp"), showWarnings = FALSE)
+      rasterOptions(tmpdir=file.path(paste0(process,"_Tmp")))
+      
+      # read in the input
+      lucfsmp_prj <- raster(process)
+      
+      # define output file name 
+      output_filename <- file.path(paste0("temp_data/processed_lu/annual_maps/lucf",plant_type,"p_",island,"_30th_", years[time],".tif"))
+      
+      # split it into annual binary layers
+      calc(lucfsmp_prj,
+           fun = function(x){if_else(x == time, true = 1, false = 0)},
+           filename = output_filename,
+           datatype = "INT1U",
+           overwrite = TRUE )
+      # remove process temporary files
+      unlink(file.path(paste0(process,"_Tmp")), recursive = TRUE)
+    }
+    
+    ## register cluster
+    registerDoParallel(cores = ncores)
+    
+    ## define foreach object.
+    foreach(t = 1:length(years),
+            # .combine combine the outputs as a mere character list (by default)
+            .inorder = FALSE, # we don't care that the results be combine in the same order they were submitted
+            .multicombine = TRUE,
+            .export = c("island"),
+            .packages = c("dplyr", "raster", "rgdal")
+    ) %dopar%  annual_split(time = t)
+  }
+  
+  ### Execute it for each primary forest type
+  
+  plant_typeS <- c("s", "m")
+  for(plant_type in plant_typeS){
+    
+    parallel_split(plant_type = plant_type, detectCores() - 1) # ~500 seconds / annual layer
+    
+    removeTmpFiles(h=0)
+  }
+  
+  rasterOptions(tmpdir = "temp_data/raster_tmp")  
+  
+  return(print(paste0("complete prepare_lucfsmp ", island)))
 }
 
 
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+
 
 ##### 2. AGGREGATE THE PIXELS TO A GIVEN PARCEL SIZE. #####
 
-aggregate_lucpfsmp <- function(island, parcel_size){
+aggregate_lucfsmp <- function(island, parcel_size){
   
   ### Function description
   # The function has for inputs annual layers of lucfp events at the pixel level.
@@ -348,20 +335,20 @@ aggregate_lucpfsmp <- function(island, parcel_size){
     ## define the task
     annual_aggregate <- function(time){
       # Define which process (island, plant_type, and year) we are in:
-      processname <- file.path(paste0("temp_data/processed_lu/annual_maps/lucpf",plant_type,"p_",island,"_total_", years[time],".tif"))
+      processname <- file.path(paste0("temp_data/processed_lu/annual_maps/lucf",plant_type,"p_",island,"_30th_", years[time],".tif"))
       
       #set temp directory
       dir.create(paste0(processname,"_Tmp"), showWarnings = FALSE)
       rasterOptions(tmpdir=file.path(paste0(processname,"_Tmp")))
       
       # read in the input.
-      lucpfsmp_annual <- raster(processname)
+      lucfsmp_annual <- raster(processname)
       
       # define output file name
-      output_filename <- file.path(paste0("temp_data/processed_lu/annual_maps/parcel_lucpf",plant_type,"p_",island,"_",parcel_size/1000,"km_total_",years[time],".tif"))
+      output_filename <- file.path(paste0("temp_data/processed_lu/annual_maps/parcel_lucf",plant_type,"p_",island,"_",parcel_size/1000,"km_30th_",years[time],".tif"))
       
       # aggregate it from the ~30m cells to parcel_size cells with mean function.
-      raster::aggregate(lucpfsmp_annual, fact = c(parcel_size/res(lucpfsmp_annual)[1], parcel_size/res(lucpfsmp_annual)[2]),
+      raster::aggregate(lucfsmp_annual, fact = c(parcel_size/res(lucfsmp_annual)[1], parcel_size/res(lucfsmp_annual)[2]),
                         expand = FALSE,
                         fun = sum,
                         na.rm = FALSE, # NA cells are in margins, see the NOTES part. If FALSE, aggregations at margins that use NA 
@@ -400,13 +387,13 @@ aggregate_lucpfsmp <- function(island, parcel_size){
     
     # brick the layers together and write the brick
     rasterlist <- list.files(path = "temp_data/processed_lu/annual_maps", 
-                             pattern = paste0("parcel_lucpf",plant_type,"p_",island,"_",parcel_size/1000,"km_total_"), 
+                             pattern = paste0("parcel_lucf",plant_type,"p_",island,"_",parcel_size/1000,"km_30th_"), 
                              full.names = TRUE) %>% as.list()
     
     parcels_brick <- brick(rasterlist)
     
     writeRaster(parcels_brick,
-                filename = file.path(paste0("temp_data/processed_lu/parcel_lucpf",plant_type,"p_",island,"_",parcel_size/1000,"km_total.tif")),
+                filename = file.path(paste0("temp_data/processed_lu/parcel_lucf",plant_type,"p_",island,"_",parcel_size/1000,"km_30th.tif")),
                 datatype = "INT4U",
                 overwrite = TRUE)
     
@@ -416,7 +403,7 @@ aggregate_lucpfsmp <- function(island, parcel_size){
   
   rasterOptions(tmpdir = "temp_data/raster_tmp")    
   
-  print(paste0("complete aggregate_lucpfsmp ",island," ",parcel_size/1000, "km"))
+  print(paste0("complete aggregate_lucfsmp ",island," ",parcel_size/1000, "km"))
 }
 
 
@@ -481,7 +468,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     rm(total_ca, mills_ca, mills)
     
     ## Mask
-    parcels_brick_name <- paste0("parcel_lucpf",plant_type,"p_",island,"_",parcel_size/1000,"km_total")
+    parcels_brick_name <- paste0("parcel_lucf",plant_type,"p_",island,"_",parcel_size/1000,"km_30th")
     parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, ".tif")))
     
     mask(x = parcels_brick, mask = total_ca_sp,
@@ -519,14 +506,14 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     
     # vector of the names in the wide format of our time varying variables
     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
-    # the layer index (1-18) indeed corresponds to the year (2001-2018) because, in aggregate_lucpfsmp, at the end, 
+    # the layer index (1-18) indeed corresponds to the year (2001-2018) because, in aggregate_lucfsmp, at the end, 
     # rasterlist is ordered along 2001-2018 and this order is preserved when the layers are bricked. 
     varying_vars <- paste0(parcels_brick_name, "_IBS_masked.", seq(from = 1, to = 18))
     
     # reshape to long
     m.df <- stats::reshape(m.df_wide,
                            varying = varying_vars,
-                           v.names = paste0("lucpf",plant_type,"p_pixelcount_total"),
+                           v.names = paste0("lucf",plant_type,"p_pixelcount_30th"),
                            sep = ".",
                            timevar = "year",
                            idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
@@ -540,11 +527,11 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     
     m.df <- setorder(m.df, parcel_id, year)
     saveRDS(m.df,
-            file = file.path(paste0("temp_data/processed_parcels/lucpf",plant_type,"p_panel_",
+            file = file.path(paste0("temp_data/processed_parcels/lucf",plant_type,"p_panel_",
                                     island,"_",
                                     parcel_size/1000,"km_",
                                     catchment_radius/1000,"km_IBS_CR_",
-                                    "total.rds")))
+                                    "30th.rds")))
     
     
     ### UML 
@@ -579,7 +566,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     rm(total_ca, mills_ca, mills)
     
     ## Mask
-    parcels_brick_name <- paste0("parcel_lucpf",plant_type,"p_",island,"_",parcel_size/1000,"km_total")
+    parcels_brick_name <- paste0("parcel_lucf",plant_type,"p_",island,"_",parcel_size/1000,"km_30th")
     parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, ".tif")))
     
     mask(x = parcels_brick, mask = total_ca_sp,
@@ -622,7 +609,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     # reshape to long
     m.df <- stats::reshape(m.df_wide,
                            varying = varying_vars,
-                           v.names = paste0("lucpf",plant_type,"p_pixelcount_total"),
+                           v.names = paste0("lucf",plant_type,"p_pixelcount_30th"),
                            sep = ".",
                            timevar = "year",
                            idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
@@ -636,11 +623,11 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     
     m.df <- setorder(m.df, parcel_id, year)
     saveRDS(m.df,
-            file = file.path(paste0("temp_data/processed_parcels/lucpf",plant_type,"p_panel_",
+            file = file.path(paste0("temp_data/processed_parcels/lucf",plant_type,"p_panel_",
                                     island,"_",
                                     parcel_size/1000,"km_",
                                     catchment_radius/1000,"km_UML_CR_",
-                                    "total.rds")))
+                                    "30th.rds")))
   }
   
   ### Execute it
@@ -670,9 +657,9 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
 ### Prepare a 30m pixel map of lucfp for each Island
 IslandS <- c("Sumatra", "Kalimantan", "Papua")
 for(Island in IslandS){
-  if(!file.exists(file.path(paste0("temp_data/processed_lu/annual_maps/lucpfmp_",Island,"_total_2018.tif")))){
+  if(!file.exists(file.path(paste0("temp_data/processed_lu/annual_maps/lucfmp_",Island,"_30th_2018.tif")))){
     
-    prepare_pixel_lucpfsmp(Island)
+    prepare_pixel_lucfsmp(Island)
   }
 }
 
@@ -680,10 +667,10 @@ for(Island in IslandS){
 PS <- 3000
 IslandS <- c("Sumatra", "Kalimantan", "Papua")
 for(Island in IslandS){
-  if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucpfmp_",Island,"_",PS/1000,"km_total.tif")))){
+  if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucfmp_",Island,"_",PS/1000,"km_30th.tif")))){
     
-    aggregate_lucpfsmp(island = Island,
-                      parcel_size = PS)
+    aggregate_lucfsmp(island = Island,
+                       parcel_size = PS)
   }
 }
 
@@ -694,11 +681,11 @@ IslandS <- c("Sumatra", "Kalimantan", "Papua")
 for(Island in IslandS){
   CR <- 10000 # i.e. 10km radius
   while(CR < 60000){
-   
-    to_panel_within_CR(island = Island,
-                       parcel_size = PS,
-                       catchment_radius = CR)
-    
+  
+  to_panel_within_CR(island = Island,
+                     parcel_size = PS,
+                     catchment_radius = CR)
+  
     CR <- CR + 20000
   }
 }
@@ -717,9 +704,9 @@ for(sample in sampleS){
     IslandS <- c("Sumatra", "Kalimantan", "Papua")
     for(Island in IslandS){
       
-      df_small   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsp_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
-      df_medium <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfmp_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
-
+      df_small   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfsp_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_30th.rds")))
+      df_medium <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfmp_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_30th.rds")))
+      
       df_medium <- dplyr::select(df_medium, -lon, -lat)
       df_list[[match(Island, IslandS)]] <- inner_join(df_small, df_medium, by = c("parcel_id", "year"))
       
@@ -732,62 +719,22 @@ for(sample in sampleS){
     ### Add columns of converted pixel counts to hectares.
     pixel_area <- (27.8*27.6)/(1e4)
     # small-sized plantations
-    indo_df <- mutate(indo_df, lucpfsp_ha_total = lucpfsp_pixelcount_total*pixel_area) 
+    indo_df <- mutate(indo_df, lucfsp_ha_30th = lucfsp_pixelcount_30th*pixel_area) 
     # medium-sized plantations
-    indo_df <- mutate(indo_df, lucpfmp_ha_total = lucpfmp_pixelcount_total*pixel_area) 
+    indo_df <- mutate(indo_df, lucfmp_ha_30th = lucfmp_pixelcount_30th*pixel_area) 
     
     indo_df <- dplyr::select(indo_df, parcel_id, year, 
-                             lucpfsp_ha_total,
-                             lucpfmp_ha_total, 
-                             lucpfsp_pixelcount_total,
-                             lucpfmp_pixelcount_total,
+                             lucfsp_ha_30th,
+                             lucfmp_ha_30th, 
+                             lucfsp_pixelcount_30th,
+                             lucfmp_pixelcount_30th,
                              everything())
     
     
-    saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",PS/1000,"km_",CR/1000,"km_",sample,"_CR.rds")))
+    saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/lucfsmp_panel_",PS/1000,"km_",CR/1000,"km_",sample,"_CR.rds")))
     
     rm(indo_df, df_list)
     CR <- CR + 20000
   }
 }
 
-### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
-### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
-### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
-### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
-# checking S&M in Sulawesi and elswhere
-# 
-# smop_prj <- st_transform(smop, crs = indonesian_crs)
-# sgbp <- st_within(smop_prj, island_sf_prj)
-# #sgbp <- sgbp_save
-# 
-# sgbp[lengths(sgbp) == 0] <- 0
-# unique(unlist(sgbp))
-# smop$sgbp_vec <- unlist(sgbp)
-# smop$island <- NA
-# smop$island[smop$sgbp_vec == 1] <- "Sumatra"
-# smop$island[smop$sgbp_vec == 2] <- "Sulawesi"
-# smop$island[smop$sgbp_vec == 3] <- "Papua"
-# smop$island[smop$sgbp_vec == 4] <- "Kalimantan"
-# 
-# sum(smop$area_ha[smop$island == "Sumatra"], na.rm=TRUE)/1e3
-# sum(smop$area_ha[smop$island == "Kalimantan"], na.rm=TRUE)/1e3
-# sum(smop$area_ha[smop$island == "Sulawesi"], na.rm=TRUE)/1e3
-# sum(smop$area_ha[smop$island == "Papua"], na.rm=TRUE)/1e3
-# sum(smop$area_ha[smop$sgbp_vec == 0], na.rm=TRUE)/1e3
-# 
-# others <- smop[smop$sgbp_vec == 0,]
-# st_geometry(others) %>% 
-#   leaflet() %>% 
-#   addTiles()%>%
-#   addProviderTiles(providers$Esri.WorldImagery, group ="ESRI") %>%
-#   addPolygons(opacity = 0.5, weight = 2, fill = FALSE)
-# 
-# nrow(smop[smop$island == "Sumatra",])
-# nrow(smop[smop$island == "Kalimantan",])
-# nrow(smop[smop$island == "Sulawesi",])
-# nrow(smop[smop$island == "Papua",])
-# 
-# 
-# nrow(smop[smop$island == "Sulawesi" & is.na(smop$area_ha),])
-# nrow(smop[smop$island == "Sulawesi",])

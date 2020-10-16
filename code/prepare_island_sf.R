@@ -65,9 +65,17 @@ provinces$island[provinces$NAME_1 == "Kalimantan Barat" |
 provinces$island[provinces$NAME_1 == "Papua" |
                         provinces$NAME_1 == "Irian Jaya Barat" ] <- "Papua"
 
+
+# provinces$island[provinces$NAME_1 == "Gorontalo" |
+#                    provinces$NAME_1 == "Sulawesi Selatan" |
+#                    provinces$NAME_1 == "Sulawesi Tengah" |
+#                    provinces$NAME_1 == "Sulawesi Barat" |
+#                    provinces$NAME_1 == "Sulawesi Utara" |
+#                    provinces$NAME_1 == "Sulawesi Tenggara"] <- "Sulawesi"
+
 island_sf <- provinces[!is.na(provinces$island),c("island", "geometry")]
 
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan", "Papua")#, "Sulawesi"
 for(Island in IslandS){
   island_sf$geometry[island_sf$island == Island] <- st_union(island_sf$geometry[island_sf$island == Island])
 }

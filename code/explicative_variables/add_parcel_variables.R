@@ -47,7 +47,7 @@
 # see this project's README for a better understanding of how packages are handled in this project. 
 
 # These are the packages needed in this particular script. 
-neededPackages = c("dplyr", "readstata13", "foreign", "sjmisc",
+neededPackages = c("plyr", "dplyr", "readstata13", "foreign", "sjmisc",
                    "rgdal", "sf", 
                    "DataCombine")
 #install.packages("sf", source = TRUE)
@@ -295,7 +295,26 @@ for(catchment_radius in catchment_radiuseS){
                    st_drop_geometry(parcels_cs[,c("parcel_id", "province", "district")]),
                    by = "parcel_id")
  
-  # REGIONAL TRENDS VARIABLES
+  
+  ### NEIGHBOR VARIABLE
+  # create a grouping variable at the cross section (9 is to recall the the group id includes the 8 neighbors + the central grid cell.)
+  parcels_cs <- parcels[!duplicated(parcels$parcel_id),c("parcel_id", "year", "lat", "lon")]
+  
+  # spatial
+  parcels_cs <- st_as_sf(parcels_cs, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+  
+  # identify neighbors
+  # this definition of neighbors includes the 8 closest, surounding, grid cells. 
+  parcels_buf <- st_buffer(parcels_cs, dist = parcel_size - 10)
+  row.names(parcels_buf) <- parcels_buf$parcel_id
+  sgbp <- st_intersects(parcels_buf)
+  
+  
+  
+  
+  
+  
+  # SPATIAL TRENDS VARIABLES
   parcels$island_year <- paste0(parcels$island,"_",parcels$year)
   parcels$province_year <- paste0(parcels$province,"_",parcels$year)
   parcels$district_year <- paste0(parcels$district,"_",parcels$year)
@@ -310,47 +329,21 @@ for(catchment_radius in catchment_radiuseS){
 
 
 
-#### BASELINE FOREST EXTENT VARIABLES AND TIME DYNAMICS VARIABLES ####
+#### TIME DYNAMICS VARIABLES ####
 catchment_radiuseS <- c(1e4, 3e4, 5e4)# 
 for(catchment_radius in catchment_radiuseS){ 
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
                                                   parcel_size/1000,"km_",
                                                   catchment_radius/1000,"CR.rds")))
   
-  # this is a cross section, computed in prepare_2000_forest_extents.R
-  bfe <- readRDS(file.path(paste0("temp_data/processed_parcels/baseline_fc_cs_",
-                                  parcel_size/1000,"km_",
-                                  catchment_radius/1000,"km_IBS_CR.rds")))
-  bfe <- dplyr::select(bfe, parcel_id, lat, lon, everything())
   
-  # merge it with our parcel panel
-  parcels <- base::merge(parcels, 
-                         dplyr::select(bfe, -lat, -lon), 
-                         by = "parcel_id")
-  
-  # test that the parcel_id have been attributed to parcels equally in the two processes 
-  # (prepare_lucpfip.R and prepare_2000_forest_extents.R)
-  # 
-  # parcels2 <- base::merge(parcels, bfe, by = c("parcel_id", "lat","lon"))
-  # setorder(parcels1, parcel_id, year)
-  # setorder(parcels2, parcel_id, year)
-  # row.names(parcels1) <- NULL
-  # row.names(parcels2) <- NULL
-  # all.equal(st_drop_geometry(parcels1[,c("parcel_id", "lon","lat")]), 
-  #           st_drop_geometry(parcels2[,c("parcel_id", "lon","lat")]))
-  # 
-  # all(names(parcels1)==names(parcels2))
-  # all.equal(st_drop_geometry(parcels1), st_drop_geometry(parcels2))
-  # rm(parcels2)
-  
-#### export shares from percentage to fraction ####  
-parcels$wa_prex_cpo_imp1 <- parcels$wa_prex_cpo_imp1/100 
-parcels$wa_prex_cpo_imp2 <- parcels$wa_prex_cpo_imp2/100 
+  ### EXPORT SHARES FROM PCT TO FRACTION   
+  parcels$wa_prex_cpo_imp1 <- parcels$wa_prex_cpo_imp1/100 
+  parcels$wa_prex_cpo_imp2 <- parcels$wa_prex_cpo_imp2/100 
 
-#### TIME DYNAMICS VARIABLES #### 
-  #parcels <- st_drop_geometry(parcels)
-    
-  ### Simple lags and leads on a large set of variables
+  
+  ### LAGS AND LEADS OF A LARGE SET OF VARIABLES 
+  
   variables <- c("wa_ffb_price_imp1", "wa_ffb_price_imp2", 
                 "wa_cpo_price_imp1", "wa_cpo_price_imp2", "wa_prex_cpo_imp1","wa_prex_cpo_imp2",       
                 #"wa_pko_price_imp1",       "wa_pko_price_imp2",       "wa_prex_pko_imp1",        "wa_prex_pko_imp2",       
@@ -547,6 +540,20 @@ parcels$wa_prex_cpo_imp2 <- parcels$wa_prex_cpo_imp2/100
   parcels <- parcels[,!(names(parcels) %in% vars_torm)]
   
   
+  ### PRICE LOGARITHMS
+  # select prices for which it's relevant/useful to compute the log
+  price_variables <- names(parcels)[grepl(pattern = "price_", x = names(parcels)) &
+                                      !grepl(pattern = "pko", x = names(parcels)) &
+                                      !grepl(pattern = "dev", x = names(parcels)) &
+                                      !grepl(pattern = "yoyg", x = names(parcels))]
+  
+  
+  for(var in price_variables){
+    parcels[,paste0("ln_",var)] <- log(parcels[,var])
+  }
+  
+  
+  
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
                                     parcel_size/1000,"km_",
                                     catchment_radius/1000,"CR.rds")))  
@@ -556,7 +563,7 @@ parcels$wa_prex_cpo_imp2 <- parcels$wa_prex_cpo_imp2/100
 
 
 
-##### ADD RSPO  & TIME SERIES - IV ##### 
+##### ADD RSPO, CONCESSIONS, LEGAL LAND USE, & TIME SERIES - IV ##### 
 ### RSPO
 rspo <- st_read("input_data/RSPO_supply_bases/RSPO-certified_oil_palm_supply_bases_in_Indonesia.shp")
 rspo <- st_transform(rspo, crs = indonesian_crs)
@@ -574,6 +581,34 @@ rspo$year <- rspo$year +1
 # rspo$icdate
 # rspo$icletdate
 
+### OIL PALM CONCESSIONS
+cns <- st_read(file.path("input_data/oil_palm_concessions"))
+cns <- st_transform(cns, crs = indonesian_crs)
+
+### LEGAL LAND USE 
+llu <- st_read(file.path("input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp"))
+llu <- st_transform(llu, crs = indonesian_crs)
+unique(llu$Fungsi)
+names(llu)[names(llu) == "Fungsi"] <- "llu"
+
+# restrict llu to provinces of interest
+llu <- llu[llu$Province == "Sumatra Utara" |
+             llu$Province == "Riau" |
+             llu$Province == "Sumatra Selantan" |
+             llu$Province == "Papua Barat" |
+             llu$Province == "Kalimantan Timur" |
+             llu$Province == "Kalimantan Selatan" |
+             llu$Province == "Kalimantan Tengah" |
+             llu$Province == "Kalimantan Barat" |
+             llu$Province == "Bengkulu" |
+             llu$Province == "Lampung" |
+             llu$Province == "Jambi" |
+             llu$Province == "Bangka Belitung" |
+             llu$Province == "Kepuluan Riau" |
+             llu$Province == "Sumatra Barat" |
+             llu$Province == "Aceh", ]
+
+                  
 ### TIME SERIES 
 ts <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
 ts <- dplyr::select(ts, year, 
@@ -596,10 +631,10 @@ for(catchment_radius in catchment_radiuseS){
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
                                       parcel_size/1000,"km_",
                                       catchment_radius/1000,"CR.rds")))
-  
-  ### RSPO
+
   parcels <- st_as_sf(parcels, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
-  
+
+  ### RSPO
   parcels$rspo_cert <- rep(FALSE, nrow(parcels))
   
   for(y in min(rspo$year):max(parcels$year)){
@@ -613,7 +648,62 @@ for(catchment_radius in catchment_radiuseS){
     parcels$rspo_cert[parcels$year == y][lengths(sgbp) == 1] <- TRUE
     
   }
+  
+  ### OIL PALM CONCESSIONS
+  
+  # We do not observe whether a grid cell is within a concession annually. 
+  # Therefore we only proceed with a cross section
+  parcels_cs <- parcels[!duplicated(parcels$parcel_id),]
+  sgbp <- st_within(parcels_cs, cns)
+  parcels_cs$concession <- rep(FALSE, nrow(parcels_cs))
+  parcels_cs$concession[lengths(sgbp) > 0] <- TRUE
+  
   parcels <- st_drop_geometry(parcels)
+  parcels_cs <- st_drop_geometry(parcels_cs)
+  
+  parcels <- merge(parcels, parcels_cs[,c("parcel_id", "concession")], by = "parcel_id")
+  
+  # note that some parcels fall within more than one concession record. There may be several reasons for concession overlaps 
+  # like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
+  # concession record. 
+  
+  
+  ### LEGAL LAND USE 
+  parcels <- st_as_sf(parcels, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+  # this is quite long (~5min)
+  parcels_cs <- parcels[!duplicated(parcels$parcel_id),]
+  parcels_cs <- st_join(x = parcels_cs, 
+                        y = st_make_valid(llu[,"llu"]), # st_make_valid bc thrown error otherwise 
+                        join = st_within, 
+                        left = TRUE)
+  
+  # some grid cells seem to fall within overlapping llu shapes though. 
+  # It's really marginal (12 instances). Just remove the duplicates it produces.
+  parcels_cs <- parcels_cs[!duplicated(parcels_cs$parcel_id),]
+
+  # merge back with panel 
+  parcels <- st_drop_geometry(parcels)
+  parcels_cs <- st_drop_geometry(parcels_cs)
+  
+  parcels <- merge(parcels, parcels_cs[,c("parcel_id", "llu")], by = "parcel_id")
+  
+  unique(parcels$llu)
+  ### ILLEGAL LUCFP 
+  # one possible link to shed light on accronyms http://documents1.worldbank.org/curated/pt/561471468197386518/pdf/103486-WP-PUBLIC-DOC-107.pdf
+  
+  parcels <- dplyr::mutate(parcels,
+                           illegal1 = (!concession & (llu != "HPK" | llu == "<NA>")), # it's not in concession and not in a convertible forest zone
+                           illegal2 = (!concession & (llu == "KSA/KPA" | # it's not in concession and it's in a permanent forest zone designation
+                                                        llu == "KSA" |
+                                                        llu == "KPA" |
+                                                        llu == "KSAL" |
+                                                        llu == "HP" |
+                                                        llu == "HPT" |
+                                                        llu == "HL")))
+
+  # yields many missing in illegal because many grid cells are within a mising land use legal classification
+  # parcels[!duplicated(parcels$parcel_id) & !is.na(parcels$llu), c("parcel_id", "concession", "llu", "illegal1", "illegal2")]
+  
   
   
   ### TIME SERIES & IV
@@ -657,7 +747,7 @@ for(catchment_radius in catchment_radiuseS){
                                     catchment_radius/1000,"CR.rds")))
 }
 
-
+rm(cns, llu, parcels, parcels_cs, rspo, rspo_cs, sgbp, ts)
 
 
 #### ADD N REACHABLE UML TO PARCELS IN ***UML*** CATCHMENT RADIUS #### 
