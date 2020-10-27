@@ -26,14 +26,17 @@
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 #"kableExtra",
 # Specify project-wide packages to install
-neededPackages <- c("data.table", "dplyr", "plyr", "Hmisc", "sjmisc", "stringr",
+neededPackages <- c("data.table", "plyr", "tidyr", "dplyr",  "Hmisc", "sjmisc", "stringr",
                     "readstata13", "foreign", "readxl", "writexl",
+                    "httr", "haven",
                     "raster", "rgdal", "sp", "sf","gfcanalysis",
-                    "doParallel", "foreach", "parallel", "snow", 
-                    "knitr", 
+                    "lubridate","exactextractr",
+                    "doParallel", "foreach", "snow", 
+                    "knitr", "kableExtra",
                     "DataCombine", 
-                    "fixest", "sandwich", "lmtest",
-                    "ggplot2")
+                    "fixest", "sandwich", "lmtest", "broom", "glmhdfe",
+                    "ggeffects",
+                    "ggplot2", "leaflet")
 
 # Note that from ?renv::restore 
 # "Any required recursive dependencies of the requested packages will be restored as well."
@@ -41,8 +44,8 @@ neededPackages <- c("data.table", "dplyr", "plyr", "Hmisc", "sjmisc", "stringr",
 # This is just to provide the user with some information on what renv does
 renv::status() 
 
-# This installs, if necessary, in renv/library, the project-specific packages as recorded in renv.lock
-renv::restore(packages = neededPackages)
+# This installs, if necessary, in renv/library, the project-specific packages as recorded in renv.lockpackages = neededPackages
+renv::restore()
 
 #### /!\ IF renv::restore() FAILS TO INSTALL SOME PACKAGES FROM neededPackages /!\ #### 
 
@@ -82,8 +85,8 @@ if(FALSE){
   # NOT RUN
   library(data.table)
   library(plyr)
+  library(tidyr)
   library(dplyr)
-  library(plyr)
   library(Hmisc)
   library(sjmisc)
   library(stringr)
@@ -98,38 +101,46 @@ if(FALSE){
   library(gfcanalysis)
   library(doParallel)
   library(foreach)
-  library(parallel)
   library(snow)
-  #library(kableExtra)
+  library(kableExtra)
   library(knitr)
-  #library(leaflet)
+  library(leaflet)
+  library("htmltools")
   #library(velox)
   #library(ExPanDaR)
   library(DataCombine)
   library(fixest)
-  library(sandwich)
-  library(lmtest)
-  library(pglm)
-  library(multiwayvcov)
-  library(clusterSEs)
-  library(clubSandwich)
-  library(boot)
-  library(Countr)
+  #library(effects)
+  #library(glmhdfe)
+  #library(sandwich)
+  #library(lmtest)
+  #library(pglm)
+  #library(multiwayvcov)
+  #library(clusterSEs)
+  #library(clubSandwich)
+  #library(boot)
+  #library(Countr)
   library(ggplot2)
-  library(doBy)
+  #library(doBy)
+  library(lubridate)
+  library(httr)
+  library(haven)
+  library(exactextractr)
+  library(ggeffects)
+  library(emmeans)
   
 }
 
 # If new packages are needed along the project data processing workflow, one should: 
-# 1. install the packages in a user local default library (you may have to chose explicitly which, hence the brackets after default_libraries)
-install.packages("tmap", lib = default_libraries[1])
+new_pck <- c("htmltools")
+# 1. install the packages in the project library (the default if you are within the project)
+install.packages(new_pck)
+# devtools::install_github("julianhinz/R_glmhdfe")
 # 2. add 'library(package)' in the list above, and ',"package"' in the neededPackages vector above, and save the present file.
 # 3. perform an implicit (the default) snapshot, that writes to the renv.lock file the packages at
-# the intersection between packages found in the project by renv::dependencies() 
-# (hence the 'library(package)' line from 2. above.) 
-# and packages installed in user default libraries (hence point 1. and the argument library below)
-renv::snapshot(library = default_libraries) 
-
+# the intersection between packages found in the project by renv::dependencies() (hence the 'library(package)' line from 2. above.) 
+# and packages installed the specified library (the default being the project's) (hence point 1.)
+renv::snapshot() 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 

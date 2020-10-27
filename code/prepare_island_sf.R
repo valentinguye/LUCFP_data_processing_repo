@@ -138,7 +138,7 @@ rm(district_names, district_names2000, district_sf)
 # copy <- districts_sgbp
 # # all districts are covered by only one island
 # districts_sgbp[lengths(districts_sgbp)>1]
-# # or another island than the three islands of interest. Attribute them 0  
+# # or another island than the three islands of interest. Attribute them 0
 # districts_sgbp[lengths(districts_sgbp)==0] <- 0
 # # 55 districts are in one of our three islands of interest
 # unlist(districts_sgbp)[unlist(districts_sgbp)!=0] %>% length()

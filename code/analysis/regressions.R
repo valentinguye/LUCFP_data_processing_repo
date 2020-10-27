@@ -14,8 +14,8 @@
 neededPackages = c("tibble", "plyr", "dplyr", "data.table",
                    "foreign", "readstata13", "readxl",
                    "raster", "rgdal",  "sp", "sf",
-                   "knitr",
-                   "fixest", "sandwich", "lmtest", "boot",
+                   "knitr", "kableExtra",
+                   "fixest", "sandwich", "lmtest", "boot", 
                    "ggplot2")
 # "pglm", "multiwayvcov", "clusterSEs", "alpaca", "clubSandwich",
 
@@ -44,7 +44,7 @@ lapply(neededPackages, library, character.only = TRUE)
 #   see in particular https://rstudio.github.io/renv/articles/renv.html 
 
 
-# # /!\ THIS BREAKS THE PROJECT REPRODUCIBILITY GUARANTY /!\
+# # # /!\ THIS BREAKS THE PROJECT REPRODUCIBILITY GUARANTY /!\
 # troublePackages <- c("leaflet", "leaflet.providers", "png")
 # # Attempt to load packages from user's default libraries.
 # lapply(troublePackages, library, lib.loc = default_libraries, character.only = TRUE)
@@ -74,9 +74,9 @@ getFixest_nthreads()
 ### Set dictionary for names of variables to display in regression tables 
 setFixest_dict(c(parcel_id = "grid cell",
                  lucpfip_ha_total = "LUCPFIP (ha)", 
-                 lucpfip_pixelcount_total = "Land use change from primary forest to industrial oil palm plantations (LUCPFIP)", 
+                 lucpfip_pixelcount_total = "Land use change from primary forest to industrial oil palm plantations", 
                  lucpfsmp_ha_total = "LUCPFSMP (ha)", 
-                 lucpfsmp_pixelcount_total = "Land use change from primary forest to small or medium-sized oil palm plantations (LUCPFSMP)", 
+                 lucpfsmp_pixelcount_total = "Land use change from primary forest to small or medium-sized oil palm plantations", 
                  lucfip_ha_30th = "LUCFIP (30 pct. canopy density, ha)",
                  lucfip_ha_60th = "LUCFIP (60 pct. canopy density, ha)",
                  lucfip_ha_90th = "LUCFIP (90 pct. canopy density, ha)",
@@ -185,6 +185,15 @@ setFixest_dict(c(parcel_id = "grid cell",
                  ln_wa_cpo_price_imp1_3pya_lag1 = "CPO price signal, 3 past year average",#(lagged)
                  ln_wa_cpo_price_imp1_4pya = "CPO price signal, 4 past year average",
                  ln_wa_cpo_price_imp1_4pya_lag1 = "CPO price signal, 4 past year average",#(lagged)
+                 ## interactions 
+                 n_reachable_uml_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "reachable mills X FFB price signal",
+                 n_reachable_uml_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "reachable mills X CPO price signal",
+                 wa_pct_own_loc_gov_imp_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "local gvt mill ownership X FFB price signal",
+                 wa_pct_own_loc_gov_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "local gvt mill ownership X CPO price signal",
+                 wa_pct_own_nat_priv_imp_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "private mill ownership X FFB price signal",
+                 wa_pct_own_nat_priv_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "private mill ownership X CPO price signal",
+                 wa_pct_own_for_imp_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "foreign mill ownership X FFB price signal",
+                 wa_pct_own_for_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "foreign mill ownership X CPO price signal",
                  ## controls
                  lucpfip_pixelcount_total_lag1 = "LUCPFIP (pixels, lagged)",
                  lucpfip_pixelcount_total_2pya = "LUCPFIP (pixels, 2 past year average)",
@@ -224,6 +233,8 @@ d_30 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
 # Split them into islands of interest
 d_30_suma <- d_30[d_30$island == "Sumatra",]
 d_30_kali <- d_30[d_30$island == "Kalimantan",]
+d_30_papu <- d_30[d_30$island == "Papua",]
+
 rm(d_30)
 
 d_50 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
@@ -232,6 +243,8 @@ d_50 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
 # Split them into islands of interest
 d_50_suma <- d_50[d_50$island == "Sumatra",]
 d_50_kali <- d_50[d_50$island == "Kalimantan",]
+d_50_papu <- d_50[d_50$island == "Papua",]
+
 rm(d_50)
 
 # d_30_all <- d_30[d_30$island %in% c("Sumatra", "Kalimantan", "Papua"),]
@@ -244,28 +257,32 @@ rm(d_50)
 
 # Prefered specifications are passed as default arguments. 
 # Currently, the returned object is a fixest object, of *ONE* regression.  
-outcome_variable = "lucpfsmp_pixelcount_total"
-island = "Sumatra"
-alt_cr = FALSE
-commo = c("ffb", "cpo")
-x_pya = 3
-dynamics = TRUE
-log_prices = TRUE
-yoyg = FALSE
-short_run = "full"
-imp = 1
-distribution = "quasipoisson"
-fe = "parcel_id + district_year"
-remaining_forest = TRUE
-offset = TRUE
-lag_or_not = "_lag1"
-controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")
-spatial_control = FALSE
-pya_ov = FALSE
-weights = FALSE
+# outcome_variable = "lucpfip_pixelcount_total"
+# island = "Sumatra"
+# alt_cr = FALSE
+# commo = c("ffb", "cpo")
+# x_pya = 3
+# dynamics = TRUE
+# log_prices = TRUE
+# yoyg = FALSE
+# short_run = "full"
+# imp = 1
+# distribution = "quasipoisson"
+# fe = "parcel_id + district_year"
+# remaining_forest = TRUE
+# offset = TRUE
+# lag_or_not = "_lag1"
+# controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")
+# interaction_terms = NULL
+# interacted = "regressors"
+# spatial_control = FALSE
+# pya_ov = FALSE
+# illegal = "all"
+# weights = FALSE
 
-make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. One of "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount_total"p
-                            island,
+
+make_base_reg <- function(island,
+                          outcome_variable = "lucpfip_pixelcount_total", # LHS. One of "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount_total"p
                             alt_cr = FALSE, # logical, if TRUE, Sumatra's catchment radius is 50000 meters, and Kalimantan's is 30000. 
                             commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo"), commodities the price signals of which should be included in the RHS
                             x_pya = 3, # either 2, 3, or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
@@ -280,8 +297,11 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
                             offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                             lag_or_not = "_lag1", # either "_lag1", or  "", should the 
                             controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # character vectors of names of control variables (don't specify lags in their names)
+                            interaction_terms = NULL, # may be one or several of the controls specified above. 
+                            interacted = "regressors",
                             spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
                             pya_ov = FALSE, # logical, whether the pya (defined by x_pya) of the outcome_variable should be added in controls
+                            illegal = "all", # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
                             weights = FALSE # logical, should obs. be weighted by the share of our sample reachable mills in all (UML) reachable mills. 
 ){
   
@@ -292,7 +312,7 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
 
     ## VARIABLES OF INTEREST (called regressors here)
   if(dynamics == FALSE){ 
-    # Only the overall effect is investigated then, no short vs. long run
+    # Only the overall effect is investigated then, no short vs. medium run
     # In this case, the variables have name element _Xya_ with X the number of years over which the mean has been 
     # computed, always including the contemporaneous record. See add_parcel_variables.R
     #short_run <- ""
@@ -318,7 +338,7 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
     }
   }
   
-  # if, on the other hand, we want to identify the short run effects, controlling for the long run's. 
+  # if, on the other hand, we want to identify the short run effects, controlling for the medium run's. 
   if(dynamics == TRUE){ 
     
     if(length(commo) == 1){
@@ -381,7 +401,6 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
     if(grepl("lucpf", outcome_variable)){
       controls <- c(controls, "remain_pf_pixelcount")
     }
-    
     if(grepl("lucf", outcome_variable)){
       controls <- c(controls, "remain_f30th_pixelcount")
     }
@@ -389,6 +408,14 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
     offset <- FALSE
   }
   
+  ## INTERACTIONS
+  # here we produce the names of the actual interaction variables
+  if(length(interaction_terms)>0){
+    # unless variables of interest to be interacted are specified, they are all the presently defined regressors
+    if(interacted == "regressors"){interacted <- regressors}
+      make_int_term <- function(x){int_term <- controls[grepl(x,controls)] %>% paste0("X",interacted)}
+      interaction_vars <- sapply(interaction_terms, FUN = make_int_term)
+  }else{interacted <- NULL}
   
   ### DATA FOR REGRESSIONS
   
@@ -405,12 +432,12 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
   if(island == "Kalimantan" & alt_cr == TRUE){
     d <- d_30_kali
   }
-  # if(island == c("Sumatra", "Kalimantan", "Papua") & alt_cr == FALSE){
-  #   d <- d_50_all
-  # }
-  # if(island == c("Sumatra", "Kalimantan", "Papua") & alt_cr == TRUE){
-  #   d <- d_30_all
-  # }
+  if(island == "all" & alt_cr == FALSE){
+    d <- rbind(d_30_suma, d_50_kali, d_50_papu)
+  }
+  if(island == "all" & alt_cr == TRUE){
+    d <- rbind(d_50_suma, d_30_kali, d_30_papu)
+  }
   
   ## Keep observations that: 
   
@@ -468,8 +495,22 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
   # - are not in an intended RSPO-certified supply base
   d <- d[d$rspo_cert==FALSE,]
   
+  # are legal, illegal, or neither
+  if(illegal == "no_ill1"){
+    d <- d[d$illegal1 == FALSE, ]
+  }
+  if(illegal == "no_ill2"){
+    d <- d[d$illegal2 == FALSE, ]
+  }
+  if(illegal == "ill1"){
+    d <- d[d$illegal1 == TRUE, ]
+  }  
+  if(illegal == "ill2"){
+    d <- d[d$illegal2 == TRUE, ]
+  }
+  
   # - have no NA on any of the variables used (otherwise they get removed by {fixest})
-  used_vars <- c(outcome_variable, regressors, controls,
+  used_vars <- c(outcome_variable, regressors, interacted, controls,
                  "parcel_id", "year", "lat", "lon", "district", "province", "island", "district_year", "province_year",
                  "n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
                  #"remain_f30th_pixelcount",
@@ -477,7 +518,7 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
   
   filter_vec <- base::rowSums(!is.na(d[,used_vars]))
   filter_vec <- filter_vec == length(used_vars)
-  d_nona <- d[filter_vec, used_vars]
+  d_nona <- d[filter_vec, c(used_vars)]
   if(anyNA(d_nona)){stop()}
   
   # - sometimes there are a couple obs. that have 0 ibs reachable despite being in the sample 
@@ -492,12 +533,18 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
                                 d_nona, 
                                 family = "poisson"),]
 
-  rm(d, d_nona)
   # note that obs2remove has to the last filtering operation on data, otherwise some units (along fe dimension)
   # may become "only-zero-outcome" units after other data removal.  
   
-  
-  
+  if(length(interaction_terms)>0){
+    for(con in interaction_terms){
+      actual_ <- controls[grepl(con, controls)]
+      for(reg in interacted){
+        d_clean[,paste0(actual_,"X",reg)] <- d_clean[,actual_]*d_clean[,reg]
+      }
+    }
+  }
+    
   ### REGRESSIONS
   
   # Formula
@@ -508,7 +555,21 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
                                 paste0(controls, collapse = "+"),
                                 " | ",
                                 fe))
-
+  
+  if(length(interaction_terms)>0){
+    fe_model <- as.formula(paste0(outcome_variable,
+                                  " ~ ",
+                                  paste0(regressors, collapse = "+"),
+                                  " + ",
+                                  paste0(controls, collapse = "+"),
+                                  " + ",
+                                  paste0(interaction_vars, collapse = "+"),
+                                  " | ",
+                                  fe))
+  }
+  
+  
+  
   if(offset == TRUE){
     if(distribution != "negbin"){ # i.e. if it's poisson or quasipoisson or gaussian
       if(weights == TRUE){
@@ -517,7 +578,7 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
                                  data = d_clean, 
                                  family = distribution,
                                  offset = offset_fml,
-                                 glm.iter = 50,
+                                 glm.iter = 100,
                                  notes = TRUE, 
                                  weights = var_weights)
         
@@ -526,7 +587,7 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
                                  data = d_clean, 
                                  family = distribution,
                                  offset = offset_fml,
-                                 glm.iter = 50,
+                                 glm.iter = 100,
                                  notes = TRUE)
       }
     }else{ # no weights allowed in negative binomial
@@ -562,17 +623,19 @@ make_base_reg <- function(outcome_variable = "lucpfip_pixelcount_total", # LHS. 
     }
   }
   
+  rm(d, d_nona, d_clean)
   return(reg_res)
+
 }
 
 
 
-##### REGRESSION TABLES ##### 
+##### TABLES OF ELASTICITIES ##### 
 # pass arguments from make_base_reg in lapply to get alternative specifications
 
 ov_list <- list("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
 isl_list <- list("Sumatra", "Kalimantan")
-### WITH DISTINCTIONS SHORT/LONG TERM & FFB/CPO PRICE SIGNALS 
+### WITH DISTINCTIONS SHORT/medium TERM & FFB/CPO PRICE SIGNALS 
 
 
 ## Elasticities 
@@ -581,54 +644,33 @@ isl_list <- list("Sumatra", "Kalimantan")
 res_list_dst_ind <- lapply(isl_list, make_base_reg,
                             outcome_variable = "lucpfip_pixelcount_total",
                             dynamics = TRUE,
-                            commo = c("ffb", "cpo"), 
+                            commo = c("ffb","cpo"), #
                             offset = FALSE) 
 
 # Smallholders
 res_list_dst_sm <- lapply(isl_list, make_base_reg,
                             outcome_variable = "lucpfsmp_pixelcount_total",
                             dynamics = TRUE,
-                            commo = c("ffb", "cpo"),
+                            commo = c("ffb", "cpo"),#
                             offset = FALSE) 
 
 res_list_dst <- append(res_list_dst_ind, res_list_dst_sm)
-
-
-# # Sumatra
-# res_list_dst_suma <- lapply(ov_list, make_base_reg,
-#                             island = "Sumatra",
-#                             dynamics = TRUE,
-#                             commo = c("ffb", "cpo"), 
-#                             offset = FALSE) 
-# 
-# # Kalimantan
-# res_list_dst_kali <- lapply(ov_list, make_base_reg,
-#                             island = "Kalimantan",
-#                             dynamics = TRUE,
-#                             commo = c("ffb", "cpo"),
-#                             offset = FALSE) 
-
-# res_list_dst <- append(res_list_dst_suma, res_list_dst_kali)
-
-# note that etable groups automatically the estimations by dependent variable. 
-
+rm(res_list_dst_ind, res_list_dst_sm)
 # preview in R 
 etable(res_list_dst, 
        se = "cluster", 
-       subtitles = c("Sumatra", "Sumatra", "Kalimantan","Kalimantan"),
-       coefstat = "confint")
+       #coefstat = "confint",
+       subtitles = c("Sumatra", "Kalimantan","Sumatra", "Kalimantan"))
 
 # In LateX
 # title
-if(log_prices == FALSE & yoyg == FALSE){
-  table_title_dyn <- paste0("LUCPFP semi-elasticities to short and long term price signals") 
-}
-if(log_prices == TRUE & yoyg == FALSE){
-  table_title_dyn <- paste0("LUCPFP elasticities to short and long term price signals") 
-}
-if(yoyg == TRUE){
-  table_title_dyn <- paste0("LUCPFP semi-elasticities to short and long term y-o-y growth rates of price signals") 
-}
+
+#table_title_dyn <- paste0("LUCFP semi-elasticities to short and medium-run price signals") 
+
+table_title_dyn <- paste0("LUCFP elasticities to short and medium-run price signals") 
+
+#table_title_dyn <- paste0("LUCFP semi-elasticities to short and medium-run y-o-y growth rates of price signals") 
+
 
 # LateX table
 etable(res_list_dst, 
@@ -641,61 +683,305 @@ etable(res_list_dst,
        subtitles = c("Sumatra", "Kalimantan", "Sumatra",  "Kalimantan"),
        family = TRUE,
        drop = c("own", "reachable"),
-       coefstat = "confint",
-       sdBelow = FALSE,
-       yesNoFixef = "X",
+       #coefstat = "confint",
+       sdBelow = F,
+       yesNo = "X",
+       fitstat = c("sq.cor"),
+       dict = TRUE, 
+       powerBelow = -7)
+
+rm(res_list_dst)
+# ILLEGAL vs LEGAL LUCFP
+ill_def <- 2
+ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def))
+ov_list <- list("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
+isl_list <- list("Sumatra", "Kalimantan")
+res_list_dst_ill <- list()
+elm <- 1
+for(OV in ov_list){
+  for(ISL in isl_list){
+    for(ILL in ill_status){
+      res_list_dst_ill[[elm]] <- make_base_reg(island = ISL, 
+                                               outcome_variable = OV,
+                                               illegal = ILL,
+                                               dynamics = TRUE,
+                                               commo = c("ffb","cpo"), #
+                                               offset = FALSE)
+      elm <- elm + 1
+    }
+  }
+}
+
+
+# preview in R 
+etable(res_list_dst_ill, 
+       se = "cluster", 
+       subtitles = c("Sumatra, legal", "Sumatra, illegal", 
+                     "Kalimantan, legal", "Kalimantan, illegal", 
+                     "Sumatra, legal", "Sumatra, illegal", 
+                     "Kalimantan, legal"))#, "Kalimantan, illegal" this one has dependent variable constant (for both ill def). 
+
+# In LateX
+# title
+
+#table_title_dyn <- paste0("Legal and illegal LUCFP semi-elasticities to short and medium-run price signals") 
+
+table_title_dyn <- paste0("Legal and illegal LUCFP elasticities to short and medium-run price signals") 
+
+#table_title_dyn <- paste0("Legal and illegal LUCFP semi-elasticities to short and medium-run y-o-y growth rates of price signals") 
+
+
+# LateX table
+etable(res_list_dst_ill, 
+       #cluster = oneway_cluster,
+       se = "cluster",
+       tex = TRUE,
+       # file = table_file, 
+       # replace = TRUE,
+       title = table_title_dyn,
+       subtitles = c("Sumatra, legal", "Sumatra, illegal", 
+                     "Kalimantan, legal", "Kalimantan, illegal", 
+                     "Sumatra, legal", "Sumatra, illegal", 
+                     "Kalimantan, legal"),#, "Kalimantan, illegal" this one has dependent variable constant.        
+       drop = c("own", "reachable"),
+       #coefstat = "confint",
+       sdBelow = TRUE,
+       yesNo = "X",
        fitstat = c("sq.cor"),
        dict = TRUE, 
        powerBelow = -7)
 
 ### INTERACTIONS 
 
+## Elasticities 
 
-# ... 
+ov_list <- list("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
+isl_list <- list("Sumatra", "Kalimantan")
+# Industrial
+res_int_list_dst_ind <- lapply(isl_list, make_base_reg,
+                           outcome_variable = "lucpfip_pixelcount_total",
+                           dynamics = FALSE,
+                           interaction_terms = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp"),#n_reachable_uml
+                           commo = c("cpo"), #"ffb",
+                           offset = FALSE) 
 
+# Smallholders
+res_int_list_dst_sm <- lapply(isl_list, make_base_reg,
+                          outcome_variable = "lucpfsmp_pixelcount_total",
+                          dynamics = FALSE,
+                          interaction_terms = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp"),#n_reachable_uml
+                          commo = c("cpo"),#"ffb",
+                          offset = FALSE) 
 
-# WITHOUT dynamics and CPO only       THIS IS PART (B) OF RESULTS, NEEDS TO BE COMPUTED IN TERMS OF MARGINAL EFFECTS
-# Sumatra
-res_list_main_ind <- lapply(isl_list, make_base_reg,
-                            outcome_variable = "lucpfip_pixelcount_total", 
-                            log_prices = TRUE,
-                            remaining_forest = FALSE,
-                            offset = FALSE) 
-
-# Kalimantan
-res_list_main_sm <- lapply(isl_list, make_base_reg,
-                            outcome_variable = "lucpfsmp_pixelcount_total", 
-                            log_prices = TRUE,
-                            remaining_forest = FALSE,
-                            offset = FALSE) 
-
-res_list_main <- append(res_list_main_ind, res_list_main_sm)
+res_int_list_dst <- append(res_int_list_dst_ind, res_int_list_dst_sm)
 
 # preview in R 
-etable(res_list_main, 
+etable(res_int_list_dst, 
        se = "cluster", 
-       subtitles = c("Sumatra", "Sumatra", "Kalimantan","Kalimantan"),
-       coefstat = "confint")
+       subtitles = c("Sumatra", "Kalimantan","Sumatra", "Kalimantan"))
 
-# # title
-# table_title_nodyn <- paste0("LUCPFIP semi-elasticities to price signals") 
-# # LateX table
-# etable(result_list_nodyn, 
-#        #cluster = oneway_cluster,
-#        se = "cluster",
-#        tex = TRUE,
-#        # file = table_file, 
-#        # replace = TRUE,
-#        title = table_title_nodyn,
-#        subtitles = c("Sumatra", "Kalimantan"),
-#        family = TRUE,
-#        drop = c("own", "reachable"),
-#        coefstat = "confint",
-#        sdBelow = FALSE,
-#        yesNoFixef = "X",
-#        fitstat = c("sq.cor"),
-#        dict = TRUE, 
-#        powerBelow = -7)
+# In LateX
+# title
+
+#table_title_dyn <- paste0("LUCPFP semi-elasticities to short and medium term price signals") 
+
+table_title_dyn <- paste0("LUCPFP elasticities to short and medium term price signals") 
+
+#table_title_dyn <- paste0("LUCPFP semi-elasticities to short and medium term y-o-y growth rates of price signals") 
+
+
+# LateX table
+etable(res_list_dst, 
+       #cluster = oneway_cluster,
+       se = "cluster",
+       tex = TRUE,
+       # file = table_file, 
+       # replace = TRUE,
+       title = table_title_dyn,
+       subtitles = c("Sumatra", "Kalimantan", "Sumatra",  "Kalimantan"),
+       family = TRUE,
+       drop = c("reachable"), # "own", "reachable"
+       sdBelow = FALSE,
+       yesNoFixef = "X",
+       fitstat = c("sq.cor"),
+       dict = TRUE, 
+       powerBelow = -7)
+
+
+##### TABLES OF MARGINAL EFFECT  ##### 
+
+ov_list <- list("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
+isl_list <- list("Sumatra", "Kalimantan")
+commo_list <- list(c("ffb"), "cpo")#, "cpo"
+res_list <- list()
+elm <- 1
+for(OV in ov_list){
+  for(ISL in isl_list){
+    for(COMMO in commo_list){
+      res_list[[elm]] <- make_base_reg(island = ISL, 
+                                       outcome_variable = OV,
+                                       dynamics = FALSE,
+                                       yoyg = FALSE,
+                                       illegal = "no_ill2",
+                                       commo = COMMO,
+                                       remaining_forest = FALSE,
+                                       offset = FALSE)
+      elm <- elm + 1
+    }
+  }
+}
+
+# preview in R 
+etable(res_list, 
+       se = "cluster", 
+       coefstat = "confint")n
+
+# Latex table 
+# title
+#table_title <- paste0("LUCFP semi-elasticities to medium-run y-o-y growth rates of price signals") 
+
+table_title <- paste0("LUCFP elasticities to medium-run price signals")
+# LateX table
+etable(res_list,
+       #cluster = oneway_cluster,
+       se = "cluster",
+       tex = TRUE,
+       # file = table_file,
+       # replace = TRUE,
+       title = table_title,
+       subtitles = c("Sumatra", "Sumatra", "Kalimantan", "Kalimantan",
+                     "Sumatra", "Sumatra", "Kalimantan", "Kalimantan"),
+       family = TRUE,
+       drop = c("own", "reachable"),
+       #coefstat = "confint",
+       sdBelow = TRUE,
+       yesNo = "X",
+       fitstat = c("sq.cor"),
+       dict = TRUE,
+       powerBelow = -7)
+
+res <- res_list[[2]]
+# keep only groups with significant and positive coefficients for policy insights
+cond <- lapply(res_list, FUN = function(res){abs(summary(res, se = "cluster")$coeftable[1,"t value"])>1.645 & res$coefficients[1] > 0})
+res_list_signif <- res_list[unlist(cond)]
+
+
+# helper function that transforms the list of results into a data frame of 
+make_price_change <- function(res){
+
+    coeff <- res$coefficients[[1]]
+    price_change <- -(1/coeff) 
+    col <- as.matrix(c(0.1,0.5,1)*price_change)
+  colnames(col) <- "colname"
+  return(col)
+}
+df <- bind_cols(lapply(res_list_signif, FUN = make_price_change)) %>% as.matrix()
+
+# prepare df for kable
+row.names(df) <- paste0(c(10, 50, 100),"% LUCFP reduction")
+df <- df*100
+df <- df %>% round(digits = 0)
+df <- df %>% as.data.frame()
+df <- apply(df, c(1,2), paste0,"%")
+colnames(df) <- NULL
+
+
+options(knitr.table.format = "latex") 
+kable(df, booktabs = T, align = "r", 
+      caption = "Price distortions against deforestation-based products to achieve different reductions in LUCFP ") %>% 
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>% 
+  add_header_above(c(" " = 1, 
+                     "FFB" = 1, "CPO" = 1,
+                     #"FFB" = 1, #"CPO" = 1,
+                     #"FFB" = 1, "CPO" = 1,
+                     #"FFB" = 1, 
+                     "CPO" = 1
+                     ), 
+                   bold = F, 
+                   align = "c") %>% 
+  add_header_above(c(" " = 1, 
+                     "Sumatra" = 3
+                     #"Kalimantan" = 1,
+                     #"Sumatra" = 2,
+                     #"Kalimantan" = 1
+                     ), 
+                   align = "c", 
+                   strikeout = F) %>% 
+
+  add_header_above(c(" " = 1, 
+                     "Industrial plantations" = 2, 
+                     "Smallholder plantations" = 1), 
+                   bold = T, 
+                   align = "c") %>% 
+  column_spec(column = c(2:(ncol(df)+1)),
+              width = "5em", 
+              latex_valign = "b") 
+  # 
+  # footnote(general = c("Sample mills are the 470 IBS palm oil mills we matched with the UML database."),
+  #          threeparttable = TRUE, 
+  #          escape = TRUE) 
+
+
+
+pixel_area_ha <- (27.8*27.6)/(1e4)
+# helper function that transforms the list of results into a data frame of partial effects. 
+make_PE <- function(res, variation){
+  # res is an element of res_list_main, so it's a fixest object. 
+  
+  # Compute the appropriate fitted values first. 
+
+  coeff <- res$coefficients[[1]]
+  avg_fv <- mean(res$fitted.values)
+  ape <- variation*coeff*avg_fv
+
+  if(grepl("pixelcount",as.character(res$fml)[2])){
+    ape <- ape*pixel_area_ha
+  }
+  
+
+} 
+
+apes <- sapply(res_list_main, make_PE, variation = 1)
+
+
+# save fitted values and linear predictors (which include FEs)
+d_clean$fitted.values <- fe_reg$fitted.values
+d_clean$linear.predictors <- fe_reg$linear.predictors
+
+## AVERAGE FITTED VALUE 
+distr_avg_fv <- ddply(d_clean, "district", summarise, 
+                      distr_avg_fv = mean(fitted.values))
+
+distr_lvl <- merge(distr_lvl, distr_avg_fv, by = "district", all = TRUE)
+# replace NAs with island average
+distr_lvl$distr_avg_fv <- replace(x = distr_lvl$distr_avg_fv, 
+                                  list = is.na(distr_lvl$distr_avg_fv), 
+                                  values = mean(distr_avg_fv$distr_avg_fv))
+distr_lvl$distr_avg_fv_ha <- distr_lvl$distr_avg_fv*(27.8*27.6)/(1e4)
+
+
+
+
+### DEMAND FUNCTIONS 
+
+ffb_demand_avg <- function(tax, fitted_value_avg, aggr_factor, coeff_ffb){
+  fitted_value_avg*aggr_factor/exp(coeff_ffb*tax)
+}
+ffb_demand_avg(tax = 0, 
+               fitted_value_avg = elmts[["Sumatra"]]["fitted_value_avg"],
+               aggr_factor = 1,
+               coeff_ffb = elmts[["Sumatra"]]["coeff_ffb"])
+
+cpo_demand_avg <- function(tax, fitted_value_avg, aggr_factor, coeff_cpo){
+  fitted_value_avg*aggr_factor/exp(coeff_cpo*tax)
+}
+cpo_demand_avg(tax = 0, 
+               fitted_value_avg = elmts[["Sumatra"]]["fitted_value_avg"],
+               aggr_factor = 1,
+               coeff_cpo = elmts[["Sumatra"]]["coeff_cpo"])
+
+
+
 
 
 

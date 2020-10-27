@@ -65,30 +65,38 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   lucpfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",
                                        parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
   
+  lucfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfsmp_panel_",
+                                       parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
+  
   # keep only year before 2015 (after they mean nothing since we plantation data are from 2015)
   lucpfip <- lucpfip[lucpfip$year<=2015,] # now runs from 2001-1998
   lucfip <- lucfip[lucfip$year<=2015,] # now runs from 2001-1998
   lucpfsmp <- lucpfsmp[lucpfsmp$year<=2015,] # now runs from 2001-1998
+  lucfsmp <- lucfsmp[lucfsmp$year<=2015,] # now runs from 2001-1998
   
   # remove coordinates, they are already in RHS
   lucpfip <- dplyr::select(lucpfip, -lat, -lon)
   lucfip <- dplyr::select(lucfip, -lat, -lon)
   lucpfsmp <- dplyr::select(lucpfsmp, -lat, -lon)
+  lucfsmp <- dplyr::select(lucfsmp, -lat, -lon)
   
   
   nrow(lucpfip)==nrow(lucfip)
+  nrow(lucpfsmp)==nrow(lucfsmp)
+  nrow(lucpfip)==nrow(lucfsmp)
   LHS <- base::merge(lucpfip, lucfip, by = c("parcel_id", "year"))
   LHS <- base::merge(LHS, lucpfsmp, by = c("parcel_id", "year"))
+  LHS <- base::merge(LHS, lucfsmp, by = c("parcel_id", "year"))
   
   # make variable that counts lucfp events on both small and medium sized plantations 
   LHS$lucpfsmp_pixelcount_total <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
   LHS$lucpfsmp_ha_total <- LHS$lucpfsp_ha_total + LHS$lucpfmp_ha_total
   
-  # LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
-  # LHS$lucfsmp_ha_30th <- LHS$lucfsp_ha_30th + LHS$lucfmp_ha_30th
+  LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
+  LHS$lucfsmp_ha_30th <- LHS$lucfsp_ha_30th + LHS$lucfmp_ha_30th
   
   
-  # explicative variables (runs from 1998-2015)
+  ### EXPLICATIVE VARIABLES (runs from 1998-2015)
   RHS <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
                                     parcel_size/1000,"km_",catchment_radius/1000,"CR.rds")))
   
@@ -97,7 +105,7 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   # from these years is captured in add_parcel_variables.R within lag variables. Hence all = FALSE
   parcels <- base::merge(LHS, RHS, by = c("parcel_id", "year"), all = FALSE)  
   
-  rm(LHS, RHS, lucpfip, lucfip, lucpfsmp)
+  rm(LHS, RHS, lucpfip, lucfip, lucpfsmp, lucfsmp)
   
   
   ### OUTCOME VARIABLE TIME DYNAMICS
@@ -108,7 +116,7 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   #                        "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th")
   
   # retirer cette ligne a la fin, mais pour l'instant fait gagner du temps, on a pas besoin de toutes les autres
-  outcome_variables <- c("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total", "lucpfmp_pixelcount_total", "lucpfsp_pixelcount_total")
+  outcome_variables <- c("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
   
   for(voi in outcome_variables){
     ## different lags
@@ -190,10 +198,10 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   # rm(parcels2)
   
   
-  ### COMPUTE ESTIMATED ANNUAL FOREST REMAINING - ONLY FOR PRIMARY AS OF NOW
+  ### COMPUTE ESTIMATED ANNUAL FOREST REMAINING
   
-  # first need to compute annual lucfp
-  # parcels <- dplyr::mutate(parcels, 
+  # Do if for lucfp if we are sure that this is an important methodology
+  # parcels <- dplyr::mutate(parcels,
   #                          total_lucfp_30th = lucfip_pixelcount_30th + lucfsmp_pixelcount_30th)
   
   parcels <- dplyr::mutate(parcels, 
@@ -209,7 +217,7 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   year_list[["2001"]] <- parcels[parcels$year == 2001, c("parcel_id", "year")] 
   # names(year_list[["2001"]]) <- "parcel_id"%>% as.data.frame() 
   year_list[["2001"]][,"accu_lucpfp_since2k"] <- 0
-  
+
   # then, each year's lucfp accumulated in the past is the sum of *past years'* total_lucpfp_total
   years <- 2002:max(parcels$year)
   for(y in years){

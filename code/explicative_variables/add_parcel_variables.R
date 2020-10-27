@@ -95,7 +95,7 @@ lapply(neededPackages, library, character.only = TRUE)
 indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
 
 ### IBS YEARS 
-years <- seq(1998, 2015, 1)
+years <- seq(1998, 2016, 1)
 
 ### GRID CELL SIZE
 parcel_size <- 3000
@@ -150,6 +150,15 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
                                       parcel_size/1000,"km_",
                                       catchment_radius/1000,"CR.rds")))
+  
+  ### ADD A 2016 LINE 
+  # it will be relevant in regressions where we use only lagged RHS variables.
+  
+  cs_2016 <- parcels[parcels$year==2015,]
+  cs_2016$year <- 2016
+  parcels <- rbind(parcels, cs_2016)
+  parcels <- arrange(parcels, parcel_id, year)
+  rm(cs_2016)
   
   # make a spatial cross section of it (parcels' coordinates are constant over time)
   parcels_centro <- parcels[parcels$year == 1998, c("parcel_id", "lat", "lon")]
@@ -215,7 +224,7 @@ while(catchment_radius < 60000){
 }
   
 
-#### ADD GEGRAPHIC VARIABLES AND THEIR TRENDS ####
+#### ADD GEOGRAPHIC VARIABLES AND THEIR TRENDS ####
 
 # read geographic shapefiles
 island_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/island_sf"))
