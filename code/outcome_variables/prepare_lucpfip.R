@@ -57,7 +57,7 @@
 
 # These are the packages needed in this particular script. 
 neededPackages = c("data.table", "dplyr", "readstata13", "readxl",
-                   "raster", "rgdal", "sp", "sf",
+                   "raster", "rgdal", "sp", "sf", "osrm", "osrmr",
                    "doParallel", "foreach", "parallel")
 
 # Install them in their project-specific versions
@@ -85,6 +85,11 @@ lapply(neededPackages, library, character.only = TRUE)
 #   see in particular https://rstudio.github.io/renv/articles/renv.html 
 
 
+### SET OSRM SERVER 
+# See the notes below and in Evernote on OSRM
+options(osrm.server = paste0(osrmr:::server_address(TRUE), "/"), osrm.profile = "driving")
+map_name = "indonesia-latest.osrm --port 5000 --max-table-size=1000000000"
+osrm_path = "C:/Users/GUYE/osrm"
 
 ### NEW FOLDERS USED IN THIS SCRIPT 
 
@@ -617,8 +622,231 @@ aggregate_lucpfip <- function(island, parcel_size){
 # Then, parcels that remain (i.e. are not masked) are not discarded by st_is_within_distance,
 # even if parts of their areas are in the sea, as long as their centroids are less than a given distance. 
 
+#### to_panel_within_CR function #### 
+# to_panel_within_CR <- function(island, parcel_size, catchment_radius){
+#   
+#   ### Function description
+#   # This repeats roughly twice the same actions, once for parcels within catchment radiuses of IBS mills only, 
+#   # and once for all UML mills. 
+#   
+#   # raster_to_df converts the raster bricks of annual layers of parcels to a panel dataframe.
+#   # This is executed for each pf_type, iteratively and not in parallel (not necessary because quite fast)
+#   # The tasks are:
+#   # 1. masking the brick of parcels of a given size (parcel_size) on a given island with the maximal CA of mills on that island;
+#   # 2. selecting only the parcels that are within a given catchment radius.
+#   # 3. reshaping the values in these parcels to a long format panel dataframe
+#   raster_to_df <- function(pf_type){
+#     
+#     years <- seq(from = 2001, to = 2018, by = 1)
+#     
+#     ### IBS 
+#     
+#     ## 1. Masking.
+#     # Probably more efficient as the st_is_within does not need to be executed over all Indonesian cells but only those within the largest catchment_radius.
+#     
+#     # Make the mask
+#     mills <- read.dta13(file.path("temp_data/processed_mill_geolocalization/IBS_UML_panel.dta"))
+#     # keep only a cross section of those that are geolocalized mills, on island of interest
+#     mills <- mills[mills$analysis_sample==1,]
+#     mills <- mills[!duplicated(mills$firm_id),]
+#     mills <- mills[mills$island_name == island,]
+#     #turn into an sf object.
+#     mills <- st_as_sf(mills,	coords	=	c("lon",	"lat"), crs=4326)
+#     # keep only the geometry, we do not need mills attributes here.
+#     mills <- st_geometry(mills)
+#     # set CRS and project
+#     mills_prj <- st_transform(mills, crs = indonesian_crs)
+#     #define big catchment areas to have a large AOI.
+#     mills_ca <- st_buffer(mills_prj, dist = 60000)
+#     # work with squares rather than with circles
+#     for(i in 1:length(mills_ca)){
+#       mills_ca[i] <- st_as_sfc(st_bbox(mills_ca[i]))
+#     }
+#     total_ca <- st_union(st_geometry(mills_ca))
+#     # coerce to a SpatialPolygon
+#     total_ca_sp <- as(total_ca, "Spatial")
+#     # keep mills_prj we need it below
+#     rm(total_ca, mills_ca, mills)
+#     
+#     ## Mask
+#     parcels_brick_name <- paste0("parcel_lucpfip_",island,"_",parcel_size/1000,"km_",pf_type)
+#     parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, ".tif")))
+#     
+#     mask(x = parcels_brick, mask = total_ca_sp,
+#          filename = file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_IBS_masked.tif")),
+#          datatype = "INT4U",
+#          overwrite = TRUE)
+#     
+#     rm(parcels_brick, total_ca_sp)
+#     
+#     
+#     ## 2. Selecting parcels within a given distance to a mill at least one year
+#     # (i.e. the parcel is present in the dataframe in all years even if it is within say 50km of a mill only since 2014)
+#     
+#     # Turn the masked raster to a sf dataframe
+#     parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_IBS_masked.tif")))
+#     
+#     m.df_wide <- raster::as.data.frame(parcels_brick, na.rm = TRUE, xy = TRUE, centroids = TRUE)
+#     
+#     m.df_wide <- m.df_wide %>% dplyr::rename(lon = x, lat = y)
+#     m.df_wide <- st_as_sf(m.df_wide, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+#     
+#     # Remove here parcels that are not within the catchment area of a given size (defined by catchment radius)
+#     # coordinates of all mills (crs is indonesian crs, unit is meter)
+#     within <- st_is_within_distance(m.df_wide, mills_prj, dist = catchment_radius)
+#     m.df_wide <- m.df_wide %>% dplyr::filter(lengths(within) >0)
+#     m.df_wide <- m.df_wide %>% st_drop_geometry()
+#     
+#     rm(within, parcels_brick)
+#     
+#     
+#     ## 3. Reshaping to long format
+#     # make parcel id
+#     island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
+#     m.df_wide$parcel_id <- paste0(island_id, c(1:nrow(m.df_wide))) %>% as.numeric()
+#     
+#     # vector of the names in the wide format of our time varying variables
+#     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
+#     # the layer index (1-18) indeed corresponds to the year (2001-2018) because, in aggregate_lucpfip, at the end, 
+#     # rasterlist is ordered along 2001-2018 and this order is preserved when the layers are bricked. 
+#     varying_vars <- paste0(parcels_brick_name, "_IBS_masked.", seq(from = 1, to = 18))
+#     
+#     # reshape to long
+#     m.df <- stats::reshape(m.df_wide,
+#                            varying = varying_vars,
+#                            v.names = paste0("lucpfip_pixelcount_",pf_type),
+#                            sep = ".",
+#                            timevar = "year",
+#                            idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
+#                            ids = "parcel_id",
+#                            direction = "long",
+#                            new.row.names = seq(from = 1, to = nrow(m.df_wide)*length(years), by = 1))
+#     
+#     rm(varying_vars, m.df_wide)
+#     # replace the indices from the raster::as.data.frame with actual years.
+#     m.df <- mutate(m.df, year = years[year])
+#     
+#     m.df <- setorder(m.df, parcel_id, year)
+#     saveRDS(m.df,
+#             file = file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+#                                     island,"_",
+#                                     parcel_size/1000,"km_",
+#                                     catchment_radius/1000,"km_IBS_CR_",
+#                                     pf_type,".rds")))
+#     
+#     
+#     ### UML 
+#     
+#     ## 1. Masking.
+#     # Probably more efficient as the st_is_within does not need to be executed over all Indonesian cells but only those within the largest catchment_radius.
+#     
+#     # Make the mask
+#     mills <- read_xlsx(file.path("input_data/uml/mills_20200129.xlsx"))
+#     mills$latitude <- as.numeric(mills$latitude)
+#     mills$longitude <- as.numeric(mills$longitude)
+#     mills$lat <- mills$latitude
+#     mills$lon <- mills$longitude
+#     mills <- st_as_sf(mills,	coords	=	c("longitude",	"latitude"), crs = 4326)
+#     mills <- st_geometry(mills)
+#     mills_prj <- st_transform(mills, crs = indonesian_crs)
+#     
+#     # there is no island column in this dataset, hence we select mills on the specific island geographically
+#     select_within <- st_within(x = mills_prj, y = island_sf_prj[island_sf_prj$shape_des == island,])
+#     mills_prj <- mills_prj[lengths(select_within)>0,]
+#     
+#     #define big catchment areas to have a large AOI.
+#     mills_ca <- st_buffer(mills_prj, dist = 60000)
+#     # work with squares rather than with circles
+#     for(i in 1:length(mills_ca)){
+#       mills_ca[i] <- st_as_sfc(st_bbox(mills_ca[i]))
+#     }
+#     total_ca <- st_union(st_geometry(mills_ca))
+#     # coerce to a SpatialPolygon
+#     total_ca_sp <- as(total_ca, "Spatial")
+#     # keep mills_prj we need it below
+#     rm(total_ca, mills_ca, mills)
+#     
+#     ## Mask
+#     parcels_brick_name <- paste0("parcel_lucpfip_",island,"_",parcel_size/1000,"km_",pf_type)
+#     parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, ".tif")))
+#     
+#     mask(x = parcels_brick, mask = total_ca_sp,
+#          filename = file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_UML_masked.tif")),
+#          datatype = "INT4U",
+#          overwrite = TRUE)
+#     
+#     rm(parcels_brick, total_ca_sp)
+#     
+#     
+#     ## 2. Selecting parcels within a given distance to a mill at least one year
+#     # (i.e. the parcel is present in the dataframe in all years even if it is within say 50km of a mill only since 2014)
+#     
+#     # Turn the masked raster to a sf dataframe
+#     parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_UML_masked.tif")))
+#     
+#     m.df_wide <- raster::as.data.frame(parcels_brick, na.rm = TRUE, xy = TRUE, centroids = TRUE)
+#     
+#     m.df_wide <- m.df_wide %>% dplyr::rename(lon = x, lat = y)
+#     m.df_wide <- st_as_sf(m.df_wide, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+#     
+#     # Remove here parcels that are not within the catchment area of a given size (defined by catchment radius)
+#     # coordinates of all mills (crs is indonesian crs, unit is meter)
+#     within <- st_is_within_distance(m.df_wide, mills_prj, dist = catchment_radius)
+#     m.df_wide <- m.df_wide %>% dplyr::filter(lengths(within) >0)
+#     m.df_wide <- m.df_wide %>% st_drop_geometry()
+#     
+#     rm(within, parcels_brick)
+#     
+#     
+#     ## 3. Reshaping to long format
+#     # make parcel id
+#     island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
+#     m.df_wide$parcel_id <- paste0(island_id, c(1:nrow(m.df_wide))) %>% as.numeric()
+#     
+#     # vector of the names in the wide format of our time varying variables
+#     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
+#     varying_vars <- paste0(parcels_brick_name, "_UML_masked.", seq(from = 1, to = 18))
+#     
+#     # reshape to long
+#     m.df <- stats::reshape(m.df_wide,
+#                            varying = varying_vars,
+#                            v.names = paste0("lucpfip_pixelcount_",pf_type),
+#                            sep = ".",
+#                            timevar = "year",
+#                            idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
+#                            ids = "parcel_id",
+#                            direction = "long",
+#                            new.row.names = seq(from = 1, to = nrow(m.df_wide)*length(years), by = 1))
+#     
+#     rm(varying_vars, m.df_wide)
+#     # replace the indices from the raster::as.data.frame with actual years.
+#     m.df <- mutate(m.df, year = years[year])
+#     
+#     m.df <- setorder(m.df, parcel_id, year)
+#     saveRDS(m.df,
+#             file = file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+#                                     island,"_",
+#                                     parcel_size/1000,"km_",
+#                                     catchment_radius/1000,"km_UML_CR_",
+#                                     pf_type,".rds")))
+#   }
+#   
+#   ### Execute it
+#   pf_typeS <- c("intact", "degraded", "total")
+#   for(pf_type in pf_typeS){
+#     
+#     raster_to_df(pf_type = pf_type)
+#     
+#     removeTmpFiles(h=0)
+#   }  
+#   
+#   
+#   print(paste0("complete to_panel_within_CR ",island," ",parcel_size/1000,"km ",catchment_radius/1000,"CR"))
+#   
+# }
 
-to_panel_within_CR <- function(island, parcel_size, catchment_radius){
+#### to_panel_within_SC function ####
+to_panel_within_CR <- function(island, parcel_size, travel_time){#catchment_radius
   
   ### Function description
   # This repeats roughly twice the same actions, once for parcels within catchment radiuses of IBS mills only, 
@@ -640,19 +868,19 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     # Probably more efficient as the st_is_within does not need to be executed over all Indonesian cells but only those within the largest catchment_radius.
     
     # Make the mask
-    mills <- read.dta13(file.path("temp_data/processed_mill_geolocalization/IBS_UML_panel.dta"))
+    mills <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
     # keep only a cross section of those that are geolocalized mills, on island of interest
     mills <- mills[mills$analysis_sample==1,]
     mills <- mills[!duplicated(mills$firm_id),]
     mills <- mills[mills$island_name == island,]
     #turn into an sf object.
-    mills <- st_as_sf(mills,	coords	=	c("lon",	"lat"), crs=4326)
+    mills <- st_as_sf(mills,	coords	=	c("lon",	"lat"), remove = FALSE, crs=4326)
     # keep only the geometry, we do not need mills attributes here.
-    mills <- st_geometry(mills)
+    mills_geom <- st_geometry(mills)
     # set CRS and project
-    mills_prj <- st_transform(mills, crs = indonesian_crs)
+    mills_prj <- st_transform(mills_geom, crs = indonesian_crs)
     #define big catchment areas to have a large AOI.
-    mills_ca <- st_buffer(mills_prj, dist = 60000)
+    mills_ca <- st_buffer(mills_prj, dist = 80000) # 80km. The point is not to be too restrictive here. 
     # work with squares rather than with circles
     for(i in 1:length(mills_ca)){
       mills_ca[i] <- st_as_sfc(st_bbox(mills_ca[i]))
@@ -661,7 +889,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     # coerce to a SpatialPolygon
     total_ca_sp <- as(total_ca, "Spatial")
     # keep mills_prj we need it below
-    rm(total_ca, mills_ca, mills)
+    rm(total_ca, mills_ca, mills_geom)
     
     ## Mask
     parcels_brick_name <- paste0("parcel_lucpfip_",island,"_",parcel_size/1000,"km_",pf_type)
@@ -686,20 +914,50 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     m.df_wide <- m.df_wide %>% dplyr::rename(lon = x, lat = y)
     m.df_wide <- st_as_sf(m.df_wide, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
     
-    # Remove here parcels that are not within the catchment area of a given size (defined by catchment radius)
-    # coordinates of all mills (crs is indonesian crs, unit is meter)
-    within <- st_is_within_distance(m.df_wide, mills_prj, dist = catchment_radius)
-    m.df_wide <- m.df_wide %>% dplyr::filter(lengths(within) >0)
-    m.df_wide <- m.df_wide %>% st_drop_geometry()
-    
-    rm(within, parcels_brick)
-    
-    
-    ## 3. Reshaping to long format
-    # make parcel id
     island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
     m.df_wide$parcel_id <- paste0(island_id, c(1:nrow(m.df_wide))) %>% as.numeric()
     
+    # NOW WE CONSIDER SUPPLY SHEDS BASED ON TRAVEL TIME BETWEEN PLANTATIONS AND MILLS
+    # Keep only parcels that are within a given travel duration from at least one mill in the whole period. 
+    # make parcel id
+    
+    # transform to lonlat and to Spatial is necessary for osrm v.3.0.0
+    m.df_wide_lonlat <- st_transform(m.df_wide, crs = 4326) 
+
+    m.df_wide_lonlat_sp <- as(m.df_wide_lonlat, "Spatial")
+    mills_sp <- as(mills, "Spatial")
+
+    ### REQUEST THE OSRM DURATIONS 
+    # See the notes below and in Evernote on OSRM
+    osrmr::run_server(osrm_path = osrm_path, map_name = map_name)
+    
+    dur_list <-  osrmTable(src = m.df_wide_lonlat_sp, dst = mills_sp)
+
+    osrmr::quit_server()
+    
+    dur_mat <- dur_list$durations
+
+    rm(dur_list)
+  # Durations are in minutes, and we impose a restriction of no more than 2, 4 or 6 hours of travel between plantation and mill.
+  for(travel_time in c(2,4,6)){
+    
+    dur_mat_log <- dur_mat/(60) < travel_time
+  
+    m.df_wide <- st_drop_geometry(m.df_wide_lonlat)
+
+    # keep only the parcels that satisfy the travel time condition for at least one mill.
+    m.df_wide <- m.df_wide[base::rowSums(dur_mat_log, na.rm = TRUE)>0,]
+    # na.rm = TRUE is in case of mills for which no duration could be computed. 
+    # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
+    
+    # dur_mat[is.na(dur_mat[1:3,])]
+    # mills[mills$firm_id %in% c(4096, 4097,51432,54268),"uml_matched_sample"]
+    # mills[mills$firm_id==51432,]
+    # mills[mills$uml_matched_sample ==0,] %>% nrow()
+    # is.na(dur_mat[1:3,]) %>% sum()
+    
+    ## 3. Reshaping to long format
+
     # vector of the names in the wide format of our time varying variables
     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
     # the layer index (1-18) indeed corresponds to the year (2001-2018) because, in aggregate_lucpfip, at the end, 
@@ -722,12 +980,28 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     m.df <- mutate(m.df, year = years[year])
    
     m.df <- setorder(m.df, parcel_id, year)
+    
     saveRDS(m.df,
             file = file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
                                     island,"_",
                                     parcel_size/1000,"km_",
-                                    catchment_radius/1000,"km_IBS_CR_",
+                                    travel_time,"h_IBS_SC_", 
                                     pf_type,".rds")))
+  }
+    
+  rm(dur_mat, dur_mat_log, m.df_wide_lonlat, m.df_wide_lonlat)
+
+  
+    
+    
+    # that's the names with CATCHMENT RADIUS METHOD
+    # saveRDS(m.df,
+    #         file = file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+    #                                 island,"_",
+    #                                 parcel_size/1000,"km_",
+    #                                 catchment_radius/1000,"km_IBS_CR_",
+    #                                 pf_type,".rds")))
+    
 
       
     ### UML 
@@ -750,7 +1024,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     mills_prj <- mills_prj[lengths(select_within)>0,]
     
     #define big catchment areas to have a large AOI.
-    mills_ca <- st_buffer(mills_prj, dist = 60000)
+    mills_ca <- st_buffer(mills_prj, dist = 80000)
     # work with squares rather than with circles
     for(i in 1:length(mills_ca)){
       mills_ca[i] <- st_as_sfc(st_bbox(mills_ca[i]))
@@ -786,11 +1060,11 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     
     # Remove here parcels that are not within the catchment area of a given size (defined by catchment radius)
     # coordinates of all mills (crs is indonesian crs, unit is meter)
-    within <- st_is_within_distance(m.df_wide, mills_prj, dist = catchment_radius)
-    m.df_wide <- m.df_wide %>% dplyr::filter(lengths(within) >0)
-    m.df_wide <- m.df_wide %>% st_drop_geometry()
-    
-    rm(within, parcels_brick)
+    # within <- st_is_within_distance(m.df_wide, mills_prj, dist = catchment_radius)
+    # m.df_wide <- m.df_wide %>% dplyr::filter(lengths(within) >0)
+    # m.df_wide <- m.df_wide %>% st_drop_geometry()
+    # 
+    # rm(within, parcels_brick)
     
     
     ## 3. Reshaping to long format
@@ -1197,3 +1471,38 @@ for(sample in sampleS){
 # 
 # rm(lucpfip_intact, lucpfip_degraded, lucpfip_total)
 # removeTmpFiles(h=0)
+
+
+
+### ALTERNATIVE OSRM WITH PUBLIC SERVER (BUT TAKES A WHILE !)
+# dur_mat <- matrix(nrow = nrow(m.df_wide_lonlat), ncol = nrow(mills))
+# 
+# if(nrow(mills) > 200){
+#   # chope the calculation for it to work with the free OSRM SERVER 
+#   n <- nrow(mills)
+#   third <- trunc(n/3)
+#   first_3rd <- 1:third
+#   snd_3rd <- (third+1):(third*2)
+#   last_3rd <- (third*2+1):n
+#   
+#   for(srci in 1:3){#nrow(m.df_wide_lonlat)
+#     #for(desti in 1:nrow(mills)){
+#     dur_mat[srci, first_3rd] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills[first_3rd,])$durations# %>% as.data.frame()
+#     dur_mat[srci, snd_3rd] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills[snd_3rd,])$durations# %>% as.data.frame()
+#     dur_mat[srci, last_3rd] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills[last_3rd,])$durations# %>% as.data.frame()
+#     #names(durations[[i]]) <- colnames(durations[[i]])
+#     #}
+#   }
+# }else{
+#   for(srci in 1:nrow(m.df_wide_lonlat)){#
+#     dur_mat[srci,] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills)$durations
+#   }
+# }
+# osrmTable(src = m.df_wide_lonlat_sp[1,], dst = mills_sp)$durations
+# # ou alors : 
+# slice_size <- 10000/500
+# i <- 1
+# while(slice < nrow(m.df_wide_lonlat)){
+#   dur_mat[i:(i+slice_size),]  <- osrmTable(src = m.df_wide_lonlat[i:(i+slice_size),], dst = mills)$durations
+#   
+# }

@@ -236,7 +236,7 @@ rsource using "install_R_project_packages.R"
 		* input:	temp_data/processed_indonesia_spatial/island_sf
 		* 			input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_2015_WGS1984.tif
 		*			input_data/margono_primary_forest/timeseq_change00_12.tif
-		*			temp_data/processed_mill_geolocalization/IBS_UML_panel.dta
+		*			temp_data/IBS_UML_panel_final.dta
 
 		* output: 
 		*		Main raster outputs 
@@ -257,7 +257,7 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_lu/austin_ioppm_2015_Sumatra_aligned.tif
 		*			temp_data/processed_lu/austin_ioppm_2015_Kalimantan_aligned.tif
 		*			temp_data/processed_lu/austin_ioppm_2015_Papua_aligned.tif
-		*			temp_data/processed_mill_geolocalization/IBS_UML_panel.dta
+		*			temp_data/IBS_UML_panel_final.dta
 
 		* output: 
 		*		Main raster outputs 

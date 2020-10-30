@@ -69,6 +69,27 @@
       "Repository": "CRAN",
       "Hash": "39ea11fb3ad0d759f9f1c053fd442957"
     },
+    "R.methodsS3": {
+      "Package": "R.methodsS3",
+      "Version": "1.8.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "4bf6453323755202d5909697b6f7c109"
+    },
+    "R.oo": {
+      "Package": "R.oo",
+      "Version": "1.24.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "5709328352717e2f0a9c012be8a97554"
+    },
+    "R.utils": {
+      "Package": "R.utils",
+      "Version": "2.10.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "a9e316277ff12a43997266f2f6567780"
+    },
     "R6": {
       "Package": "R6",
       "Version": "2.4.1",
@@ -370,6 +391,13 @@
       "Repository": "CRAN",
       "Hash": "eee36211f74e4dbc80eae9d504b58f0b"
     },
+    "gepaf": {
+      "Package": "gepaf",
+      "Version": "0.1.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "a9106dd173eb74f21d51f1260a17ea3c"
+    },
     "gfcanalysis": {
       "Package": "gfcanalysis",
       "Version": "1.5.0",
@@ -636,6 +664,20 @@
       "Repository": "CRAN",
       "Hash": "49f7258fd86ebeaea1df24d9ded00478"
     },
+    "osrm": {
+      "Package": "osrm",
+      "Version": "3.0.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "fa55a57ea8af0cbd94b1fcd036a575a2"
+    },
+    "osrmr": {
+      "Package": "osrmr",
+      "Version": "0.1.35",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "da6ade0b1361df76b3b9fe9daa3264bb"
+    },
     "pillar": {
       "Package": "pillar",
       "Version": "1.4.6",
@@ -741,6 +783,13 @@
       "Repository": "CRAN",
       "Hash": "c66b930d20bb6d858cd18e1cebcfae5c"
     },
+    "remotes": {
+      "Package": "remotes",
+      "Version": "2.2.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "430a0908aee75b1fcba0e62857cab0ce"
+    },
     "renv": {
       "Package": "renv",
       "Version": "0.12.0-27",
@@ -773,6 +822,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "dc2f6aa3dcc81a47fee312acd9afa2b0"
+    },
+    "rjson": {
+      "Package": "rjson",
+      "Version": "0.2.20",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "7d597f982ee6263716b6a2f28efd29fa"
     },
     "rlang": {
       "Package": "rlang",

@@ -834,7 +834,7 @@ for(OV in ov_list){
 # preview in R 
 etable(res_list, 
        se = "cluster", 
-       coefstat = "confint")n
+       coefstat = "confint")
 
 # Latex table 
 # title

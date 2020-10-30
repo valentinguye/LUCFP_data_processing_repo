@@ -56,7 +56,7 @@
 
 # These are the packages needed in this particular script. 
 neededPackages = c("data.table", "dplyr", "readstata13", "readxl",
-                   "raster", "rgdal", "sp", "sf",
+                   "raster", "rgdal", "sp", "sf", "osrm",
                    "doParallel", "foreach", "parallel")
 
 # Install them in their project-specific versions
