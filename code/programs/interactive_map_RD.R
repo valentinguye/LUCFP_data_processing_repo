@@ -530,4 +530,26 @@ leaflet() %>%
 
 
 
+#--------------------------------
+rowid <- m.df_wide_lonlat$parcel_id[m.df_wide_lonlat$parcel_id == 25000]
+head(m.df$parcel_id)
+mills$timetop1 <- dur_mat[rowid,]/60
+mills <- st_transform(mills, crs = indonesian_crs)
+mills <- st_buffer(mills, dist = 50000)
+mills <- st_transform(mills, crs = 4326)
+cb_timetop1 <- colorNumeric("viridis", # "viridis" (green-purple), "magma" (yellow-purple), "inferno" (like magma), or "plasma", "BuPu", "Greens"
+                                domain = st_drop_geometry(mills[,"timetop1"]),
+                                #bins = 4, 
+                                na.color = "transparent", 
+                                reverse = F)
+leaflet() %>% 
+  addTiles()%>%
+  addProviderTiles(providers$Esri.WorldImagery, group ="ESRI") %>%
+
+  addPolygons(data = mills, 
+              opacity = 1, weight = 2, col = ~cb_timetop1(mills$timetop1), 
+              fill = TRUE, fillColor = ~cb_timetop1(mills$timetop1),
+              label = mills$timetop1) %>% 
+  addMarkers(data = m.df_wide_lonlat[rowid,])
+
 

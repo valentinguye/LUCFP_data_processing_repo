@@ -270,7 +270,27 @@ rsource using "install_R_project_packages.R"
 
 	*** prepare parcel maps of annual LUC from primary forest to small and medium size plantations (LUCPFSP) 
 		rsource using "code/outcome_variables/prepare_lucpfsp"
-		* input: 		
+		* input: 
+
+		* output:	temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
+		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
+
+
+
+	*** program that selects raster grid cells into data frames, based on OSRM travel time constraints. 
+	capture "code/programs/make_osrm_supplysheds.R"
+	/* it is not sourced here, because it requires a local instance of OSRM to be set up. See within the script for more details. 
+	For this reason, the output being not easily reproducible, it is saved in input_data, and not temp_data. 
+	*/
+	* input: 		temp_data/processed_indonesia_spatial/island_sf
+	*				temp_data/IBS_UML_panel_final.dta
+	*				input_data/uml/mills_20200129.xlsx
+	*				temp_data/processed_lu/parcel_lucpfip_ISLAND_PS_TYPE for ISLAND = c("Sumatra", "Kalimantan", "Papua"); PS = 3km, TYPE = c("intact", "degraded", "total", "30th" "60th", "90th")
+
+	* output:		input/processed_parcels/lucpfip_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one has rows from three islands and columns for three forest definitions.  
+	*				input/processed_parcels/lucpfsmp_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one has rows from three islands and columns for three forest definitions.  
+	*				input/processed_parcels/lucfip_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one has rows from three islands and columns for three forest definitions.  
+	*				input/processed_parcels/lucfsmp_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one has rows from three islands and columns for three forest definitions.  
 
 
 
