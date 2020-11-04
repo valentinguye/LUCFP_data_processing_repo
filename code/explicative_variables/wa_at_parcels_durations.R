@@ -1,8 +1,10 @@
 # This script uses dataframes of parcels built in make_osrm_CA.R 
 # These dataframes have parcels of a given size (3x3km only for now), 
 # within respectively 2h, 4h and 6h driving catchment areas of IBS mills
-# For each combination of parcel size and catchment area, there is a different parcel dataframe. 
+# For each combination of parcel size and catchment area, there is a different parcel data frame. 
 
+# IN THIS SCRIPT, CONTRARY TO wa_at_parcels_distances.R EVERYTHING IS DONE WITHIN ISLANDS
+# this is because the driving travel times need to be computed first for every possible parcel-mill pair. Therefore,  
 # Now we would like to add explanatory variables to these dataframes.  
 
 # So we repeat the following main steps for each parcel_size X catchment area combination. 
@@ -36,7 +38,7 @@
 # see this project's README for a better understanding of how packages are handled in this project. 
 
 # These are the packages needed in this particular script. 
-neededPackages = c("data.table", "dplyr", "readstata13", "readxl",
+neededPackages = c("data.table", "tidyr", "dplyr", "readstata13", "readxl",
                    "rgdal", "sf",
                    "doParallel", "foreach", "parallel")
 #install.packages("sf", source = TRUE)
@@ -106,9 +108,7 @@ ibs <- ibs[, c("firm_id", "year", "trase_code", "uml_id", "mill_name", "parent_c
                "pko_price_imp1","pko_price_imp2", "out_ton_pko_imp1", "out_ton_pko_imp2", "out_val_pko_imp1", "out_val_pko_imp2",
                "prex_pko_imp1", "prex_pko_imp2",
                "export_pct_imp", "revenue_total", "workers_total_imp3",
-               "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp", 
-               "iv2_imp1", "iv2_imp2", "iv3_imp1", "iv3_imp2", "iv4_imp1", "iv4_imp2", 
-               "concentration_10", "concentration_30", "concentration_50")]
+               "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp")]
 
 # we don't keep the logs because we don't want to compute means of logs, but logs of means. 
 # "ffb_price_imp1_ln", "ffb_price_imp2_ln", "cpo_price_imp1_ln", "cpo_price_imp2_ln",        
@@ -125,9 +125,6 @@ ibs_cs <- lapply(ibs_cs, FUN = st_transform, crs = indonesian_crs)
 ibs_cs <- lapply(ibs_cs, FUN = function(cs){mutate(cs, indo_crs_lon = st_coordinates(cs)[,"X"])})
 ibs_cs <- lapply(ibs_cs, FUN = function(cs){mutate(cs, indo_crs_lat = st_coordinates(cs)[,"Y"])})
 
-##### COMPUTE DURATION MATRICES WITH A LOCAL INSTANCE OF OSRM #####
-
-
 
 
 ##### COMPUTE WEIGHTED AVERAGES OF MILL VARIABLES FOR PARCEL OF A GIVEN SET OF PARCELS ##### 
@@ -141,17 +138,21 @@ ibs_cs <- lapply(ibs_cs, FUN = function(cs){mutate(cs, indo_crs_lat = st_coordin
 # parcels[["geometry"]][parcels$parcel_id == i]
 # parcels[parcels$parcel_id == i, "geometry"]
 
-parcel_set_w_average <- function(parcel_size, catchment_radius){
+island <- "Sumatra"
+parcel_size <- 3000
+travel_time <- 4
+
+parcel_set_w_average <- function(island, parcel_size, travel_time){
   
   #### Prepare parcel panel ####
   # Import the parcel panel (for IBS)
-  parcels_centro <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
+  parcels_centro <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_CA_total.rds")))
   # keep only one cross-section, no matter which. 
-  parcels_centro <- dplyr::filter(parcels_centro, year == 2001)
-  # turn it into a sf object (lon lat are already expressed in indonesian crs)
-  parcels_centro <- st_as_sf(parcels_centro, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
-  parcels_centro <- dplyr::select(parcels_centro, parcel_id, geometry)
-  
+  parcels_centro <- parcels_centro[!duplicated(parcels_centro$parcel_id),]
+  # turn it into a sf object
+  parcels_centro <- st_as_sf(parcels_centro, coords = c("lon", "lat"), remove = FALSE, crs = 4326)
+  parcels_centro <- mutate(parcels_centro, lonlat = paste0(lon, lat))
+  parcels_centro <- st_drop_geometry(parcels_centro)
   
   
   
@@ -175,6 +176,51 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
       #let's not be year specific in this function, and we will rename and append everything after. 
       
       ## Attribute to each parcel centroid the sf data frame of reachable mills 
+      
+      # This is the driving travel time (duration) matrix between each pair of parcel and mill. 
+      dur_mat <- readRDS(file.path(paste0("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_",years[t])))
+
+      dur_mat <- readRDS(file.path(paste0("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_IBS")))
+      dur_mat <- dur_mat$durations
+
+      dur_mat_log <- dur_mat/(60) < travel_time
+      dur_mat_log <- replace_na(dur_mat_log, replace = FALSE)
+      anyNA(dur_mat_log)
+
+      # parcels <- lapply(X = 1:nrow(dur_mat_log), FUN = function(i){ibs[dur_mat_log[,],]})
+      # this creates a 14Gb list, this is not possible...
+
+      # selector <- as.vector(t(dur_mat_log))
+      
+      b <- ibs$firm_id[as.vector(t(dur_mat_log))]
+      dim(b)
+      b <- ibs[selector,c("firm_id","year")]#,]
+      b[!is.na(b$firm_id),]
+
+      ibs[c(T,F),]
+      names(parcels) <- row.names(dur_mat_log)
+      parcels2 <- bind_rows(parcels)
+
+
+            t_dur_mat_log <- t(dur_mat_log)
+      as.data.frame
+dim(t_dur_mat_log)
+
+      sum(dur_mat_log[1,], na.rm=T)
+#       
+#       
+#       
+#       inner_join()
+      uml_msk_TT_df <- merge(uml_msk_df, dur_mat_log, by = "lonlat", all = FALSE)
+      uml_msk_TT_df <- uml_msk_TT_df[base::rowSums(uml_msk_TT_df[,grepl("firm_id",colnames(uml_msk_TT_df))], na.rm = TRUE)>0,]
+      # na.rm = TRUE is in case of mills for which no duration could be computed. 
+      # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
+      
+      uml_msk_TT_df <- uml_msk_TT_df[,!grepl("firm_id",colnames(uml_msk_TT_df))]
+      uml_msk_TT_df <- dplyr::select(uml_msk_TT_df, -lonlat)
+
+      
+      
       
       # this is a data frame of pairs of parcel and year t mill points that are within catchment_radius
       # ***the geometry kept is from x ***

@@ -106,9 +106,9 @@ ibs <- ibs[, c("firm_id", "year", "trase_code", "uml_id", "mill_name", "parent_c
                "pko_price_imp1","pko_price_imp2", "out_ton_pko_imp1", "out_ton_pko_imp2", "out_val_pko_imp1", "out_val_pko_imp2",
                "prex_pko_imp1", "prex_pko_imp2",
                "export_pct_imp", "revenue_total", "workers_total_imp3",
-               "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp", 
-               "iv2_imp1", "iv2_imp2", "iv3_imp1", "iv3_imp2", "iv4_imp1", "iv4_imp2", 
-               "concentration_10", "concentration_30", "concentration_50")]
+               "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp")]#,
+               # "iv2_imp1", "iv2_imp2", "iv3_imp1", "iv3_imp2", "iv4_imp1", "iv4_imp2", 
+               # "concentration_10", "concentration_30", "concentration_50"
 
 # we don't keep the logs because we don't want to compute means of logs, but logs of means. 
 # "ffb_price_imp1_ln", "ffb_price_imp2_ln", "cpo_price_imp1_ln", "cpo_price_imp2_ln",        

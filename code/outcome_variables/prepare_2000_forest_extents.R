@@ -631,38 +631,38 @@ to_panel_within_CA <- function(island, parcel_size){
   ## 1. Masking.
 
   # Make the mask
-  mills <- read.dta13(file.path("temp_data/processed_mill_geolocalization/IBS_UML_panel.dta"))
+  ibs <- read.dta13(file.path("temp_data/processed_mill_geolocalization/IBS_UML_panel.dta"))
   # keep only a cross section of those that are geolocalized mills, on island of interest
-  mills <- mills[mills$analysis_sample==1,]
-  mills <- mills[!duplicated(mills$firm_id),]
-  mills <- mills[mills$island_name == island,]
+  ibs <- ibs[ibs$analysis_sample==1,]
+  ibs <- ibs[!duplicated(ibs$firm_id),]
+  ibs <- ibs[ibs$island_name == island,]
   #turn into an sf object.
-  mills <- st_as_sf(mills,	coords	=	c("lon",	"lat"), crs=4326)
+  ibs <- st_as_sf(ibs,	coords	=	c("lon",	"lat"), crs=4326)
   # keep only the geometry, we do not need mills attributes here.
-  mills <- st_geometry(mills)
+  ibs <- st_geometry(ibs)
   # set CRS and project
-  mills_prj <- st_transform(mills, crs = indonesian_crs)
+  ibs_prj <- st_transform(ibs, crs = indonesian_crs)
   #define big catchment areas to have a large AOI.
-  mills_ca <- st_buffer(mills_prj, dist = 80000)
+  ibs_ca <- st_buffer(ibs_prj, dist = 80000)
   # work with squares rather than with circles
-  for(i in 1:length(mills_ca)){
-    mills_ca[i] <- st_as_sfc(st_bbox(mills_ca[i]))
+  for(i in 1:length(ibs_ca)){
+    ibs_ca[i] <- st_as_sfc(st_bbox(ibs_ca[i]))
   }
-  total_ca <- st_union(st_geometry(mills_ca))
+  total_ibs_ca <- st_union(st_geometry(ibs_ca))
   # coerce to a SpatialPolygon
-  total_ca_sp <- as(total_ca, "Spatial")
-  # keep mills_prj we need it below
-  rm(total_ca, mills_ca, mills)
+  total_ibs_ca_sp <- as(total_ibs_ca, "Spatial")
+  # keep ibs_prj we need it below
+  rm(total_ibs_ca, ibs_ca, ibs)
   
   # MASK
-  mask(x = fc2000, mask = total_ca_sp,
+  mask(x = fc2000, mask = total_ibs_ca_sp,
        filename = file.path("temp_data/processed_lu", paste0("parcel_fc2000_",island,"_30th_",parcel_size/1000,"km_IBS_masked.tif")),
        datatype = "INT4U",
        overwrite = TRUE)
   
   rm(fc2000)
   
-  mask(x = pfc2000, mask = total_ca_sp,
+  mask(x = pfc2000, mask = total_ibs_ca_sp,
        filename = file.path("temp_data/processed_lu", paste0("parcel_pfc2000_",island,"_total_",parcel_size/1000,"km_IBS_masked.tif")),
        datatype = "INT4U",
        overwrite = TRUE)
@@ -673,7 +673,7 @@ to_panel_within_CA <- function(island, parcel_size){
   ## 2. Selecting parcels within a given distance to a mill at least one year
 
   # read in the duration matrix, common to all parcel layers (outcomes) 
-  dur_mat <- readRDS("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_IBS")
+  dur_mat <- readRDS(file.path(paste0("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_IBS")))
   dur_mat <- dur_mat$durations
   
   # Turn the masked rasters to a sf dataframe
@@ -681,24 +681,41 @@ to_panel_within_CA <- function(island, parcel_size){
     
     m.parcels <- raster(file.path(paste0("temp_data/processed_lu/",in_fc_type_file_name,".tif")))
     
-    m.df <- raster::as.data.frame(m.parcels, na.rm = TRUE, xy = TRUE, centroids = TRUE)
+    ibs_msk_df <- raster::as.data.frame(m.parcels, na.rm = TRUE, xy = TRUE, centroids = TRUE)
     
-    m.df <- m.df %>% dplyr::rename(lon = x, lat = y)
-    m.df <- st_as_sf(m.df, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+    # the whole point of the below is to merge more safely the duration matrix and the parcel data frame. 
+    ibs_msk_df <- ibs_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
+    ibs_msk_df <- st_as_sf(ibs_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
+    ibs_msk_df <- st_transform(ibs_msk_df, crs = 4326)
+    ibs_msk_df$lon <- st_coordinates(ibs_msk_df)[,"X"]
+    ibs_msk_df$lat <- st_coordinates(ibs_msk_df)[,"Y"]
+    ibs_msk_df <- mutate(ibs_msk_df, lonlat = paste0(lon, lat))
+    ibs_msk_df <- st_drop_geometry(ibs_msk_df)
     
-    # keep only the parcels that satisfy the travel time condition for at least one mill in the whole period.
-    dur_mat_log <- dur_mat/(60) < travel_time
-    
-    m.df <- m.df[base::rowSums(dur_mat_log, na.rm = TRUE)>0,]
-
-    rm(m.parcels)
-    
-    ## 3. Reshaping to long format
-    # make parcel id
+    # Besides, make IDs 
     island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
-    m.df$parcel_id <- paste0(island_id, c(1:nrow(m.df))) %>% as.numeric()
+    ibs_msk_df$parcel_id <- paste0(island_id, c(1:nrow(ibs_msk_df))) %>% as.numeric()
     
-    return(m.df)
+
+    ## keep only the parcels that satisfy the travel time condition for at least one mill in the whole period.
+    dur_mat_log <- dur_mat/(60) < travel_time
+    dur_mat_log <- as.data.frame(dur_mat_log)
+    
+    # The row.names have been computed the same way the ibs_msk_df$lonlat column was is computed above. 
+    colnames(dur_mat_log) <- paste0("firm_id_",colnames(dur_mat_log))
+    dur_mat_log$lonlat <- row.names(dur_mat_log)
+    
+    ibs_msk_TT_df <- merge(ibs_msk_df, dur_mat_log, by = "lonlat", all = FALSE)
+    ibs_msk_TT_df <- ibs_msk_TT_df[base::rowSums(ibs_msk_TT_df[,grepl("firm_id",colnames(ibs_msk_TT_df))], na.rm = TRUE)>0,]
+    # na.rm = TRUE is in case of mills for which no duration could be computed. 
+    # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
+    
+    ibs_msk_TT_df <- ibs_msk_TT_df[,!grepl("firm_id",colnames(ibs_msk_TT_df))]
+    ibs_msk_TT_df <- dplyr::select(ibs_msk_TT_df, -lonlat)
+
+    rm(m.parcels, ibs_msk_df, dur_mat_log)
+
+    return(ibs_msk_TT_df)
   }
   
   # execute it 
@@ -706,36 +723,36 @@ to_panel_within_CA <- function(island, parcel_size){
   in_fc_type_file_name <- paste0("parcel_fc2000_",island,"_30th_",parcel_size/1000,"km_IBS_masked")
   
   for(travel_time in c(2,4,6)){
-    m.df <- convert_to_df(in_fc_type_file_name = in_fc_type_file_name, 
+    ibs_msk_df <- convert_to_df(in_fc_type_file_name = in_fc_type_file_name, 
                           travel_time = travel_time)
     
     # rename the pixel count variable
-    names(m.df)[names(m.df)==in_fc_type_file_name] <- "fc2000_30th_pixelcount"
+    names(ibs_msk_df)[names(ibs_msk_df)==in_fc_type_file_name] <- "fc2000_30th_pixelcount"
     
     out_fc_type_file_name <- paste0("fc2000_cs_",
                                     island,"_30th_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_IBS_CA.tif")
     
-    saveRDS(m.df, file = file.path(paste0("temp_data/processed_lu/",out_fc_type_file_name)))
-    rm(m.df)
+    saveRDS(ibs_msk_df, file = file.path(paste0("temp_data/processed_lu/",out_fc_type_file_name)))
+    rm(ibs_msk_df)
     
     # for pfc2000
     in_fc_type_file_name <- paste0("parcel_pfc2000_",island,"_total_",parcel_size/1000,"km_IBS_masked")
     
-    m.df <- convert_to_df(in_fc_type_file_name = in_fc_type_file_name, 
+    ibs_msk_df <- convert_to_df(in_fc_type_file_name = in_fc_type_file_name, 
                           travel_time = travel_time)
     
     # rename the pixel count variable
-    names(m.df)[names(m.df)==in_fc_type_file_name] <- "pfc2000_total_pixelcount"
+    names(ibs_msk_df)[names(ibs_msk_df)==in_fc_type_file_name] <- "pfc2000_total_pixelcount"
     
     out_fc_type_file_name <- paste0("pfc2000_cs_",
                                     island,"_total_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_IBS_CA.tif")
     
-    saveRDS(m.df, file = file.path(paste0("temp_data/processed_lu/",out_fc_type_file_name)))
-    rm(m.df)
+    saveRDS(ibs_msk_df, file = file.path(paste0("temp_data/processed_lu/",out_fc_type_file_name)))
+    rm(ibs_msk_df)
   }
   
   
@@ -749,40 +766,42 @@ to_panel_within_CA <- function(island, parcel_size){
   ## 1. Masking.
 
   # Make the mask
-  mills <- read_xlsx(file.path("input_data/uml/mills_20200129.xlsx"))
-  mills$latitude <- as.numeric(mills$latitude)
-  mills$longitude <- as.numeric(mills$longitude)
-  mills$lat <- mills$latitude
-  mills$lon <- mills$longitude
-  mills <- st_as_sf(mills,	coords	=	c("longitude",	"latitude"), crs = 4326)
-  mills <- st_geometry(mills)
-  mills_prj <- st_transform(mills, crs = indonesian_crs)
+  uml <- read_xlsx(file.path("input_data/uml/mills_20200129.xlsx"))
+  uml$latitude <- as.numeric(uml$latitude)
+  uml$longitude <- as.numeric(uml$longitude)
+  uml$lat <- uml$latitude
+  uml$lon <- uml$longitude
+  uml <- st_as_sf(uml,	coords	=	c("longitude",	"latitude"), crs = 4326)
+  uml_geom <- st_geometry(uml)
+  uml_prj <- st_transform(uml_geom, crs = indonesian_crs)
   
   # there is no island column in this dataset, hence we select mills on the specific island geographically
-  select_within <- st_within(x = mills_prj, y = island_sf_prj[island_sf_prj$shape_des == island,])
-  mills_prj <- mills_prj[lengths(select_within)>0,]
+  select_within <- st_within(x = uml_prj, y = island_sf_prj[island_sf_prj$shape_des == island,])
+  uml_prj <- uml_prj[lengths(select_within)>0,]
+  uml <- uml[lengths(select_within)>0,]
   
   #define big catchment areas to have a large AOI.
-  mills_ca <- st_buffer(mills_prj, dist = 60000)
+  uml_ca <- st_buffer(uml_prj, dist = 80000)
   # work with squares rather than with circles
-  for(i in 1:length(mills_ca)){
-    mills_ca[i] <- st_as_sfc(st_bbox(mills_ca[i]))
+  for(i in 1:length(uml_ca)){
+    uml_ca[i] <- st_as_sfc(st_bbox(uml_ca[i]))
   }
-  total_ca <- st_union(st_geometry(mills_ca))
+  total_uml_ca <- st_union(st_geometry(uml_ca))
   # coerce to a SpatialPolygon
-  total_ca_sp <- as(total_ca, "Spatial")
-  # keep mills_prj we need it below
-  rm(total_ca, mills_ca, mills)
+  total_uml_ca_sp <- as(total_uml_ca, "Spatial")
+  # keep uml_prj we need it below
+  rm(total_uml_ca, uml_ca, uml_geom)
+  
   
   # MASK
-  mask(x = fc2000, mask = total_ca_sp,
+  mask(x = fc2000, mask = total_uml_ca_sp,
        filename = file.path("temp_data/processed_lu", paste0("parcel_fc2000_",island,"_30th_",parcel_size/1000,"km_UML_masked.tif")),
        datatype = "INT4U",
        overwrite = TRUE)
   
   rm(fc2000)
   
-  mask(x = pfc2000, mask = total_ca_sp,
+  mask(x = pfc2000, mask = total_uml_ca_sp,
        filename = file.path("temp_data/processed_lu", paste0("parcel_pfc2000_",island,"_total_",parcel_size/1000,"km_UML_masked.tif")),
        datatype = "INT4U",
        overwrite = TRUE)
@@ -792,7 +811,7 @@ to_panel_within_CA <- function(island, parcel_size){
   ## 2. Selecting parcels within a given distance to a mill at least one year
   
   # read in the duration matrix, common to all parcel layers (outcomes) 
-  dur_mat <- readRDS("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_UML")
+  dur_mat <- readRDS(file.path(paste0("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_UML")))
   dur_mat <- dur_mat$durations
   
   # Turn the masked rasters to a sf dataframe
@@ -800,24 +819,41 @@ to_panel_within_CA <- function(island, parcel_size){
     
     m.parcels <- raster(file.path(paste0("temp_data/processed_lu/",in_fc_type_file_name,".tif")))
     
-    m.df <- raster::as.data.frame(m.parcels, na.rm = TRUE, xy = TRUE, centroids = TRUE)
+    uml_msk_df <- raster::as.data.frame(m.parcels, na.rm = TRUE, xy = TRUE, centroids = TRUE)
     
-    m.df <- m.df %>% dplyr::rename(lon = x, lat = y)
-    m.df <- st_as_sf(m.df, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+    # the whole point of the below is to merge more safely the duration matrix and the parcel data frame. 
+    uml_msk_df <- uml_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
+    uml_msk_df <- st_as_sf(uml_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
+    uml_msk_df <- st_transform(uml_msk_df, crs = 4326)
+    uml_msk_df$lon <- st_coordinates(uml_msk_df)[,"X"]
+    uml_msk_df$lat <- st_coordinates(uml_msk_df)[,"Y"]
+    uml_msk_df <- mutate(uml_msk_df, lonlat = paste0(lon, lat))
+    uml_msk_df <- st_drop_geometry(uml_msk_df)
     
-    # keep only the parcels that satisfy the travel time condition for at least one mill in the whole period.
-    dur_mat_log <- dur_mat/(60) < travel_time
-    
-    m.df <- m.df[base::rowSums(dur_mat_log, na.rm = TRUE)>0,]
-    
-    rm(m.parcels)
-    
-    ## 3. Reshaping to long format
-    # make parcel id
+    # Besides, make IDs 
     island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
-    m.df$parcel_id <- paste0(island_id, c(1:nrow(m.df))) %>% as.numeric()
+    uml_msk_df$parcel_id <- paste0(island_id, c(1:nrow(uml_msk_df))) %>% as.numeric()
     
-    return(m.df)
+    
+    ## keep only the parcels that satisfy the travel time condition for at least one mill in the whole period.
+    dur_mat_log <- dur_mat/(60) < travel_time
+    dur_mat_log <- as.data.frame(dur_mat_log)
+    
+    # The row.names have been computed the same way the uml_msk_df$lonlat column was is computed above. 
+    colnames(dur_mat_log) <- paste0("firm_id_",colnames(dur_mat_log))
+    dur_mat_log$lonlat <- row.names(dur_mat_log)
+    
+    uml_msk_TT_df <- merge(uml_msk_df, dur_mat_log, by = "lonlat", all = FALSE)
+    uml_msk_TT_df <- uml_msk_TT_df[base::rowSums(uml_msk_TT_df[,grepl("firm_id",colnames(uml_msk_TT_df))], na.rm = TRUE)>0,]
+    # na.rm = TRUE is in case of mills for which no duration could be computed. 
+    # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
+    
+    uml_msk_TT_df <- uml_msk_TT_df[,!grepl("firm_id",colnames(uml_msk_TT_df))]
+    uml_msk_TT_df <- dplyr::select(uml_msk_TT_df, -lonlat)
+    
+    rm(m.parcels, uml_msk_df, dur_mat_log)
+    
+    return(uml_msk_TT_df)
   }
   
   # execute it 
@@ -825,47 +861,47 @@ to_panel_within_CA <- function(island, parcel_size){
   in_fc_type_file_name <- paste0("parcel_fc2000_",island,"_30th_",parcel_size/1000,"km_UML_masked")
   
   for(travel_time in c(2,4,6)){
-    m.df <- convert_to_df(in_fc_type_file_name = in_fc_type_file_name, 
+    uml_msk_df <- convert_to_df(in_fc_type_file_name = in_fc_type_file_name, 
                           travel_time = travel_time)
     
     # rename the pixel count variable
-    names(m.df)[names(m.df)==in_fc_type_file_name] <- "fc2000_30th_pixelcount"
+    names(uml_msk_df)[names(uml_msk_df)==in_fc_type_file_name] <- "fc2000_30th_pixelcount"
     
     out_fc_type_file_name <- paste0("fc2000_cs_",
                                     island,"_30th_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_UML_CA.tif")
     
-    saveRDS(m.df, file = file.path(paste0("temp_data/processed_lu/",out_fc_type_file_name)))
-    rm(m.df)
+    saveRDS(uml_msk_df, file = file.path(paste0("temp_data/processed_lu/",out_fc_type_file_name)))
+    rm(uml_msk_df)
     
     # for pfc2000
     in_fc_type_file_name <- paste0("parcel_pfc2000_",island,"_total_",parcel_size/1000,"km_UML_masked")
     
-    m.df <- convert_to_df(in_fc_type_file_name = in_fc_type_file_name, 
+    uml_msk_df <- convert_to_df(in_fc_type_file_name = in_fc_type_file_name, 
                           travel_time = travel_time)
     
     # rename the pixel count variable
-    names(m.df)[names(m.df)==in_fc_type_file_name] <- "pfc2000_total_pixelcount"
+    names(uml_msk_df)[names(uml_msk_df)==in_fc_type_file_name] <- "pfc2000_total_pixelcount"
     
     out_fc_type_file_name <- paste0("pfc2000_cs_",
                                     island,"_total_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_UML_CA.tif")
     
-    saveRDS(m.df, file = file.path(paste0("temp_data/processed_lu/",out_fc_type_file_name)))
-    rm(m.df)
+    saveRDS(uml_msk_df, file = file.path(paste0("temp_data/processed_lu/",out_fc_type_file_name)))
+    rm(uml_msk_df)
   }
 }
 
 PS <- 3000
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   to_panel_within_CA(island = Island,
                      parcel_size = PS)
     
 }
-
+rm(to_panel_within_CA)
 
 
 
@@ -945,20 +981,21 @@ for(sample in sampleS){
     
     # For each Island, join columns of baseline forest extent pixelcounts
     df_list <- list()
-    IslandS <- c("Sumatra", "Kalimantan", "Papua")
+    IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
     for(Island in IslandS){
       
       df_fc2000   <- readRDS(file.path(paste0("temp_data/processed_lu/fc2000_cs_",
                                               Island,"_30th_",
                                               PS/1000,"km_",
                                               TT,"h_",
-                                              sample,"_CR.tif")))
+                                              sample,"_CA.tif"))) 
       
       df_pfc2000 <- readRDS(file.path(paste0("temp_data/processed_lu/pfc2000_cs_",
                                              Island,"_total_",
                                              PS/1000,"km_",
                                              TT,"h_",
-                                             sample,"_CR.tif")))
+                                             sample,"_CA.tif"))) 
+      
       
       df_pfc2000 <- dplyr::select(df_pfc2000, -lon, -lat)
       df_list[[match(Island, IslandS)]] <- inner_join(df_fc2000, df_pfc2000, by = "parcel_id")
@@ -991,7 +1028,6 @@ for(sample in sampleS){
     saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/baseline_fc_cs_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
     
     rm(indo_df, df_list)
-    CR <- CR + 20000
   }
 }
 
