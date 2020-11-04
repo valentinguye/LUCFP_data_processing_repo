@@ -91,39 +91,6 @@ indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +
 ### IBS YEARS
 years <- seq(from = 1998, to = 2015, by = 1)
 
-##### PREPARE IBS DATA ##### 
-
-ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))  
-
-# keep only geolocalized mills
-ibs <- ibs[ibs$analysis_sample == 1,]
-length(unique(ibs$firm_id))
-
-# keep only the variables that identify mills and those which we want to distribute over parcels. 
-ibs <- ibs[, c("firm_id", "year", "trase_code", "uml_id", "mill_name", "parent_co", "lat", "lon",
-               "min_year","est_year", "est_year_imp", "max_year", 
-               "ffb_price_imp1", "ffb_price_imp2", "in_ton_ffb_imp1", "in_ton_ffb_imp2", "in_val_ffb_imp1", "in_val_ffb_imp2",
-               "cpo_price_imp1","cpo_price_imp2", "out_ton_cpo_imp1", "out_ton_cpo_imp2", "out_val_cpo_imp1", "out_val_cpo_imp2",
-               "prex_cpo_imp1", "prex_cpo_imp2",
-               "pko_price_imp1","pko_price_imp2", "out_ton_pko_imp1", "out_ton_pko_imp2", "out_val_pko_imp1", "out_val_pko_imp2",
-               "prex_pko_imp1", "prex_pko_imp2",
-               "export_pct_imp", "revenue_total", "workers_total_imp3",
-               "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp")]
-
-# we don't keep the logs because we don't want to compute means of logs, but logs of means. 
-# "ffb_price_imp1_ln", "ffb_price_imp2_ln", "cpo_price_imp1_ln", "cpo_price_imp2_ln",        
-#           "pko_price_imp1_ln", "pko_price_imp2_ln", "out_val_cpo_imp1_ln", "out_val_cpo_imp2_ln", "out_val_pko_imp1_ln",      
-#          "out_val_pko_imp2_ln", "revenue_total_ln" 
-
-
-# split the panel into sf cross sections 
-class(ibs$year)
-ibs_cs <- lapply(years, FUN = function(x) ibs[ibs$year == x,]) 
-ibs_cs <- lapply(ibs_cs, FUN = st_as_sf, coords =  c("lon", "lat"), remove = TRUE, crs = 4326)
-ibs_cs <- lapply(ibs_cs, FUN = st_transform, crs = indonesian_crs)
-# later we need these coordinates to turn nested ibs_cs to sf objects. 
-ibs_cs <- lapply(ibs_cs, FUN = function(cs){mutate(cs, indo_crs_lon = st_coordinates(cs)[,"X"])})
-ibs_cs <- lapply(ibs_cs, FUN = function(cs){mutate(cs, indo_crs_lat = st_coordinates(cs)[,"Y"])})
 
 
 
@@ -138,23 +105,49 @@ ibs_cs <- lapply(ibs_cs, FUN = function(cs){mutate(cs, indo_crs_lat = st_coordin
 # parcels[["geometry"]][parcels$parcel_id == i]
 # parcels[parcels$parcel_id == i, "geometry"]
 
-island <- "Sumatra"
+island <- "Kalimantan"
 parcel_size <- 3000
 travel_time <- 4
 
 parcel_set_w_average <- function(island, parcel_size, travel_time){
+  ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))  
   
+  # keep only geolocalized mills on the island of interest
+  ibs <- ibs[ibs$analysis_sample == 1,]
+  ibs <- ibs[ibs$island_name == island,]
+  
+  # keep only the variables that identify mills and those which we want to distribute over parcels. 
+  ibs <- ibs[, c("firm_id", "year", "trase_code", "uml_id", "mill_name", "parent_co", "lat", "lon",
+                 "min_year","est_year", "est_year_imp", "max_year", 
+                 "ffb_price_imp1", "ffb_price_imp2", "in_ton_ffb_imp1", "in_ton_ffb_imp2", "in_val_ffb_imp1", "in_val_ffb_imp2",
+                 "cpo_price_imp1","cpo_price_imp2", "out_ton_cpo_imp1", "out_ton_cpo_imp2", "out_val_cpo_imp1", "out_val_cpo_imp2",
+                 "prex_cpo_imp1", "prex_cpo_imp2",
+                 "pko_price_imp1","pko_price_imp2", "out_ton_pko_imp1", "out_ton_pko_imp2", "out_val_pko_imp1", "out_val_pko_imp2",
+                 "prex_pko_imp1", "prex_pko_imp2",
+                 "export_pct_imp", "revenue_total", "workers_total_imp3",
+                 "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp")]
+  
+  # we don't keep the logs because we don't want to compute means of logs, but logs of means. 
+  # "ffb_price_imp1_ln", "ffb_price_imp2_ln", "cpo_price_imp1_ln", "cpo_price_imp2_ln",        
+  #           "pko_price_imp1_ln", "pko_price_imp2_ln", "out_val_cpo_imp1_ln", "out_val_cpo_imp2_ln", "out_val_pko_imp1_ln",      
+  #          "out_val_pko_imp2_ln", "revenue_total_ln" 
+  
+  
+# split the panel into sf cross sections 
+ibs_cs <- lapply(years, FUN = function(x) ibs[ibs$year == x,]) 
+# ibs_cs <- lapply(ibs_cs, FUN = st_as_sf, coords =  c("lon", "lat"), remove = TRUE, crs = 4326)
+# ibs_cs <- lapply(ibs_cs, FUN = st_transform, crs = indonesian_crs)
+# later we need these coordinates to turn nested ibs_cs to sf objects. 
+# ibs_cs <- lapply(ibs_cs, FUN = function(cs){mutate(cs, indo_crs_lon = st_coordinates(cs)[,"X"])})
+# ibs_cs <- lapply(ibs_cs, FUN = function(cs){mutate(cs, indo_crs_lat = st_coordinates(cs)[,"Y"])})
+
+
   #### Prepare parcel panel ####
   # Import the parcel panel (for IBS)
   parcels_centro <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_CA_total.rds")))
-  # keep only one cross-section, no matter which. 
+  # keep only one cross-section, no matter which as this is a balanced panel
   parcels_centro <- parcels_centro[!duplicated(parcels_centro$parcel_id),]
-  # turn it into a sf object
-  parcels_centro <- st_as_sf(parcels_centro, coords = c("lon", "lat"), remove = FALSE, crs = 4326)
   parcels_centro <- mutate(parcels_centro, lonlat = paste0(lon, lat))
-  parcels_centro <- st_drop_geometry(parcels_centro)
-  
-  
   
   #### Compute panel of weighted averages ####
   
@@ -166,7 +159,7 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
     
     ## Sequence over which to execute the task 
     years <- seq(from = 1998, to = 2015, by = 1)
-    
+    t <- 3
     ## read the input to the task
     # has been done beforehand because it is not specific to function variables
     
@@ -178,99 +171,74 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
       ## Attribute to each parcel centroid the sf data frame of reachable mills 
       
       # This is the driving travel time (duration) matrix between each pair of parcel and mill. 
+      # no matter the t, this matrix has the same amount of rows (parcels) as parcels_centro
       dur_mat <- readRDS(file.path(paste0("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_",years[t])))
-
-      dur_mat <- readRDS(file.path(paste0("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_IBS")))
       dur_mat <- dur_mat$durations
 
-      dur_mat_log <- dur_mat/(60) < travel_time
-      dur_mat_log <- replace_na(dur_mat_log, replace = FALSE)
-      anyNA(dur_mat_log)
-
-      # parcels <- lapply(X = 1:nrow(dur_mat_log), FUN = function(i){ibs[dur_mat_log[,],]})
-      # this creates a 14Gb list, this is not possible...
-
-      # selector <- as.vector(t(dur_mat_log))
+      anyNA(dur_mat)
+      dur_mat <- replace_na(dur_mat, replace = FALSE)
+      anyNA(dur_mat)
       
-      b <- ibs$firm_id[as.vector(t(dur_mat_log))]
-      dim(b)
-      b <- ibs[selector,c("firm_id","year")]#,]
-      b[!is.na(b$firm_id),]
+      # for more safety, merge the dur_mat with the parcels centro based on coordinates identifiers
+      dur_mat <- as.data.frame(dur_mat)
+      dur_mat$lonlat <- row.names(dur_mat)
+      # sort = FALSE is MEGA IMPORTANT because otherwise dur_mat get sorted in a different way than
+      dur_mat <- merge(dur_mat, parcels_centro[,c("lonlat", "parcel_id")], by = "lonlat", all = FALSE, sort = FALSE)
+      row.names(dur_mat) <- dur_mat$lonlat
+      # so there should be the same amount of parcels which coordinates matched, as the total amount of parcels.
+      if(nrow(dur_mat) != nrow(parcels)){stop(paste0("duration matrix and parcel cross section did not merge in ",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_",years[t]))}
 
-      ibs[c(T,F),]
-      names(parcels) <- row.names(dur_mat_log)
-      parcels2 <- bind_rows(parcels)
+      # additional check:
+      parcels <- parcels_centro
+      parcels <- dplyr::arrange(parcels,parcel_id)
+      dur_mat <- dplyr::arrange(dur_mat,parcel_id)
 
-
-            t_dur_mat_log <- t(dur_mat_log)
-      as.data.frame
-dim(t_dur_mat_log)
-
-      sum(dur_mat_log[1,], na.rm=T)
-#       
-#       
-#       
-#       inner_join()
-      uml_msk_TT_df <- merge(uml_msk_df, dur_mat_log, by = "lonlat", all = FALSE)
-      uml_msk_TT_df <- uml_msk_TT_df[base::rowSums(uml_msk_TT_df[,grepl("firm_id",colnames(uml_msk_TT_df))], na.rm = TRUE)>0,]
-      # na.rm = TRUE is in case of mills for which no duration could be computed. 
-      # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
-      
-      uml_msk_TT_df <- uml_msk_TT_df[,!grepl("firm_id",colnames(uml_msk_TT_df))]
-      uml_msk_TT_df <- dplyr::select(uml_msk_TT_df, -lonlat)
-
-      
-      
-      
-      # this is a data frame of pairs of parcel and year t mill points that are within catchment_radius
-      # ***the geometry kept is from x ***
-      d <- st_join(x = parcels_centro, 
-                   y = ibs_cs[[t]], 
-                   join = st_is_within_distance, 
-                   dist = catchment_radius, 
-                   left = FALSE) # to return only records that spatially match (i.e. an inner join and not a left join)
-      
       # nest the sets of reachable mills within each parcel row.
-      # they need to be no sf object for that. 
-      d <- st_set_geometry(d, NULL)
-      parcels <- nest_join(parcels_centro, d, 
-                           by = "parcel_id", 
-                           keep = T, # keep = T keeps parcel_id in the nested df.
-                           name = "reachable") %>% st_as_sf() # (bc the nest_join removes the sf class)
-      rm(d)
+      dur_mat <- dplyr::select(dur_mat, -lonlat, -parcel_id)
+      dur_mat <- as.matrix(dur_mat)
+
+      dur_mat_log <- dur_mat/(60) < travel_time
+
+      list_col <- list()
+      length(list_col) <- nrow(parcels)
+      parcels$reachable <- list_col
+      # 
+      # # nest reachable mills within each parcel record. 
+      # parcels$reachable <- lapply(X = 1:nrow(dur_mat_log), FUN = function(p){ibs_cs[[t]][dur_mat_log[p,],]})
       
-      # select non empty reachable nested data frames (data frames of reachable mills) - programing purpose
+      parcels$reachable <- lapply(X = row.names(dur_mat_log), FUN = function(id){ibs_cs[[t]][dur_mat_log[id,],]})
+
+      rm(list_col)
+
+      row.names(parcels) <- parcels$lonlat
+
+      # select non empty reachable nested data frames (data frames of reachable mills) - programming purpose
       s <- sapply(parcels$reachable, FUN = nrow)>0
       
+      for(ids in row.names(parcels)[s]){
+        # select reachable list-column for the parcels that have a reachable mill, the reachable 
+        parcels[ids,]$reachable[[1]]$durations <- dur_mat[ids,dur_mat_log[ids,]] #%>% as.vector()
+      }
+     
+      parcels$reachable[s] <- lapply(parcels$reachable[s], mutate, w = 1/durations)
+      View(parcels$reachable[[890]])
+      parcels$reachable[[890]]$firm_id
+      ids <- row.names(parcels)[s][890]
+      ids <- row.names(parcels)[890] # or ids <- row.names(parcels)[s][1]
+      parcels$reachable[[s]]$durations <- sapply(row.names(parcels)[s], FUN = function(ids){dur_mat[ids,dur_mat_log[ids,]]})
+        # add to this reachable mill data set a variable for their respective durations to parcel p. 
+         
+        #
+        
+        # compute the inverse of this duration
+        n_df <- mutate(n_df, w = 1/durations)
+      
+      
+      parcels$reachable[s] <- lapply()
+
       # compute the number of reachable mills at each parcel - informative purpose
-      parcels[,"n_reachable_ibs"] <- sapply(parcels$reachable, 
-                                            FUN = nrow)
-      # turn (non-empty) nested tibbles into sf data frames. 
-      parcels$reachable[s] <- lapply(parcels$reachable[s], 
-                                     FUN = st_as_sf, 
-                                     coords =  c("indo_crs_lon", "indo_crs_lat"), 
-                                     remove = FALSE, 
-                                     crs = indonesian_crs)
-      # # at this stage let's store our working object somewhere 
-      # parcels_saved <- parcels
-      
-      # make a distance column in the reachable data frames 
-      parcels$reachable[s] <- lapply(parcels$parcel_id[s], 
-                                     FUN = function(i){
-                                       mutate(parcels$reachable[parcels$parcel_id == i][[1]], 
-                                              distance = st_distance(x = parcels$geometry[parcels$parcel_id == i], 
-                                                                     y = parcels$reachable[parcels$parcel_id == i][[1]]$geometry,
-                                                                     by_element = TRUE) %>% as.numeric()
-                                       )
-                                     })
-      
-      # make the inverse of distance column
-      parcels$reachable[s] <- lapply(parcels$parcel_id[s], 
-                                     FUN = function(i){
-                                       mutate(parcels$reachable[parcels$parcel_id == i][[1]], 
-                                              w = 1/distance
-                                       )
-                                     })
+      # parcels[,"n_reachable_ibs"] <- sapply(parcels$reachable, FUN = nrow)
+    
       
       # Define the variables of interest we want to compute the weighted averages of. 
       # variables <- c("ffb_price_imp1", "ffb_price_imp2")      

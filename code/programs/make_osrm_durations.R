@@ -246,7 +246,6 @@ for(island in c("Sumatra", "Kalimantan")){ #"Papua" does not work with IBS mills
 ### IBS YEARS
 years <- seq(from = 1998, to = 2015, by = 1)
 
-
 for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
   
     ### PREPARE IBS DATA 
@@ -274,7 +273,7 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
 
     osrmr::run_server(osrm_path = osrm_path, map_name = map_name)
     
-    for(t in years){
+    for(t in years){#
       ibs_cs <- ibs[ibs$year == t,]
       row.names(ibs_cs) <- ibs_cs$firm_id
       ibs_cs_sp <- as(ibs_cs, "Spatial")
