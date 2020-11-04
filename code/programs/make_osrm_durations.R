@@ -55,7 +55,6 @@ osrm_path = "C:/Users/GUYE/osrm"
 
 ### NEW FOLDERS USED IN THIS SCRIPT 
 # final outputs of this script are stored in input_data because their reproducibility relies on user having a local OSRM server. 
-dir.create("input_data/processed_parcels")
 dir.create("input_data/local_osrm_outputs")
 
 
@@ -251,7 +250,9 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
     ### PREPARE IBS DATA 
     ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))  
     # keep only geolocalized mills and useful variables
-    ibs <- ibs[ibs$analysis_sample == 1,c("firm_id", "year", "island_name", "lon", "lat")]
+    ibs <- ibs[ibs$analysis_sample == 1,c("firm_id", "year", "min_year", "max_year", "island_name", "lon", "lat")]
+    # keep all unique records of mills
+    ibs <- ibs[!duplicated(ibs$firm_id),]
     ibs <- ibs[ibs$island_name == island,]
     ibs <- st_as_sf(ibs, coords =  c("lon", "lat"), remove = TRUE, crs = 4326)
     
@@ -273,8 +274,10 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
 
     osrmr::run_server(osrm_path = osrm_path, map_name = map_name)
     
-    for(t in years){#
-      ibs_cs <- ibs[ibs$year == t,]
+    for(t in years){
+      # this line makes sure that mills that just miss in IBS for a period of time but then appear again, are counted as reachable.
+      ibs_cs <- ibs[ibs$min_year <= t & ibs$max_year >=t,]  
+
       row.names(ibs_cs) <- ibs_cs$firm_id
       ibs_cs_sp <- as(ibs_cs, "Spatial")
       
