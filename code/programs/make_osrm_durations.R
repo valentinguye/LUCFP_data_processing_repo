@@ -236,7 +236,9 @@ for(island in c("Sumatra", "Kalimantan")){ #"Papua" does not work with IBS mills
   
 }
 
-
+island <- "Sumatra"
+travel_time <- 6
+t <- 1998
 
 
 #### OSRM ANNUAL DURATIONS ####  
@@ -274,7 +276,7 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
 
     osrmr::run_server(osrm_path = osrm_path, map_name = map_name)
     
-    for(t in years){
+    for(t in years){#c(2013,2014,2015)
       # this line makes sure that mills that just miss in IBS for a period of time but then appear again, are counted as reachable.
       ibs_cs <- ibs[ibs$min_year <= t & ibs$max_year >=t,]  
 
