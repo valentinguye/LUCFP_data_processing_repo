@@ -1,7 +1,7 @@
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 # This script adds variables to the parcel panel data frame. 
 # In particular, it compute the number of UML mills each parcel can reach within 10, 30 and 50km. 
-# And it adds geographic variables (island and districts). 
+# And it adds geographic variables (provinces and districts). 
 #
 #
 #   Inputs: UML most complete version
@@ -9,9 +9,6 @@
 # 
 #           parcel panel from previous step (i.e. making weighted averages)
 #           --> pattern: wa_panel_parcels_ ; for each parcel_size and catchment_radius combination
-#         
-#           island polygons
-#           --> temp_data/processed_indonesia_spatial/island_sf
 #   
 #           Province polygons
 #           --> input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp
@@ -25,7 +22,7 @@
 #
 #
 #   Outputs: parcel panel with new columns: the parcel and time varying numbers of UML mills reachable within 10, 30 and 50km. 
-#                                           the island, the district, and the pixelcounts and areas (ha) of 2000 forest extents
+#                                           the province, the district, and the pixelcounts and areas (ha) of 2000 forest extents
 #                                           (for 30% tree canopy density outside indsutrial plantations and total primary forest. 
 #           --> pattern temp_data/processed_parcels/parcels_panel_reachable_uml_
 #                       temp_data/processed_parcels/parcels_panel_geovars_
@@ -108,17 +105,6 @@ parcel_size <- 3000
 
 ### PREPARE SPATIAL DATA 
 
-# read geographic shapefiles
-island_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/island_sf"))
-names(island_sf)[names(island_sf)=="island"] <- "shape_des"
-
-island_sf_prj <- st_transform(island_sf, crs = indonesian_crs)
-
-# make the operation faster by using island bbox (other wise the island polygons make 
-# the computation very long)
-# (and this also includes parcel centroids in the sea)
-# island_sf_prj_bbox <- sapply(island_sf_prj$geometry, function(x){st_as_sfc(st_bbox(x))}) %>% st_sfc(crs = indonesian_crs)
-
 # province
 province_sf <- st_read(file.path("input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp"))
 province_sf <- dplyr::select(province_sf, NAME_1)
@@ -167,7 +153,6 @@ uml <- st_transform(uml, crs = indonesian_crs)
 for(travel_time in c(2,4,6)){
   # read the parcel panel as outputted from wa_at_parcels_durations
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
-                                      island,"_",
                                       parcel_size/1000,"km_",
                                       travel_time,"h_CA.rds")))
   
@@ -177,8 +162,8 @@ for(travel_time in c(2,4,6)){
   
   ### ISLAND variable
   
-  parcels$island <- island
-
+  # Already set at the end of wa_at_parcels_durations.R
+  
   ### PROVINCE variable
   
   # Work with a cross section for province and district attribution
@@ -225,7 +210,6 @@ for(travel_time in c(2,4,6)){
   parcels$district_year <- paste0(parcels$district,"_",parcels$year)
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
-                                    island,"_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_CA.rds")))
 }
@@ -238,7 +222,6 @@ for(travel_time in c(2,4,6)){
 #### TIME DYNAMICS VARIABLES ####
 for(travel_time in c(2,4,6)){ 
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
-                                      island,"_",
                                       parcel_size/1000,"km_",
                                       travel_time,"h_CA.rds")))
   
@@ -434,7 +417,7 @@ for(travel_time in c(2,4,6)){
       parcels <- dplyr::arrange(parcels, parcel_id, year)
       
     }
-  }  
+  }# closes the loop on variables  
   
   # remove some variables that were only temporarily necessary
   vars_torm <- names(parcels)[grepl(pattern = "price_", x = names(parcels)) &
@@ -461,10 +444,9 @@ for(travel_time in c(2,4,6)){
   
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
-                                    island,"_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_CA.rds")))  
-}
+} # closes the loop on travel_time
 
 
 ##### ADD RSPO, CONCESSIONS, LEGAL LAND USE, & TIME SERIES - IV ##### 
@@ -499,7 +481,7 @@ names(llu)[names(llu) == "Fungsi"] <- "llu"
 llu <- llu[llu$Province == "Sumatra Utara" |
              llu$Province == "Riau" |
              llu$Province == "Sumatra Selantan" |
-             llu$Province == "Papua Barat" |
+             #llu$Province == "Papua Barat" |
              llu$Province == "Kalimantan Timur" |
              llu$Province == "Kalimantan Selatan" |
              llu$Province == "Kalimantan Tengah" |
@@ -532,7 +514,6 @@ ts <- ts[!duplicated(ts$year),]
 
 for(travel_time in c(2,4,6)){ 
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
-                                      island,"_",
                                       parcel_size/1000,"km_",
                                       travel_time,"h_CA.rds")))
   
@@ -647,7 +628,6 @@ for(travel_time in c(2,4,6)){
   
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
-                                    island,"_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_CA.rds")))
 }

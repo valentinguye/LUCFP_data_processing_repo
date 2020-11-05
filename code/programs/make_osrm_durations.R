@@ -2,8 +2,62 @@
 # This script repeats roughly twice the same actions, once for parcels within supply sheds of IBS mills only, 
 # and once for all UML mills. 
 
-### SELECT RASTER CELLS TO A DATAFRAME
-# NOW WE CONSIDER CATCHMENT AREAS BASED ON TRAVEL TIME BETWEEN PLANTATIONS AND MILLS
+
+
+# Framed below, are notes on the procedure to set this script up and running. 
+
+### -------------------------------------------------------------------------------------------------------------------------------------------------###
+# We want a local instance of OSRM because it enables to compute large duration matrices efficiently. 
+# Slicing the inputs and the task and using the public server is easily coded, but very inefficient as many requests need to be sent (it's in terms of days of running times in our case). 
+# 
+# Download OSRM Release build (February 01 2018 13:27:05 CEST) from here http://build.project-osrm.org/
+# Put the folder content in a folder at "C:/Users/GUYE/osrm" (or where ever)
+# download indonesia-latest.osrm.pbf at https://download.geofabrik.de/asia/indonesia.html on 29/10/2020
+# put the downloaded data in the osrm folder. 
+# open command prompt and run: 
+#     cd C:\Users\GUYE\osrm
+#     osrm-extract.exe indonesia-latest.osm.pbf -p car.lua
+#     osrm-contract.exe indonesia-latest.osrm
+#     osrm-routed.exe indonesia-latest.osrm --port 5000 --max-table-size=1000000000 
+# 
+# The first line (after cd...) takes a bit of time bc it compiles the data for indonesia, the routes etc. 
+# The last one is useless but if it returns  "running and waiting for requests" this means the installation of the local OSRM instance is achieved. 
+# 
+# Now, in R, first thing is to install {osrm} and {osrmr}. 
+# The former executes osrmTable, and for it to work, it needs to be in an old version, like 3.0.0, hence 
+# remotes::install_version("osrm", version= "3.0.0"). 
+# otherwise there is an error from no compatibility with the local OSRM version downloaded. See there https://github.com/rCarto/osrm/issues/52
+# 
+# {osrmr} enables to open the shell and get the local osrm server "running and waiting for requests". Typically, we pass arguments to osrmr::run_server() so that it prompts
+# cd C:\Users\GUYE\osrm
+# osrm-routed.exe indonesia-latest.osrm --port 5000 --max-table-size=1000000000 
+# from R. 
+# 
+# (The  --max-table-size=1000000000 is allowing for a large duration table to be returned from the local server.)
+# 
+# Hence R code 
+# options(osrm.server = paste0(osrmr:::server_address(TRUE), "/"), osrm.profile = "driving")
+#     map_name = "indonesia-latest.osrm --port 5000 --max-table-size=1000000000"
+#     osrm_path = "C:/Users/GUYE/osrm"
+#     Sys.setenv("OSRM_PATH"=osrm_path) 
+# 
+#     osrmr::run_server(map_name = map_name)
+#     
+#     dur_list <-  osrmTable(src = m.df_wide_lonlat_sp, dst = mills_sp)
+# 
+#     osrmr::quit_server()
+# 
+# Where the inputs of osrmTable need to be in Spatial class in the 3.0.0 version of osrm needed here. 
+# 
+# 
+# # this procedure is inspired from 
+# https://phabi.ch/2020/05/06/run-osrm-in-docker-on-windows/
+# http://build.project-osrm.org/
+# https://reckoningrisk.com/OSRM-server/
+
+### -------------------------------------------------------------------------------------------------------------------------------------------------###
+
+
 
 
 ##### 0. PACKAGES, WD, OBJECTS #####

@@ -997,7 +997,7 @@ for(sample in sampleS){
                                              sample,"_CA.tif"))) 
       
       
-      df_pfc2000 <- dplyr::select(df_pfc2000, -lon, -lat)
+      df_pfc2000 <- dplyr::select(df_pfc2000, -lon, -lat, -idncrs_lon, -idncrs_lat)
       df_list[[match(Island, IslandS)]] <- inner_join(df_fc2000, df_pfc2000, by = "parcel_id")
     }
     

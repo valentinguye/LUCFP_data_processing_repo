@@ -275,27 +275,36 @@ rsource using "install_R_project_packages.R"
 		* output:	temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
 		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
 
-
-
-	*** program that selects raster grid cells into data frames, based on OSRM travel time constraints. 
-	capture "code/programs/make_osrm_supplysheds.R"
-	/* it is not sourced here, because it requires a local instance of OSRM to be set up. See within the script for more details. 
+	*** prepare driving travel time between every pairs of parcels and mills. 
+	capture "code/programs/make_osrm_durations"
+	/*  
+	It is not sourced here, because it requires a local instance of OSRM to be set up. See within the script for more details. 
 	For this reason, the output being not easily reproducible, it is saved in input_data, and not temp_data. 
+	
+	This is run by island (SUMATRA AND KALIMANTAN ONLY BECAUSE NOT WORKING IN PAPUA),
+	for any existing mill up to 2015 (geolocalized IBS or UML) and for annually existing mills (geolocalized IBS only so far). 
 	*/
+
+
+	*** Program that selects outcome variable raster grid cells into data frames, based on OSRM travel time constraints - for either IBS or UML mills. 
+	/* This corresponds to the 3rd parts of prepare_* scripts, that selected grid cells based on a catchment radius (i.e. distance) constraint. 
+	But unlike the code in these prepare_* scripts, here only total primary forest is kept (and 30th forest in preparation) and this script gathers 
+	parcels from industrial, small and medium sized plantations.  	
+	*/
+	rsource using "code/programs/make_osrm_CA"
 	* input: 		temp_data/processed_indonesia_spatial/island_sf
 	*				temp_data/IBS_UML_panel_final.dta
 	*				input_data/uml/mills_20200129.xlsx
 	*				temp_data/processed_lu/parcel_lucpfip_ISLAND_PS_TYPE for ISLAND = c("Sumatra", "Kalimantan", "Papua"); PS = 3km, TYPE = c("intact", "degraded", "total", "30th" "60th", "90th")
+	*				input_data/local_osrm_outputs/osrm_driving_durations_ISLAND_PS_SAMPLE for ISLAND = ("Sumatra", "Kalimantan") PS = 3km and SAMPLE = (IBS, UML)
 
-	* output:		input/processed_parcels/lucpfip_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one has rows from three islands and columns for three forest definitions.  
-	*				input/processed_parcels/lucpfsmp_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one has rows from three islands and columns for three forest definitions.  
-	*				input/processed_parcels/lucfip_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one has rows from three islands and columns for three forest definitions.  
-	*				input/processed_parcels/lucfsmp_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one has rows from three islands and columns for three forest definitions.  
-
+	* output:		input/processed_parcels/lucpfSIZEp_panel_ISLAND_PS_CA.rds for ISLAND = ("Sumatra", "Kalimantan"); PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA)  : each one is for total primary forest only
+	*				input/processed_parcels/lucpfp_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one is for total primary forest only, and has rows from two islands and columns for three plantation sizes  
 
 
 
 	*** prepare parcel maps and dataframes of baseline forest extents according to different definitions
+	* This script outputs these baseline forest covers for parcels within CR and within CA (OSRM duration based). 
 	rsource using "code/outcome_variables/prepare_2000_forest_extents.R"
 	* input: 	temp_data/processed_indonesia_spatial/island_sf
 	*			temp_data/processed_lu/gfc_data_Indonesia_TH.tif for TH = (30th, 60th, 90th)
@@ -303,6 +312,7 @@ rsource using "install_R_project_packages.R"
 	*			temp_data/processed_lu/margono_primary_forest_ISLAND_aligned.tif for ISLAND = ("Sumatra", "Kalimantan", "Papua")
 	*			temp_data/processed_mill_geolocalization/IBS_UML_panel.dta
 	*			input_data/uml/mills_20200129.xlsx
+	*			input_data/local_osrm_outputs/osrm_driving_durations_ISLAND_PS_SAMPLE for ISLAND = ("Sumatra", "Kalimantan") PS = 3km and SAMPLE = (IBS, UML)
 
 	* output: 	temp_data/processed_lu/gfc_fc2000_ISLAND_TH.tif for ISLAND = ("Sumatra", "Kalimantan", "Papua") and TH = (30th, 60th, 90th)
 	*			temp_data/processed_lu/gfc_fc2000_ISLAND_TH_prj.tif for ISLAND = ("Sumatra", "Kalimantan", "Papua") and TH = (30th, 60th, 90th)
@@ -316,6 +326,7 @@ rsource using "install_R_project_packages.R"
 	*			temp_data/processed_lu/pfc2000_cs_ISLAND_total_PS_CR.tif for ISLAND = ("Sumatra", "Kalimantan", "Papua"), PS = 3km and CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR)
 	* 		main output: 
 	*			temp_data/processed_parcels/baseline_fc_cs_PS_CR.rds for PS = 3km and CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR)
+	*			temp_data/processed_parcels/baseline_fc_cs_PS_CA.rds for PS = 3km and CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA)
 
 	*** prepare emissions from LUCPFIP 
 		rsource using "code/outcome_variables/prepare_emissions.R"
@@ -334,7 +345,7 @@ rsource using "install_R_project_packages.R"
 	 */	
 
 	 * /!\ ~ 61 hours to execute 
-	rsource using "code/explicative_variables/wa_at_parcels.R"
+	rsource using "code/explicative_variables/wa_at_parcels_distances.R"
 		* input   	temp_data/IBS_UML_panel_final.dta
 		*			temp_data/processed_parcels/lucpfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
 
@@ -343,13 +354,32 @@ rsource using "install_R_project_packages.R"
 
 
 
+	/* Or ditribute to the same square parcels but within a travel time catchment AREA and with DURATION-weighted averages. 
+	 It is different than wa_at_parcels_distances.R because it runs the analysis by ISLAND. 
+	 And because it uses an additional input: the duration matrices annually computed by a program (make_osrm_durations.R) that requires a local OSRM server. 
+	 Contrary to its "distance" counterparts, it requires the parcel template (lucpfip_panel typically) the ISLAND LEVEL. 
+	 The end of the script stacks the two islands together. 
+	 */
+	rsource using "code/explicative_variables/wa_at_parcels_durations.R"
+	* input 	temp_data/IBS_UML_panel_final.dta
+	*			temp_data/processed_parcels/lucpfip_panel_ISLAND_PS_CA_total.rds for ISLAND = (Sumatra, Kalimantan); PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA)
+	*			input_data/local_osrm_outputs/osrm_driving_durations_ISLAND_PS_TT_YEAR for ISLAND = (Sumatra, Kalimantan); PS = 3km, TT = (2h_IBS, 4h_IBS, 6h_IBS); YEAR = 1998:2015
+
+	* output 	temp_data/processed_parcels/temp_cs_wa_explanatory/cs_wa_explanatory_ISLAND_PS_CA_YEAR.rds for ISLAND = (Sumatra, Kalimantan); PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) and YEAR = (1998-2015)
+	*			temp_data/processed_parcels/wa_panel_parcels_ISLAND_PS_CA.rds for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA)
+	*			temp_data/processed_parcels/wa_panel_parcels_PS_CA.rds for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
+
+
+
+
 
 	/* add information on the number of UML mills that are reachable from each parcel in each year within 10, 30 and 50km. 
 	  and on the share of IBS sample in this total number of reachable UML mills. 
-	  AND add island and district variables, and baseline forest extents variables computed in prepare_2000_forest_extents.R
+	  AND add island and district variables
+	  AND legal or certified land use attributes
 	  AND add time series of international and domestic prices and export tax and spreads. 
 	  /!\ ~1h */
-	rsource using "code/explicative_variables/add_parcel_variables.R"	
+	rsource using "code/explicative_variables/add_CR_parcel_variables.R"	
 		* input:	temp_data/processed_UML/UML_valentin_imputed_est_year.dta
 		*			temp_data/processed_parcels/wa_panel_parcels_PS_CR.rds  	 for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_indonesia_spatial/island_sf
@@ -357,21 +387,53 @@ rsource using "install_R_project_packages.R"
 		*			input_data/indonesia_spatial/district_shapefiles/district_2015_base2000.shp
 		*			temp_data/processed_indonesia_spatial/province_district_code_names_93_2016.dta
 		*			temp_data/processed_parcels/baseline_fc_cs_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
+		*			input_data/RSPO_supply_bases/RSPO-certified_oil_palm_supply_bases_in_Indonesia.shp
+		*			input_data/oil_palm_concessions
+		*			input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp
 
 		*output: 	temp_data/processed_parcels/parcels_panel_reachable_uml_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/parcels_panel_geovars_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/parcels_panel_w_dyn_PS_CR.rds   for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/parcels_panel_final_PS_CR.rds   for PS = 3km, CR = (10CR, 30CR, 50CR)
 
+	/* Same as above, but on the duration-based CA parcels. 
+	In particular, this differs from the CR counterpart because this one does not compute n_reachable_uml nor sample_coverage variables.
+	*/
+	rsource using "code/explicative_variables/add_CA_parcel_variables.R"
+		* input:	input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp
+		*			input_data/indonesia_spatial/district_shapefiles/district_2015_base2000.shp
+		*			temp_data/processed_indonesia_spatial/province_district_code_names_93_2016.dta
+		*			input_data/RSPO_supply_bases/RSPO-certified_oil_palm_supply_bases_in_Indonesia.shp
+		*			input_data/oil_palm_concessions
+		*			input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp
+		*   	 	temp_data/processed_parcels/wa_panel_parcels_PS_CA.rds for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
+
+		* output: 	temp_data/processed_parcels/parcels_panel_geovars_PS_CA for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
+		*			temp_data/processed_parcels/parcels_panel_w_dyn_PS_CA for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
+		*			temp_data/processed_parcels/parcels_panel_final_PS_CA for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
+
+
+
 **** Merge LHS and RHS (!)
-	rsource using "code/merge_lhs_rhs_parcels.R"
+	* Add also baseline forest extents variables computed in prepare_2000_forest_extents.R
+		rsource using "code/merge_lhs_rhs_CR_parcels.R"
 		* input: 	temp_data/processed_parcels/OV_panel_PS_CR.rds 		for OV = (lucpfip, lucfip, ... ); PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
 		*			temp_data/processed_parcels/parcels_panel_final_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
+		*			temp_data/processed_parcels/baseline_fc_cs_PS_CR.rds for PS = 3km and CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
+
 
 		* output: 	temp_data/panel_parcels_ip_final_PS_CR.rds  for PS = 3km, CR = (10CR, 30CR, 50CR)
 
+	* And same as above, but for duration-based CA parcels. 
+		rsource using "code/merge_lhs_rhs_CR_parcels.R"
+		* input: 	input/processed_parcels/lucpfp_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA) : each one is for total primary forest only, and has rows from two islands and columns for three plantation sizes  
+		*			temp_data/processed_parcels/parcels_panel_final_PS_CA for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
+		* 			temp_data/processed_parcels/baseline_fc_cs_PS_CA.rds for PS = 3km and CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA)
+
+		* output: 	temp_data/panel_parcels_ip_final_PS_CA.rds for PS = 3km and CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA)
 
 
+		
 ***** ANALYSIS *****
 * note: we do the conversion from pixel counts to areas in here, 
 * depending on what we need. This is not done in earlier stages, so it will have to be done before analysis in further scripts too. 

@@ -393,69 +393,69 @@ rm(to_panel_within_UML_CA)
 
 # May be this is not necessary, if the outputs from this script are only used per island, in wa_at_parcels_durations. 
 #### Gather the lucfip variables for each parcel_size and catchment area combinations. ####
-# PS <- 3000  
-# sampleS <- c("IBS", "UML")
-# travel_timeS <- c(2,4,6)
-# for(size in c("i","s", "m")){
-#   for(sample in sampleS){
-#     for(TT in travel_timeS){
-#       # Repeat for primary and normal forest. 
-#       ## PRIMARY
-#       # For each Island, join columns of lucfip variable for different forest definitions 
-#       pf_df_list <- list()
-#       IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
-#       for(Island in IslandS){
-# 
-#         # df_intact   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_intact.rds")))
-#         # df_degraded <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_degraded.rds")))
-#         df_total    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
-# 
-#         # df_degraded <- dplyr::select(df_degraded, -lon, -lat)
-#         # df <- inner_join(df_intact, df_degraded, by = c("parcel_id", "year"))
-#         # 
-#         # df_total <- dplyr::select(df_total, -lon, -lat)
-#         # pf_df_list[[match(Island, IslandS)]] <- inner_join(df, df_total, by = c("parcel_id", "year"))
-#         pf_df_list[[match(Island, IslandS)]] <- df_total
-#         
-#       }
-#       
-#       # stack the three Islands together
-#       indo_df <- bind_rows(pf_df_list)
-#       
-#       indo_df <- dplyr::select(indo_df, parcel_id, year,
-#                                everything())
-#       
-#       saveRDS(indo_df, file = file.path(paste0("input_data/processed_parcels/lucpf",size,"p_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
-#       
-#       rm(indo_df, pf_df_list)
-#       
-#       
-#       
-#       # ## "NORMAL" forest
-#       # df_list <- list()
-#       # IslandS <- c("Sumatra", "Kalimantan", "Papua")
-#       # for(Island in IslandS){
-#       #   
-#       #   df_90th <- readRDS(file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_90th.rds")))
-#       #   df_60th <- readRDS(file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_60th.rds")))
-#       #   df_30th <- readRDS(file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
-#       #   
-#       #   df_60th <- dplyr::select(df_60th, -lon, -lat)
-#       #   df <- inner_join(df_90th, df_60th, by = c("parcel_id", "year"))
-#       #   
-#       #   df_30th <- dplyr::select(df_30th, -lon, -lat)
-#       #   df_list[[match(Island, IslandS)]] <- inner_join(df, df_30th, by = c("parcel_id", "year"))
-#       # }
-#       # 
-#       # # stack the three Islands together
-#       # indo_df <- bind_rows(df_list)
-#       # 
-#       # indo_df <- dplyr::select(indo_df, parcel_id, year,
-#       #                          everything())
-#       # 
-#       # saveRDS(indo_df, file = file.path(paste0("input_data/processed_parcels/lucf",size,"p_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
-#       # 
-#       # rm(indo_df, df_list)
-#     }
-#   }
-# }
+PS <- 3000
+sampleS <- c("IBS", "UML")
+travel_timeS <- c(2,4,6)
+for(size in c("i","s", "m")){
+  for(sample in sampleS){
+    for(TT in travel_timeS){
+      # Repeat for primary and normal forest.
+      ## PRIMARY
+      # For each Island, join columns of lucfip variable for different forest definitions
+      pf_df_list <- list()
+      IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
+      for(Island in IslandS){
+
+        
+        df_small    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsp_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
+        df_medium    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfmp_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
+        df_indus    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
+
+        df_small <- dplyr::select(df_small, -idncrs_lon, -idncrs_lat, -lon, -lat)
+        df <- inner_join(df_indus, df_small, by = c("parcel_id", "year"))
+
+        df_medium <- dplyr::select(df_medium, -idncrs_lon, -idncrs_lat, -lon, -lat)
+        pf_df_list[[match(Island, IslandS)]] <- inner_join(df, df_medium, by = c("parcel_id", "year"))
+
+      }
+
+      # stack the three Islands together
+      indo_df <- bind_rows(pf_df_list)
+
+      indo_df <- dplyr::select(indo_df, parcel_id, year,
+                               everything())
+
+      saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucpfp_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
+
+      rm(indo_df, pf_df_list)
+
+
+
+      # ## "NORMAL" forest
+      # df_list <- list()
+      # IslandS <- c("Sumatra", "Kalimantan", "Papua")
+      # for(Island in IslandS){
+      #
+      #   df_90th <- readRDS(file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_90th.rds")))
+      #   df_60th <- readRDS(file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_60th.rds")))
+      #   df_30th <- readRDS(file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
+      #
+      #   df_60th <- dplyr::select(df_60th, -lon, -lat)
+      #   df <- inner_join(df_90th, df_60th, by = c("parcel_id", "year"))
+      #
+      #   df_30th <- dplyr::select(df_30th, -lon, -lat)
+      #   df_list[[match(Island, IslandS)]] <- inner_join(df, df_30th, by = c("parcel_id", "year"))
+      # }
+      #
+      # # stack the three Islands together
+      # indo_df <- bind_rows(df_list)
+      #
+      # indo_df <- dplyr::select(indo_df, parcel_id, year,
+      #                          everything())
+      #
+      # saveRDS(indo_df, file = file.path(paste0("input_data/processed_parcels/lucf",size,"p_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
+      #
+      # rm(indo_df, df_list)
+    }
+  }
+}

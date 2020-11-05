@@ -39,7 +39,6 @@
 
 # These are the packages needed in this particular script. 
 neededPackages = c("data.table", "tidyr", "dplyr", "readstata13", "readxl",
-                   "rgdal", "sf",
                    "doParallel", "foreach", "parallel")
 #install.packages("sf", source = TRUE)
 # library(sf)
@@ -372,34 +371,32 @@ for(ISL in c("Sumatra", "Kalimantan")){
 
 ### Gather the lucfip variables for each parcel_size and catchment area combinations. ####
 PS <- 3000
-for(TT in c(2,4,6)){
-
+# for each catchment area (2, 4, and 6 hours) stack the RHS parcel data from the two islands.  
+for(travel_time in c(2,4,6)){
   # For each Island, join columns of 
-      pf_df_list <- list()
-      IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
-      for(Island in IslandS){
+  pf_df_list <- list()
+  islandS <- c("Sumatra", "Kalimantan")
+  for(island in islandS){
 
-        # df_intact   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_intact.rds")))
-        # df_degraded <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_degraded.rds")))
-        df_total    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
+        df_total    <- readRDS(file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
+                                                island,"_",parcel_size/1000,"km_",travel_time,"h_CA.rds")))
+        
+        # leave the island information in a variable 
+        df_total$island <- island
+        
+        pf_df_list[[match(island, islandS)]] <- df_total
 
-        # df_degraded <- dplyr::select(df_degraded, -lon, -lat)
-        # df <- inner_join(df_intact, df_degraded, by = c("parcel_id", "year"))
-        #
-        # df_total <- dplyr::select(df_total, -lon, -lat)
-        # pf_df_list[[match(Island, IslandS)]] <- inner_join(df, df_total, by = c("parcel_id", "year"))
-        pf_df_list[[match(Island, IslandS)]] <- df_total
+  }
 
-      }
+  # stack the islands together
+  indo_df <- bind_rows(pf_df_list)
 
-      # stack the three Islands together
-      indo_df <- bind_rows(pf_df_list)
+  indo_df <- dplyr::select(indo_df, parcel_id, year,
+                            everything())
 
-      indo_df <- dplyr::select(indo_df, parcel_id, year,
-                               everything())
+  saveRDS(indo_df, file = file.path(paste0("input_data/processed_parcels/wa_panel_parcels_",
+                                           parcel_size/1000,"km_",travel_time,"h_CA.rds")))
 
-      saveRDS(indo_df, file = file.path(paste0("input_data/processed_parcels/lucpf",size,"p_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
-
-      rm(indo_df, pf_df_list)
+  rm(indo_df, pf_df_list)
 
 }
