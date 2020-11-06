@@ -1064,6 +1064,12 @@ drop min_year
 rename minmin_year min_year
 order min_year, after(lon)
 sort firm_id year 
+* and max_year
+bys firm_id: egen maxmax_year = max(max_year)
+drop max_year 
+rename maxmax_year max_year
+order max_year, after(min_year)
+sort firm_id year 
 
 ** some tidying
 order trase_code, after(year)
