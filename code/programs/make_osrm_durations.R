@@ -308,7 +308,7 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
     # keep only geolocalized mills and useful variables
     ibs <- ibs[ibs$analysis_sample == 1,c("firm_id", "year", "min_year", "max_year", "island_name", "lon", "lat")]
     # keep all unique records of mills
-    ibs <- ibs[!duplicated(ibs$firm_id),]
+    #ibs <- ibs[!duplicated(ibs$firm_id),] # this line is for the computation of n_reachable_ibs_imp, not for the main workflow
     ibs <- ibs[ibs$island_name == island,]
     ibs <- st_as_sf(ibs, coords =  c("lon", "lat"), remove = TRUE, crs = 4326)
     
@@ -332,8 +332,9 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
     
     for(t in years){#c(2013,2014,2015)
       # this line makes sure that mills that just miss in IBS for a period of time but then appear again, are counted as reachable.
-      ibs_cs <- ibs[ibs$min_year <= t & ibs$max_year >=t,]  
-
+      # ibs_cs <- ibs[ibs$min_year <= t & ibs$max_year >=t,]  # this line is for the computation of n_reachable_ibs_imp, not for the main workflow
+      ibs_cs <- ibs[ibs$year == t,]
+      
       row.names(ibs_cs) <- ibs_cs$firm_id
       ibs_cs_sp <- as(ibs_cs, "Spatial")
       
@@ -353,3 +354,40 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
 rm(years)
 
 
+
+
+
+
+
+### ALTERNATIVE OSRM WITH PUBLIC SERVER (BUT TAKES A WHILE !)
+# dur_mat <- matrix(nrow = nrow(m.df_wide_lonlat), ncol = nrow(mills))
+# 
+# if(nrow(mills) > 200){
+#   # chope the calculation for it to work with the free OSRM SERVER 
+#   n <- nrow(mills)
+#   third <- trunc(n/3)
+#   first_3rd <- 1:third
+#   snd_3rd <- (third+1):(third*2)
+#   last_3rd <- (third*2+1):n
+#   
+#   for(srci in 1:3){#nrow(m.df_wide_lonlat)
+#     #for(desti in 1:nrow(mills)){
+#     dur_mat[srci, first_3rd] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills[first_3rd,])$durations# %>% as.data.frame()
+#     dur_mat[srci, snd_3rd] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills[snd_3rd,])$durations# %>% as.data.frame()
+#     dur_mat[srci, last_3rd] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills[last_3rd,])$durations# %>% as.data.frame()
+#     #names(durations[[i]]) <- colnames(durations[[i]])
+#     #}
+#   }
+# }else{
+#   for(srci in 1:nrow(m.df_wide_lonlat)){#
+#     dur_mat[srci,] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills)$durations
+#   }
+# }
+# osrmTable(src = m.df_wide_lonlat_sp[1,], dst = mills_sp)$durations
+# # ou alors : 
+# slice_size <- 10000/500
+# i <- 1
+# while(slice < nrow(m.df_wide_lonlat)){
+#   dur_mat[i:(i+slice_size),]  <- osrmTable(src = m.df_wide_lonlat[i:(i+slice_size),], dst = mills)$durations
+#   
+# }

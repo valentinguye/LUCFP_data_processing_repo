@@ -57,7 +57,7 @@
 
 # These are the packages needed in this particular script. 
 neededPackages = c("data.table", "dplyr", "readstata13", "readxl",
-                   "raster", "rgdal", "sp", "sf", "osrm", "osrmr",
+                   "raster", "rgdal", "sp", "sf",
                    "doParallel", "foreach", "parallel")
 
 # Install them in their project-specific versions
@@ -85,11 +85,6 @@ lapply(neededPackages, library, character.only = TRUE)
 #   see in particular https://rstudio.github.io/renv/articles/renv.html 
 
 
-### SET OSRM SERVER 
-# See the notes below and in Evernote on OSRM
-options(osrm.server = paste0(osrmr:::server_address(TRUE), "/"), osrm.profile = "driving")
-map_name = "indonesia-latest.osrm --port 5000 --max-table-size=1000000000"
-osrm_path = "C:/Users/GUYE/osrm"
 
 ### NEW FOLDERS USED IN THIS SCRIPT 
 
@@ -1199,37 +1194,3 @@ for(sample in sampleS){
 # rm(lucpfip_intact, lucpfip_degraded, lucpfip_total)
 # removeTmpFiles(h=0)
 
-
-
-### ALTERNATIVE OSRM WITH PUBLIC SERVER (BUT TAKES A WHILE !)
-# dur_mat <- matrix(nrow = nrow(m.df_wide_lonlat), ncol = nrow(mills))
-# 
-# if(nrow(mills) > 200){
-#   # chope the calculation for it to work with the free OSRM SERVER 
-#   n <- nrow(mills)
-#   third <- trunc(n/3)
-#   first_3rd <- 1:third
-#   snd_3rd <- (third+1):(third*2)
-#   last_3rd <- (third*2+1):n
-#   
-#   for(srci in 1:3){#nrow(m.df_wide_lonlat)
-#     #for(desti in 1:nrow(mills)){
-#     dur_mat[srci, first_3rd] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills[first_3rd,])$durations# %>% as.data.frame()
-#     dur_mat[srci, snd_3rd] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills[snd_3rd,])$durations# %>% as.data.frame()
-#     dur_mat[srci, last_3rd] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills[last_3rd,])$durations# %>% as.data.frame()
-#     #names(durations[[i]]) <- colnames(durations[[i]])
-#     #}
-#   }
-# }else{
-#   for(srci in 1:nrow(m.df_wide_lonlat)){#
-#     dur_mat[srci,] <- osrmTable(src = m.df_wide_lonlat[srci,], dst = mills)$durations
-#   }
-# }
-# osrmTable(src = m.df_wide_lonlat_sp[1,], dst = mills_sp)$durations
-# # ou alors : 
-# slice_size <- 10000/500
-# i <- 1
-# while(slice < nrow(m.df_wide_lonlat)){
-#   dur_mat[i:(i+slice_size),]  <- osrmTable(src = m.df_wide_lonlat[i:(i+slice_size),], dst = mills)$durations
-#   
-# }

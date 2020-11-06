@@ -57,7 +57,7 @@
 
 # These are the packages needed in this particular script. 
 neededPackages = c("data.table", "dplyr", "readstata13", "readxl",
-                   "raster", "rgdal", "sp", "sf", "osrm", "osrmr",
+                   "raster", "rgdal", "sp", "sf", 
                    "doParallel", "foreach", "parallel")
 
 # Install them in their project-specific versions
@@ -84,23 +84,6 @@ lapply(neededPackages, library, character.only = TRUE)
 #   you should try to install them, preferably in their versions stated in the renv.lock file. 
 #   see in particular https://rstudio.github.io/renv/articles/renv.html 
 
-
-### SET OSRM SERVER 
-# See the notes below and in Evernote on OSRM
-options(osrm.server = paste0(osrmr:::server_address(TRUE), "/"), osrm.profile = "driving")
-map_name = "indonesia-latest.osrm --port 5000 --max-table-size=1000000000"
-osrm_path = "C:/Users/GUYE/osrm"
-
-### NEW FOLDERS USED IN THIS SCRIPT 
-
-# annual layers will be stored in a subfolder just for the sake of tidyness in processed_lu
-dir.create("temp_data/processed_lu/annual_maps")
-
-# dataframes of parcels are stored here 
-dir.create("temp_data/processed_parcels")
-
-# raster temp files are stored there
-dir.create("temp_data/raster_tmp")
 
 
 ### RASTER OPTIONS ### 
@@ -133,12 +116,12 @@ island_sf_prj <- st_transform(island_sf, crs = indonesian_crs)
 
 
 ##### 1. PREPARE 30m PIXEL-LEVEL MAPS OF LUCPFIP ##### 
+island <- "Sumatra"
 
 prepare_pixel_lucpfip <- function(island){
   
   ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
   #### Define area of interest (AOI) ####
-  
   aoi <- island_sf[island_sf$shape_des == island,]
   aoi <- st_as_sfc(st_bbox(aoi))
   aoi_sp <- as(aoi, "Spatial")
@@ -147,22 +130,228 @@ prepare_pixel_lucpfip <- function(island){
   # it is not projected # 
   
   ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
-  #### Make a layer of earlier detected industrial oil palm plantations ####
+  #### Make a layer of earliest detected industrial oil palm plantations ####
   
   # Read all layers of ioppm of interest
-  ioppm2000 <- raster(file.path(paste0("input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_2000_WGS1984.tif"))) 
-  ioppm2005 <- raster(file.path(paste0("input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_2005_WGS1984.tif"))) 
-  ioppm2010 <- raster(file.path(paste0("input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_2010_WGS1984.tif"))) 
-  ioppm2015 <- raster(file.path(paste0("input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_2015_WGS1984.tif"))) 
+  ioppm_list <- list()
+  decades <- c("2000", "2005", "2010", "2015")
+  length(ioppm_list) <- length(decades)
+  names(ioppm_list) <- decades
   
-  # stack is necessary for clusterR
-  rs <- raster::stack(ioppm2000, ioppm2005, ioppm2010, ioppm2015)
-  
-  overlay_to_detect_earliest <- function(rs){
-    rs[[]]
+  for(decadal_year in decades){
+    ioppm <- raster(file.path(paste0("input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_",decadal_year,"_WGS1984.tif")))
+    
+    # stabilizes the transformations implemented in this loop (otherwise 2005 turns NAs into 0s for instance...)
+    dataType(ioppm) <- "INT2S"
+    
+    # First, crop from Indonesia wide to island extent (in the longitude mainly)
+    ioppm <- raster::crop(ioppm, y = aoi_sp)
+    # then extend it (in the latitude mainly) because raw data do not cover northern part of Sumatra. 
+    ioppm <- raster::extend(ioppm, y = aoi_sp, value = NA)
+    
+    # change binary occurrence of event into time of event
+    ioppm_list[[decadal_year]] <- ioppm*(as.numeric(decadal_year)-2000+200) # (-1800 is a little trick to enable dataType to pass under the bar of dataType from INT2 to INT1, without losing information)
   }
   
-  ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+  rs <- raster::stack(ioppm_list[["2000"]], ioppm_list[["2005"]], ioppm_list[["2010"]], ioppm_list[["2015"]])
+  
+  # the min requires that cells that are never plantations are NA and not O (and hence the na.rm = TRUE) 
+  earliest <- calc(rs, min, na.rm = TRUE)
+  
+  # lightening the dataType requires that there are no NAs
+  earliest <- raster::reclassify(earliest, rcl = cbind(NA,0))
+  
+  dataType(earliest) <- "INT1U"
+  getValues(earliest) %>% unique()
+  # plot(earliest)
+  # 
+  rm(rs, ioppm_list)
+  
+   ### OVERLAY EARLIEST WITH LOSS  
+  
+  # Read the target GFC loss layer
+  loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
+
+  # get the two rasters on the same projection
+  beginCluster() # this uses by default detectCores() - 1
+  projectRaster(from = earliest, to = loss,
+                method = "ngb",
+                filename = file.path(paste0("temp_data/processed_lu/austin_earliest_detected_",island,"_aligned.tif")),
+                datatype = "INT2S",
+                overwrite = TRUE)
+  endCluster()
+  print(paste0("completed austin_earliest_detected_",island,"_aligned.tif"))
+  removeTmpFiles(h=0)  
+  
+  # Not useful if we condition on loss being non null. 
+  # reclassify loss's 0s into NA, so that cells with never detected loss do not get taken for cells with loss in 2000 (which is not observed) 
+  # raster::reclassify(loss, 
+  #                    rcl = cbind(0,NA), 
+  #                    filename = file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj_0toNA.tif")), 
+  #                    overwrite=TRUE, 
+  #                    datatype = "INT2S")
+  
+  
+  # Compute the difference between the year when iopp is detected the earliest, and the year when forest loss occurred. 
+  # We do not conition on being within primary forest as of now, in order to remain as general as possible 
+  # this is not a loss of coding efficiency as an overlay will be required anyways afterwards to qualify the loss years either as immediate or long.  
+  
+  # loss rs [[1]]
+  loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
+  
+  #earliest rs[[2]]
+  earliest <- raster(file.path(paste0("temp_data/processed_lu/austin_earliest_detected_",island,"_aligned.tif")))
+
+  loss_earliest <- raster::stack(loss, earliest)
+  
+  make_time_laps <- function(rs){
+    # condition on the pixel having a loss event once (rs[[1]]>0), within a plantation (rs[[2]]>0)
+    # outside this condition, this is not an event we are interested in. We don't want to set it as NA (too heavy) nor as 0 (because 0 has another meaning of 
+    # immediate conversion), hence set at arbitrary -51 which is a value that cannot be reached by other cells. 
+    fake_NA <- -51 
+    if(rs[[1]]>0 & rs[[2]]>0){rs[[2]] - rs[[1]]-200}else{fake_NA}} # -200 is because values in loss are 1, 2,..., 18 while in earliest they are 200, 205, 210, 215
+                                                                          #  is because we do not want to count 
+  beginCluster() # uses by default detectedCores() - 1
+  clusterR(loss_earliest,
+           fun = calc, 
+           args = list(make_time_laps),
+           filename = file.path(paste0("temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_",island,".tif")),
+           datatype = "INT1S", # only one byte necessary now, as values go from -51 to 14, without NA.
+           overwrite = TRUE)
+  endCluster()
+  print(paste0("completed earliest_ioppm_to_loss_timelaps_",island,"_aligned.tif"))
+  
+  # Finally, split this into  different rasters, with reclassify
+  
+  # Recall that reclassify works with a reclassiying matrix
+  # The two first columns of rclmat are intervals, values within which should be converted in the third column's value.
+  # The right = TRUE (the default) means that intervals are open on the left and closed on the right. 
+  # Here, with right = FALSE we set this the other way round, so the kind: [x;y[
+  # include.lowest means that the lowest interval is closed on the left if right = TRUE, and 
+  # that the highest interval is closed on the right if right = FALSE, so in our case here. 
+  time_laps <- raster(file.path(paste0("temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_",island,".tif")))
+  
+
+  
+  beginCluster() # this uses by default detectCores() - 1
+  
+  # REPLACEMENT OF TREES WITHIN PLANTATIONS: loss that occurs within plantations. Do not run it here as it will probably be in a separate script...
+  m1 <- c(fake_NA,fake_NA,0,
+           -18,0,1,
+            0,5,0,
+            5,14,0)
+  rclmat1 <- matrix(m1, ncol = 3, byrow = TRUE)
+  clusterR(time_laps,
+           fun = reclassify,
+           args = list(rcl = rclmat1, right = FALSE, include.lowest = TRUE),
+           #export = "rclmat", # works with or without
+           filename = file.path(paste0("temp_data/processed_lu/loss_in_iopp_",island,".tif")),
+           datatype = "INT1U",
+           overwrite = TRUE)
+  rm(m1, rclmat1)
+  
+  # SHORT TIMELAPS BETWEEN LOSS AND EALIEST IOPP: loss that occurs the same year or up to 4 years prior to the earliest iopp detected
+  m2 <- c(fake_NA,fake_NA,0, 
+          -18,0,0,
+          0,5,1,
+          5,14,0)
+  rclmat2 <- matrix(m2, ncol = 3, byrow = TRUE)
+  clusterR(time_laps,
+           fun = reclassify,
+           args = list(rcl = rclmat2, right = FALSE, include.lowest = TRUE), 
+           #export = "rclmat", # works with or without 
+           filename = file.path(paste0("temp_data/processed_lu/loss_to_iopp_rapid_",island,".tif")), 
+           datatype = "INT1U",
+           overwrite = TRUE)
+  rm(m2, rclmat2)
+  
+  # LONG TIMELAPS BETWEEN LOSS AND EALIEST IOPP: loss that occurs between 5 to 14 years prior to the earliest iopp detected
+  m3 <- c(fake_NA,fake_NA,0, 
+          -18,0,0,
+          0,5,0,
+          5,14,1)
+  rclmat3 <- matrix(m3, ncol = 3, byrow = TRUE)
+  clusterR(time_laps,
+           fun = reclassify,
+           args = list(rcl = rclmat3, right = FALSE, include.lowest = TRUE), 
+           #export = "rclmat", # works with or without 
+           filename = file.path(paste0("temp_data/processed_lu/loss_to_iopp_slow_",island,".tif")), 
+           datatype = "INT1U",
+           overwrite = TRUE)
+  rm(m3, rclmat3)
+  
+  endCluster()  
+  
+  print(paste0("completed loss_to_iopp_slow_",island,"_aligned.tif"))
+  
+  removeTmpFiles(h=0)  
+}  
+
+# remove that after 
+IslandS <- c("Sumatra", "Kalimantan")
+for(Island in IslandS){
+    prepare_pixel_lucpfip(Island)
+}
+
+  # then start everything again from overlay step, looping over rapid or transitional 
+  # GFC loss layer (rs[[1]]) of years of a loss event
+  loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
+  
+  # selecting rasters for either rapid or slow LUCFP (rs[[2]])
+  replacement <- raster(file.path(paste0("temp_data/processed_lu/loss_in_iopp_",island,".tif")))
+  rapid <- raster(file.path(paste0("temp_data/processed_lu/loss_to_iopp_rapid_",island,".tif")))
+  slow <- raster(file.path(paste0("temp_data/processed_lu/loss_to_iopp_slow_",island,".tif")))
+  
+  # primary forest (rs[[3]])
+  pf <- raster(file.path(paste0("temp_data/processed_lu/margono_primary_forest_",island,"_aligned.tif")))
+  
+  # stack is necessary for clusterR
+  rs_replacement <- raster::stack(loss, replacement)
+  rs_rapid <- raster::stack(loss, rapid, pf)
+  rs_slow <- raster::stack(loss, slow, pf)
+  
+  overlay_replacement <- function(rs){rs[[1]]*rs[[2]]}
+  overlay_lucpfp <- function(rs){rs[[1]]*rs[[2]]*(rs[[3]] != 0)} # (recall that pf is either 2 or 1 or 0 for degraded, intact or non primary forest resp. Here we want total primary forest)
+  
+  # note that using calc below is equivalent to using overlay but more appropriate to the input being a stack, 
+  # which is necessary to pass several raster layers to the first argument of clusterR
+  
+  # run the computation in parallel with clusterR, as cells are processed one by one independently.
+  beginCluster() # uses by default detectedCores() - 1
+  
+  # For replacement
+  clusterR(rs_replacement,
+           fun = calc, #
+           args = list(overlay_replacement),
+           filename = file.path(paste0("temp_data/processed_lu/loss_in_iopp_years_",island,"_intact.tif")),
+           datatype = "INT1U",
+           overwrite = TRUE )
+  
+  # For rapid conversion
+  clusterR(rs_rapid,
+           fun = calc, 
+           args = list(overlay_lucpfp),
+           filename = file.path(paste0("temp_data/processed_lu/lucpfip_rapid_",island,"_total.tif")),
+           datatype = "INT1U",
+           overwrite = TRUE )
+  
+  # For slow conversion
+  clusterR(rs_slow,
+           fun = calc, 
+           args = list(overlay_lucpfp),
+           filename = file.path(paste0("temp_data/processed_lu/lucpfip_slow_",island,"_total.tif")),
+           datatype = "INT1U",
+           overwrite = TRUE )
+  
+  endCluster()
+  
+  rm(loss, replacement, rapid, slow, pf, 
+     rs_replacement, rs_rapid, rs_slow, overlay_replacement, overlay_lucpfp)
+  removeTmpFiles(h=0) 
+  
+  
+  
+    ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
   #### Prepare plantation maps ####
   
   for(decadal_year in c(2005, 2010)){ # 2000 and 2015 already computed in prepare_lucfip and lucpfip resp.
