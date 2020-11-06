@@ -104,9 +104,11 @@ years <- seq(from = 1998, to = 2015, by = 1)
 # parcels[["geometry"]][parcels$parcel_id == i]
 # parcels[parcels$parcel_id == i, "geometry"]
 # 
-# island <- "Kalimantan"
-# parcel_size <- 3000
-# travel_time <- 4
+island <- "Sumatra"
+parcel_size <- 3000
+travel_time <- 2
+t <- 1
+
 
 parcel_set_w_average <- function(island, parcel_size, travel_time){
   ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))  
@@ -394,7 +396,7 @@ for(travel_time in c(2,4,6)){
   indo_df <- dplyr::select(indo_df, parcel_id, year,
                             everything())
 
-  saveRDS(indo_df, file = file.path(paste0("input_data/processed_parcels/wa_panel_parcels_",
+  saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
                                            parcel_size/1000,"km_",travel_time,"h_CA.rds")))
 
   rm(indo_df, pf_df_list)
