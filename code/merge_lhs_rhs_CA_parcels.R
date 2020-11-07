@@ -54,26 +54,39 @@ lapply(neededPackages, library, character.only = TRUE)
 
 merge_lhs_rhs <- function(parcel_size, travel_time){
   
-  # merge lucpfp and lucfp outcome variables data sets together (industrial, small and medium are already in it)
+  # merge lucpfp and lucfp outcome variables data sets together 
+  
+  # For lucpfp and lucfp, industrial, small and medium are already in it, hence the name with "*fp"
   lucpfp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfp_panel_",
                                       parcel_size/1000,"km_",travel_time,"h_IBS_CA.rds")))
-  
+
   # lucfp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfp_panel_",
-  #                                    parcel_size/1000,"km_",travel_time,"h_IBS_CA.rds")))
+  #                                    parcel_size/1000,"km_",travel_time,"h_IBS_CA.rds")))  
+  
+  # This one has outcomes only for industrial plantations, but with dynamics: replacement, rapid and slow (the two latter on total primary forest)
+  lucpfip_dyn <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfp_panel_dynamics_",
+                                          parcel_size/1000,"km_",travel_time,"h_IBS_CA.rds")))
+  
+
   
   # keep only year before 2015 (after they mean nothing since plantation data are from 2015)
   lucpfp <- lucpfp[lucpfp$year<=2016,] # now runs from 2001-1998
   #lucfp <- lucfp[lucfp$year<=2016,] # now runs from 2001-1998
-
+  lucpfip_dyn <- lucpfip_dyn[lucpfip_dyn$year<=2015,]
+  
   
   # remove coordinates, they are already in RHS
   lucpfp <- dplyr::select(lucpfp, -idncrs_lat, -idncrs_lon)# -lat, -lon, keep them to merge on them for more safety
   #lucfp <- dplyr::select(lucfp, -lat, -lon, -idncrs_lat, -idncrs_lon)
-
+  lucpfip_dyn <- dplyr::select(lucpfip_dyn, -idncrs_lat, -idncrs_lon)
+  
   
   ### THIS NEEDS TO BE CHANGED WHEN WE HAVE LUCFP
-  LHS <- lucpfp
-  rm(lucpfp)
+  #  LHS <- lucpfp
+  nrow(lucpfp) == nrow(lucpfip_dyn)
+  LHS <- base::merge(lucpfp, lucpfip_dyn, by = c("parcel_id", "lon", "lat", "year"))
+  
+  rm(lucpfp, lucpfip_dyn)
   #nrow(lucpfp)==nrow(lucfp)
   #LHS <- base::merge(lucpfp, lucfp, by = c("parcel_id", "year"))
   
@@ -83,6 +96,9 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   
   # LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
   # LHS$lucfsmp_ha_30th <- LHS$lucfsp_ha_30th + LHS$lucfmp_ha_30th
+  
+  
+  # check that rapid + slow = total ? 
   
   
   ### EXPLICATIVE VARIABLES (runs from 1998-2015) SOON UP TO 2016!!

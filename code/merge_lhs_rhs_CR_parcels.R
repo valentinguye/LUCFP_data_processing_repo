@@ -55,7 +55,7 @@ lapply(neededPackages, library, character.only = TRUE)
 
 merge_lhs_rhs <- function(parcel_size, catchment_radius){
   
-  # megre lucpfip and lucfip outcome variables data sets together
+  # merge lucpfip and lucfip outcome variables data sets together
   lucpfip <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
                                   parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
   
@@ -68,25 +68,33 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   lucfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfsmp_panel_",
                                        parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
   
+  lucpfip_dyn <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_dynamics_",
+                                          parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
+
+  
   # keep only year before 2015 (after they mean nothing since we plantation data are from 2015)
   lucpfip <- lucpfip[lucpfip$year<=2015,] # now runs from 2001-1998
   lucfip <- lucfip[lucfip$year<=2015,] # now runs from 2001-1998
   lucpfsmp <- lucpfsmp[lucpfsmp$year<=2015,] # now runs from 2001-1998
   lucfsmp <- lucfsmp[lucfsmp$year<=2015,] # now runs from 2001-1998
+  lucpfip_dyn <- lucpfip_dyn[lucpfip_dyn$year<=2015,]
   
   # remove coordinates, they are already in RHS
   lucpfip <- dplyr::select(lucpfip, -lat, -lon)
   lucfip <- dplyr::select(lucfip, -lat, -lon)
   lucpfsmp <- dplyr::select(lucpfsmp, -lat, -lon)
   lucfsmp <- dplyr::select(lucfsmp, -lat, -lon)
+  lucpfip_dyn <- dplyr::select(lucpfip_dyn, -lat, -lon)
   
   
   nrow(lucpfip)==nrow(lucfip)
   nrow(lucpfsmp)==nrow(lucfsmp)
   nrow(lucpfip)==nrow(lucfsmp)
+  nrow(lucpfip)==nrow(lucpfip_dyn)
   LHS <- base::merge(lucpfip, lucfip, by = c("parcel_id", "year"))
   LHS <- base::merge(LHS, lucpfsmp, by = c("parcel_id", "year"))
   LHS <- base::merge(LHS, lucfsmp, by = c("parcel_id", "year"))
+  LHS <- base::merge(LHS, lucpfip_dyn, by = c("parcel_id", "year"))
   
   # make variable that counts lucfp events on both small and medium sized plantations 
   LHS$lucpfsmp_pixelcount_total <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
@@ -94,6 +102,8 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   
   LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
   LHS$lucfsmp_ha_30th <- LHS$lucfsp_ha_30th + LHS$lucfmp_ha_30th
+  
+  # check that rapid + slow = total ? 
   
   
   ### EXPLICATIVE VARIABLES (runs from 1998-2015)

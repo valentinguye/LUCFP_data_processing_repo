@@ -1,6 +1,9 @@
 
-# This script repeats roughly twice the same actions, once for parcels within supply sheds of IBS mills only, 
-# and once for all UML mills. 
+# This script has in two main parts. 
+# The first part selects cells within catchment area (CA) for outcome variables, not annually. 
+# The second part does the same but annually (the annual variation is whether mills are there or not), for explanatory variables (computed in wa_at_parcels_durations.R)
+
+# The first part is repeated for the IBS and the UML sets of mills.  
 
 
 

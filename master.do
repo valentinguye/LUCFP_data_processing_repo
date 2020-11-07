@@ -425,7 +425,7 @@ rsource using "install_R_project_packages.R"
 		* output: 	temp_data/panel_parcels_ip_final_PS_CR.rds  for PS = 3km, CR = (10CR, 30CR, 50CR)
 
 	* And same as above, but for duration-based CA parcels. 
-		rsource using "code/merge_lhs_rhs_CR_parcels.R"
+		rsource using "code/merge_lhs_rhs_CA_parcels.R"
 		* input: 	input/processed_parcels/lucpfp_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA) : each one is for total primary forest only, and has rows from two islands and columns for three plantation sizes  
 		*			temp_data/processed_parcels/parcels_panel_final_PS_CA for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
 		* 			temp_data/processed_parcels/baseline_fc_cs_PS_CA.rds for PS = 3km and CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA)
@@ -433,7 +433,7 @@ rsource using "install_R_project_packages.R"
 		* output: 	temp_data/panel_parcels_ip_final_PS_CA.rds for PS = 3km and CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA)
 
 
-		
+
 ***** ANALYSIS *****
 * note: we do the conversion from pixel counts to areas in here, 
 * depending on what we need. This is not done in earlier stages, so it will have to be done before analysis in further scripts too. 
