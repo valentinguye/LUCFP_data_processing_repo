@@ -297,7 +297,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   
 
   ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
-  #### Overlay forest loss years and different dynamics of oil palm conversion ####
+  #### Overlay forest loss YEARS and different dynamics of oil palm conversion ####
 
   # GFC loss layer (rs[[1]]) of years of a loss event
   loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
@@ -473,8 +473,9 @@ aggregate_lucpfip_dynamics <- function(island, parcel_size){
       raster::aggregate(lucpfip_annual, fact = c(parcel_size/res(lucpfip_annual)[1], parcel_size/res(lucpfip_annual)[2]),
                         expand = FALSE,
                         fun = sum,
-                        na.rm = FALSE, # NA cells are in margins, see the NOTES part. If FALSE, aggregations at margins that use NA 
+                        na.rm = TRUE, # NA cells are in margins, see the NOTES part. If FALSE, aggregations at margins that use NA 
                         # are discarded because the sum would be spurious as it would count all NA as 0s while it is not necessary the case.
+                        # as there is no land on margins anyways, we can set na.rm = TRUE. It is safer, as it will count 
                         filename = output_filename,
                         datatype = "INT4U", # because the sum may go up to ~ 10 000 with parcel_size = 3000,
                         # but to more than 65k with parcel_size = 10000 so INT4U will be necessary;
@@ -539,6 +540,12 @@ plot(timelaps)
 replacement <- raster(file.path(paste0("temp_data/processed_lu/loss_in_iopp_",island,".tif")))
 rapid <- raster(file.path(paste0("temp_data/processed_lu/loss_to_iopp_rapid_",island,".tif")))
 slow <- raster(file.path(paste0("temp_data/processed_lu/loss_to_iopp_slow_",island,".tif")))
+plot(slow)
+NAvalue(slow)
+slow_s <- sampleRandom(slow, size = 1e5)
+unique(slow_s)
+dataType(slow)
+
 
 lucpfip <- raster(file.path(paste0("temp_data/processed_lu/annual_maps/parcel_lucpfip_",dyna,"_",island,"_",parcel_size/1000,"km_total_2010.tif")))
 
@@ -794,21 +801,15 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
 ### Prepare a 30m pixel map of lucfp for each Island
 IslandS <- c("Sumatra", "Kalimantan")
 for(Island in IslandS){
-  if(!file.exists(file.path(paste0("temp_data/processed_lu/annual_maps/lucpfip_slow_",Island,"_total_2018.tif")))){
-    
     prepare_pixel_lucpfip_dynamics(Island)
-  }
 }
 
 ### Aggregate this Island map to a chosen parcel size (3km, 6km and 9km for instance)
 PS <- 3000
 IslandS <- c("Sumatra", "Kalimantan")
 for(Island in IslandS){
-  #if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucpfip_",Island,"_",PS/1000,"km_total.tif")))){
-    
     aggregate_lucpfip_dynamics(island = Island,
                                 parcel_size = PS)
-  #}
 }
 
 ### For that Island and for each aggregation factor, extract panels of parcels within different catchment area sizes 
@@ -818,14 +819,9 @@ IslandS <- c("Sumatra", "Kalimantan")
 for(Island in IslandS){
   CR <- 10000 # i.e. 10km radius
   while(CR < 60000){
-    # on ne fait pas confiance à celui qui existe pour Sumatra car il vient d'une erreur dans aggregate_lucpfip
-    #if(!file.exists(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",Island,"_",PS/1000,"km_",CR/1000,"CR_total.rds")))){
-    
     to_panel_within_CR_dynamics(island = Island,
                                  parcel_size = PS,
                                  catchment_radius = CR)
-    
-    #} # only the function execution is conditioned to the file existance, not the loop incrementation
     
     CR <- CR + 20000
   }
@@ -844,8 +840,8 @@ for(sample in sampleS){
     IslandS <- c("Sumatra", "Kalimantan")
     for(Island in IslandS){
       
-      df_replace   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_replace_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_intact.rds")))
-      df_rapid <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_rapid_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_degraded.rds")))
+      df_replace   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_replace_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
+      df_rapid <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_rapid_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
       df_slow    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_slow_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
       
       df_rapid <- dplyr::select(df_rapid, -lon, -lat)
@@ -861,11 +857,11 @@ for(sample in sampleS){
     
     ### Add columns of converted pixel counts to hectares.
     pixel_area <- (27.8*27.6)/(1e4)
-    # intact
+    # replace
     indo_df <- mutate(indo_df, lucpfip_replace_ha = lucpfip_replace_pixelcount*pixel_area) 
-    # degraded
+    # rapid
     indo_df <- mutate(indo_df, lucpfip_rapid_ha = lucpfip_rapid_pixelcount*pixel_area) 
-    # total
+    # slow
     indo_df <- mutate(indo_df, lucpfip_slow_ha = lucpfip_slow_pixelcount*pixel_area) 
     
     indo_df <- dplyr::select(indo_df, parcel_id, year, 
