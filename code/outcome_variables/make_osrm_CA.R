@@ -656,7 +656,7 @@ travel_timeS <- c(2,4,6)
       # indo_df <- dplyr::select(indo_df, parcel_id, year,
       #                          everything())
       #
-      # saveRDS(indo_df, file = file.path(paste0("input_data/processed_parcels/lucf",size,"p_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
+      # saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
       #
       # rm(indo_df, df_list)
     

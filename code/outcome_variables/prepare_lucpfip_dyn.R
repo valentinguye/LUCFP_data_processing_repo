@@ -142,27 +142,28 @@ prepare_pixel_lucpfip_dynamics <- function(island){
     ioppm <- raster(file.path(paste0("input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_",decadal_year,"_WGS1984.tif")))
     
     # stabilizes the transformations implemented in this loop (otherwise 2005 turns NAs into 0s for instance...)
-    dataType(ioppm) <- "INT2S"
-    
+    dataType(ioppm) # this changes to FLT4S with the operations below but it is not important. 
+    NAvalue(ioppm)
     # First, crop from Indonesia wide to island extent (in the longitude mainly)
     ioppm <- raster::crop(ioppm, y = aoi_sp)
     # then extend it (in the latitude mainly) because raw data do not cover northern part of Sumatra. 
     ioppm <- raster::extend(ioppm, y = aoi_sp, value = NA)
     
     # change binary occurrence of event into time of event
-    ioppm_list[[decadal_year]] <- ioppm*(as.numeric(decadal_year)-2000+200) # (-1800 is a little trick to enable dataType to pass under the bar of dataType from INT2 to INT1, without losing information)
+    ioppm_list[[decadal_year]] <- ioppm*(as.numeric(decadal_year)-2000+200) # (-1800 is a trick to enable dataType to pass under the bar of dataType from INT2 to INT1, without losing information)
   }
   
   rs <- raster::stack(ioppm_list[["2000"]], ioppm_list[["2005"]], ioppm_list[["2010"]], ioppm_list[["2015"]])
   
   # the min requires that cells that are never plantations are NA and not O (and hence the na.rm = TRUE) 
   earliest <- calc(rs, min, na.rm = TRUE)
-  
+  # dataType(earliest)
+  # NAvalue(earliest)
+  # getValues(earliest) %>% unique()  
   # lightening the dataType requires that there are no NAs
-  earliest <- raster::reclassify(earliest, rcl = cbind(NA,0))
   
-  dataType(earliest) <- "INT1U"
-  # getValues(earliest) %>% unique()
+  earliest <- raster::reclassify(earliest, rcl = cbind(NA,0))
+  # getValues(earliest) %>% unique()  
   # plot(earliest)
 
   rm(rs, ioppm_list)
@@ -170,7 +171,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   ### COMPUTE TIME LAPS BY OVERLAYING EARLIEST AND LOSS  
   
   ## PRELIMINARY ALIGNEMENT
-  if(!file.exists(file.path(paste0("temp_data/processed_lu/austin_earliest_detected_",island,"_aligned.tif")))){
+ 
     # Read the target GFC loss layer
     loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
   
@@ -179,46 +180,50 @@ prepare_pixel_lucpfip_dynamics <- function(island){
     projectRaster(from = earliest, to = loss,
                   method = "ngb",
                   filename = file.path(paste0("temp_data/processed_lu/austin_earliest_detected_",island,"_aligned.tif")),
-                  datatype = "INT2S",
+                  datatype = "INT2U", # INT2U will allow NA at the margins. 
                   overwrite = TRUE)
     endCluster()
     print(paste0("completed austin_earliest_detected_",island,"_aligned.tif"))
     removeTmpFiles(h=0)  
-  }
+  
   
   ## OVERLAY FUNCTION
   # Compute the difference between the year when iopp is detected the earliest, and the year when forest loss occurred. 
   # We do not condition on being within primary forest as of now, in order to remain as general as possible 
   # this is not a loss of coding efficiency as an overlay will be required anyways afterwards to qualify the loss years either as immediate or long.  
+    
+  # NOTE ON NAs
+  # NAs are present, at the margins, due to project operations. 
+  # We do not have to reclassify them, as long as we use if_else in the make_time_laps function below. 
+  # if_else(NA>0 & NA >0, true = 1, false = 0) does not throw an error. But something using if(NA){} would! 
+  
+  # Moreover, we would like to stick to INT1 dataType as long as possible to reduce file sizes, but "data type "INT1S" is not available in GDAL."
+  # Therefore, we "upgrade" to INT2S. 
+  # We arbitrarily chose a value of -51 for cells that do not satisfy the conditions of having loss and having plantations. 
+  # This makes it easier (than setting to NA) to reclassify these cells to 0 later on. And of course we cannot set them to 0 because 0 is a value
+  # that can be reached in the difference, and has a different meaning (immediate conversion)
 
   # loss rs [[1]]
   loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
-  # probably necessary to not have NAs, as we condition on these and if(NA){} would throw an error. 
-  NAvalue(loss) <- 0
-  #dataType(loss)
   
   #earliest rs[[2]]
   earliest <- raster(file.path(paste0("temp_data/processed_lu/austin_earliest_detected_",island,"_aligned.tif")))
-  NAvalue(earliest) <- 0
-  #dataType(earliest)
-  
+
   rs <- raster::stack(loss, earliest)
   
   # condition on the pixel having a loss event once (rs[[1]]>0), within a plantation (rs[[2]]>0)
-  # outside this condition, this is not an event we are interested in. We don't want to set it as NA (too heavy) nor as 0 (because 0 has another meaning of 
-  # immediate conversion), hence set at arbitrary -51 which is a value that cannot be reached by other cells. 
+  # outside this condition, this is not an event we are interested in. 
   make_time_laps <- function(loss1, earliest2){if_else(loss1>0 & earliest2>0, 
-                                         true = earliest2 - loss1-200, 
-                                         false = -51)} # -200 is because values in loss are 1, 2,..., 18 while in earliest they are 200, 205, 210, 215
-                                                       #  is because we do not want to count
-  
+                                         true = earliest2 - loss1-200, # -200 is because values in loss are 1, 2,..., 18 while in earliest they are 200, 205, 210, 215
+                                         false = -51)} 
+                                                       
+
   beginCluster() # uses by default detectedCores() - 1
   clusterR(rs,
            fun = overlay, 
            args = list(fun = make_time_laps, unstack = TRUE),
            filename = file.path(paste0("temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_",island,".tif")),
-           datatype = "INT1S", # only one byte necessary now, as values go from -51 to 14, without NA.
-           # but "data type "INT1S" is not available in GDAL. Changed to "INT2S""
+           datatype = "INT2S", 
            overwrite = TRUE)
   endCluster()
   print(paste0("completed earliest_ioppm_to_loss_timelaps_",island,".tif"))
@@ -239,11 +244,11 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   
   beginCluster() # this uses by default detectCores() - 1
 
-  # REPLACEMENT OF TREES WITHIN PLANTATIONS: loss that occurs within plantations. Do not run it here as it will probably be in a separate script...
+  # REPLACEMENT OF TREES WITHIN PLANTATIONS: loss that occurs within plantations. 
   m1 <- c(-51,-51,0,
-           -18,0,1,
-            0,5,0,
-            5,14,0)
+          -18,0,1,
+          0,5,0,
+          5,14,0)
   rclmat1 <- matrix(m1, ncol = 3, byrow = TRUE)
   clusterR(time_laps,
            fun = reclassify,
@@ -269,7 +274,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
            overwrite = TRUE)
   rm(m2, rclmat2)
   
-  # LONG TIMELAPS BETWEEN LOSS AND EALIEST IOPP: loss that occurs between 5 to 14 years prior to the earliest iopp detected
+  # LONG TIMELAPS BETWEEN LOSS AND EARLIEST IOPP: loss that occurs between 5 to 14 years prior to the earliest iopp detected
   m3 <- c(-51,-51,0, 
           -18,0,0,
           0,5,0,
@@ -323,7 +328,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   clusterR(rs_replacement,
            fun = calc, #
            args = list(overlay_replacement),
-           filename = file.path(paste0("temp_data/processed_lu/lupcfip_replace_",island,"_total.tif")),
+           filename = file.path(paste0("temp_data/processed_lu/lucpfip_replace_",island,"_total.tif")),
            # the name is not very meaningful, but it's for coding purpose along this script, to have this outcome in the loops easily. 
            datatype = "INT1U",
            overwrite = TRUE )
@@ -354,7 +359,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   
   ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
   #### Split LUCFP to annual layers ####
-  
+
   ### Function description
   # parallel_split has for input a single lucpfip layer where each pixel has a value corresponding to the year when a lucpfip event occured;
   # it outputs annual layers in each of which pixels are either 1 if a lucpfip event occured that year, and 0 else.
@@ -421,6 +426,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   rasterOptions(tmpdir = "temp_data/raster_tmp")  
   
   return(print(paste0("complete prepare_lucpfip_dynamics ", island)))
+  
 }
 
 
@@ -522,6 +528,25 @@ aggregate_lucpfip_dynamics <- function(island, parcel_size){
   print(paste0("complete aggregate_lucpfip_dynamics ",island," ",parcel_size/1000, "km"))
 }
 
+timelaps <- raster(file.path(paste0("temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_",island,".tif")))
+timelaps_s <- sampleRandom(timelaps, 10000)
+unique(timelaps_s)
+dataType(timelaps)
+NAvalue(timelaps)
+plot(timelaps)
+
+# binaries
+replacement <- raster(file.path(paste0("temp_data/processed_lu/loss_in_iopp_",island,".tif")))
+rapid <- raster(file.path(paste0("temp_data/processed_lu/loss_to_iopp_rapid_",island,".tif")))
+slow <- raster(file.path(paste0("temp_data/processed_lu/loss_to_iopp_slow_",island,".tif")))
+
+lucpfip <- raster(file.path(paste0("temp_data/processed_lu/annual_maps/parcel_lucpfip_",dyna,"_",island,"_",parcel_size/1000,"km_total_2010.tif")))
+
+lucpfip_v <- getValues(lucpfip)
+lucpfip_v[!is.na(lucpfip_v)] 
+
+pixels <- raster(file.path(paste0("temp_data/processed_lu/annual_maps/lucpfip_",dyna,"_",island,"_total_2010.tif")))
+plot(pixels)
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
@@ -749,7 +774,7 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
   
   ### Execute it
   dynamicS <- c("replace", "rapid", "slow")
-  for(dyna in dyna){
+  for(dyna in dynamicS){
     
     raster_to_df(dyna = dyna)
     
@@ -779,11 +804,11 @@ for(Island in IslandS){
 PS <- 3000
 IslandS <- c("Sumatra", "Kalimantan")
 for(Island in IslandS){
-  if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucpfip_",Island,"_",PS/1000,"km_total.tif")))){
+  #if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucpfip_",Island,"_",PS/1000,"km_total.tif")))){
     
     aggregate_lucpfip_dynamics(island = Island,
                                 parcel_size = PS)
-  }
+  #}
 }
 
 ### For that Island and for each aggregation factor, extract panels of parcels within different catchment area sizes 

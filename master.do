@@ -298,8 +298,10 @@ rsource using "install_R_project_packages.R"
 	*				temp_data/processed_lu/parcel_lucpfip_ISLAND_PS_TYPE for ISLAND = c("Sumatra", "Kalimantan", "Papua"); PS = 3km, TYPE = c("intact", "degraded", "total", "30th" "60th", "90th")
 	*				input_data/local_osrm_outputs/osrm_driving_durations_ISLAND_PS_SAMPLE for ISLAND = ("Sumatra", "Kalimantan") PS = 3km and SAMPLE = (IBS, UML)
 
-	* output:		input/processed_parcels/lucpfSIZEp_panel_ISLAND_PS_CA.rds for ISLAND = ("Sumatra", "Kalimantan"); PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA)  : each one is for total primary forest only
-	*				input/processed_parcels/lucpfp_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one is for total primary forest only, and has rows from two islands and columns for three plantation sizes  
+	* output:		temp_data/processed_parcels/lucpfSIZEp_panel_ISLAND_PS_CA.rds for SIZE = ("s", "m", "i"); ISLAND = ("Sumatra", "Kalimantan"); PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA)  : each one is for total primary forest only
+	*				temp_data/processed_parcels/lucpfp_panel_PS_CA.rds for PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA) : each one is for total primary forest only, and has rows from two islands and columns for three plantation sizes  
+	*				temp_data/processed_parcels/lucpfip_panel_DYNA_ISLAND_PS_CA.rds for DYNA = ("replace", "rapid", "slow"); ISLAND = ("Sumatra", "Kalimantan"); PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA)  : each one is for total primary forest only
+	*				temp_data/processed_parcels/lucpfip_panel_dynamics_ISLAND_PS_CA.rds for ISLAND = ("Sumatra", "Kalimantan"); PS = 3km, CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA)  : each one is for total primary forest only
 
 
 
