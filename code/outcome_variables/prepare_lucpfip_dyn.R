@@ -58,7 +58,7 @@
 # These are the packages needed in this particular script. 
 neededPackages = c("data.table", "dplyr", "readstata13", "readxl",
                    "raster", "rgdal", "sp", "sf", 
-                   "doParallel", "foreach", "parallel")
+                  "doParallel", "foreach", "parallel")
 
 # Install them in their project-specific versions
 renv::restore(packages = neededPackages)
@@ -85,6 +85,16 @@ lapply(neededPackages, library, character.only = TRUE)
 #   see in particular https://rstudio.github.io/renv/articles/renv.html 
 
 
+### NEW FOLDERS USED IN THIS SCRIPT 
+
+# annual layers will be stored in a subfolder just for the sake of tidyness in processed_lu
+dir.create("temp_data/processed_lu/annual_maps")
+
+# dataframes of parcels are stored here 
+dir.create("temp_data/processed_parcels")
+
+# raster temp files are stored there
+dir.create("temp_data/raster_tmp")
 
 ### RASTER OPTIONS ### 
 # Do not change chunksize, as it is not safe in combinatin with clusterR and machine specific. 
@@ -142,8 +152,8 @@ prepare_pixel_lucpfip_dynamics <- function(island){
     ioppm <- raster(file.path(paste0("input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_",decadal_year,"_WGS1984.tif")))
     
     # stabilizes the transformations implemented in this loop (otherwise 2005 turns NAs into 0s for instance...)
-    dataType(ioppm) # this changes to FLT4S with the operations below but it is not important. 
-    NAvalue(ioppm)
+    # dataType(ioppm) # this changes to FLT4S with the operations below but it is not important. 
+    # NAvalue(ioppm)
     # First, crop from Indonesia wide to island extent (in the longitude mainly)
     ioppm <- raster::crop(ioppm, y = aoi_sp)
     # then extend it (in the latitude mainly) because raw data do not cover northern part of Sumatra. 
@@ -160,38 +170,38 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   # dataType(earliest)
   # NAvalue(earliest)
   # getValues(earliest) %>% unique()  
+
   # lightening the dataType requires that there are no NAs
-  
   earliest <- raster::reclassify(earliest, rcl = cbind(NA,0))
   # getValues(earliest) %>% unique()  
   # plot(earliest)
-
+  
   rm(rs, ioppm_list)
   
   ### COMPUTE TIME LAPS BY OVERLAYING EARLIEST AND LOSS  
   
   ## PRELIMINARY ALIGNEMENT
- 
-    # Read the target GFC loss layer
-    loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
+  if(!file.exists(file.path(paste0("temp_data/processed_lu/austin_earliest_detected_",island,"_aligned.tif")))){
+  # Read the target GFC loss layer
+  loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
   
-    # get the two rasters on the same projection
-    beginCluster() # this uses by default detectCores() - 1
-    projectRaster(from = earliest, to = loss,
-                  method = "ngb",
-                  filename = file.path(paste0("temp_data/processed_lu/austin_earliest_detected_",island,"_aligned.tif")),
-                  datatype = "INT2U", # INT2U will allow NA at the margins. 
-                  overwrite = TRUE)
-    endCluster()
-    print(paste0("completed austin_earliest_detected_",island,"_aligned.tif"))
-    removeTmpFiles(h=0)  
-  
+  # get the two rasters on the same projection
+  beginCluster() # this uses by default detectCores() - 1
+  projectRaster(from = earliest, to = loss,
+                method = "ngb",
+                filename = file.path(paste0("temp_data/processed_lu/austin_earliest_detected_",island,"_aligned.tif")),
+                datatype = "INT1U", # INT2U will allow NA at the margins. 
+                overwrite = TRUE)
+  endCluster()
+  print(paste0("completed austin_earliest_detected_",island,"_aligned.tif"))
+  removeTmpFiles(h=0)  
+  }
   
   ## OVERLAY FUNCTION
   # Compute the difference between the year when iopp is detected the earliest, and the year when forest loss occurred. 
   # We do not condition on being within primary forest as of now, in order to remain as general as possible 
   # this is not a loss of coding efficiency as an overlay will be required anyways afterwards to qualify the loss years either as immediate or long.  
-    
+  
   # NOTE ON NAs
   # NAs are present, at the margins, due to project operations. 
   # We do not have to reclassify them, as long as we use if_else in the make_time_laps function below. 
@@ -202,22 +212,22 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   # We arbitrarily chose a value of -51 for cells that do not satisfy the conditions of having loss and having plantations. 
   # This makes it easier (than setting to NA) to reclassify these cells to 0 later on. And of course we cannot set them to 0 because 0 is a value
   # that can be reached in the difference, and has a different meaning (immediate conversion)
-
+  
   # loss rs [[1]]
   loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
   
   #earliest rs[[2]]
   earliest <- raster(file.path(paste0("temp_data/processed_lu/austin_earliest_detected_",island,"_aligned.tif")))
-
+  
   rs <- raster::stack(loss, earliest)
   
   # condition on the pixel having a loss event once (rs[[1]]>0), within a plantation (rs[[2]]>0)
   # outside this condition, this is not an event we are interested in. 
   make_time_laps <- function(loss1, earliest2){if_else(loss1>0 & earliest2>0, 
-                                         true = earliest2 - loss1-200, # -200 is because values in loss are 1, 2,..., 18 while in earliest they are 200, 205, 210, 215
-                                         false = -51)} 
-                                                       
-
+                                                       true = earliest2 - loss1-200, # -200 is because values in loss are 1, 2,..., 18 while in earliest they are 200, 205, 210, 215
+                                                       false = -51)} 
+  
+  
   beginCluster() # uses by default detectedCores() - 1
   clusterR(rs,
            fun = overlay, 
@@ -243,9 +253,9 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   time_laps <- raster(file.path(paste0("temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_",island,".tif")))
   
   beginCluster() # this uses by default detectCores() - 1
-
+  
   # REPLACEMENT OF TREES WITHIN PLANTATIONS: loss that occurs within plantations. 
-  m1 <- c(-51,-51,0,
+  m1 <- c(-51,-50,0,
           -18,0,1,
           0,5,0,
           5,14,0)
@@ -260,7 +270,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   rm(m1, rclmat1)
   
   # SHORT TIMELAPS BETWEEN LOSS AND EALIEST IOPP: loss that occurs the same year or up to 4 years prior to the earliest iopp detected
-  m2 <- c(-51,-51,0, 
+  m2 <- c(-51,-50,0, 
           -18,0,0,
           0,5,1,
           5,14,0)
@@ -275,7 +285,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   rm(m2, rclmat2)
   
   # LONG TIMELAPS BETWEEN LOSS AND EARLIEST IOPP: loss that occurs between 5 to 14 years prior to the earliest iopp detected
-  m3 <- c(-51,-51,0, 
+  m3 <- c(-51,-50,0, 
           -18,0,0,
           0,5,0,
           5,14,1)
@@ -295,10 +305,10 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   
   removeTmpFiles(h=0)  
   
-
+  
   ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
   #### Overlay forest loss YEARS and different dynamics of oil palm conversion ####
-
+  
   # GFC loss layer (rs[[1]]) of years of a loss event
   loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
   
@@ -354,12 +364,12 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   rm(loss, replacement, rapid, slow, pf, 
      rs_replacement, rs_rapid, rs_slow, overlay_replacement, overlay_lucpfp)
   removeTmpFiles(h=0) 
-
+  
   
   
   ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
   #### Split LUCFP to annual layers ####
-
+  
   ### Function description
   # parallel_split has for input a single lucpfip layer where each pixel has a value corresponding to the year when a lucpfip event occured;
   # it outputs annual layers in each of which pixels are either 1 if a lucpfip event occured that year, and 0 else.
@@ -473,7 +483,7 @@ aggregate_lucpfip_dynamics <- function(island, parcel_size){
       raster::aggregate(lucpfip_annual, fact = c(parcel_size/res(lucpfip_annual)[1], parcel_size/res(lucpfip_annual)[2]),
                         expand = FALSE,
                         fun = sum,
-                        na.rm = TRUE, # NA cells are in margins, see the NOTES part. If FALSE, aggregations at margins that use NA 
+                        na.rm = FALSE, # NA cells are in margins, see the NOTES part. If FALSE, aggregations at margins that use NA 
                         # are discarded because the sum would be spurious as it would count all NA as 0s while it is not necessary the case.
                         # as there is no land on margins anyways, we can set na.rm = TRUE. It is safer, as it will count 
                         filename = output_filename,
@@ -528,32 +538,32 @@ aggregate_lucpfip_dynamics <- function(island, parcel_size){
   
   print(paste0("complete aggregate_lucpfip_dynamics ",island," ",parcel_size/1000, "km"))
 }
+# 
+# timelaps <- raster(file.path(paste0("temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_",island,".tif")))
+# timelaps_s <- sampleRandom(timelaps, 10000)
+# unique(timelaps_s)
+# dataType(timelaps)
+# NAvalue(timelaps)
+# plot(timelaps)
+# 
+# # binaries
+# replacement <- raster(file.path(paste0("temp_data/processed_lu/loss_in_iopp_",island,".tif")))
+# rapid <- raster(file.path(paste0("temp_data/processed_lu/loss_to_iopp_rapid_",island,".tif")))
+# slow <- raster(file.path(paste0("temp_data/processed_lu/loss_to_iopp_slow_",island,".tif")))
+# plot(slow)
+# NAvalue(slow)
+# slow_s <- sampleRandom(slow, size = 1e5)
+# unique(slow_s)
+# dataType(slow)
 
-timelaps <- raster(file.path(paste0("temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_",island,".tif")))
-timelaps_s <- sampleRandom(timelaps, 10000)
-unique(timelaps_s)
-dataType(timelaps)
-NAvalue(timelaps)
-plot(timelaps)
-
-# binaries
-replacement <- raster(file.path(paste0("temp_data/processed_lu/loss_in_iopp_",island,".tif")))
-rapid <- raster(file.path(paste0("temp_data/processed_lu/loss_to_iopp_rapid_",island,".tif")))
-slow <- raster(file.path(paste0("temp_data/processed_lu/loss_to_iopp_slow_",island,".tif")))
-plot(slow)
-NAvalue(slow)
-slow_s <- sampleRandom(slow, size = 1e5)
-unique(slow_s)
-dataType(slow)
-
-
-lucpfip <- raster(file.path(paste0("temp_data/processed_lu/annual_maps/parcel_lucpfip_",dyna,"_",island,"_",parcel_size/1000,"km_total_2010.tif")))
-
-lucpfip_v <- getValues(lucpfip)
-lucpfip_v[!is.na(lucpfip_v)] 
-
-pixels <- raster(file.path(paste0("temp_data/processed_lu/annual_maps/lucpfip_",dyna,"_",island,"_total_2010.tif")))
-plot(pixels)
+# 
+# lucpfip <- raster(file.path(paste0("temp_data/processed_lu/annual_maps/parcel_lucpfip_",dyna,"_",island,"_",parcel_size/1000,"km_total_2010.tif")))
+# 
+# lucpfip_v <- getValues(lucpfip)
+# lucpfip_v[!is.na(lucpfip_v)] 
+# 
+# pixels <- raster(file.path(paste0("temp_data/processed_lu/annual_maps/lucpfip_",dyna,"_",island,"_total_2010.tif")))
+# plot(pixels)
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
@@ -586,10 +596,10 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
     years <- seq(from = 2001, to = 2018, by = 1)
     
     ### IBS
-    
+
     ## 1. Masking.
     # Probably more efficient as the st_is_within does not need to be executed over all Indonesian cells but only those within the largest catchment_radius.
-    
+
     # Make the mask
     mills <- read.dta13(file.path("temp_data/processed_mill_geolocalization/IBS_UML_panel.dta"))
     # keep only a cross section of those that are geolocalized mills, on island of interest
@@ -613,65 +623,65 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
     total_ca_sp <- as(total_ca, "Spatial")
     # keep mills_prj we need it below
     rm(total_ca, mills_ca, mills)
-    
+
     ## Mask
     parcels_brick_name <- paste0("parcel_lucpfip_",dyna,"_",island,"_",parcel_size/1000,"km_total")
     parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, ".tif")))
-    
+
     mask(x = parcels_brick, mask = total_ca_sp,
          filename = file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_IBS_masked.tif")),
          datatype = "INT4U",
          overwrite = TRUE)
-    
+
     rm(parcels_brick, total_ca_sp)
-    
-    
+
+
     ## 2. Selecting parcels within a given distance to a mill at least one year
     # (i.e. the parcel is present in the dataframe in all years even if it is within say 50km of a mill only since 2014)
-    
+
     # Turn the masked raster to a sf dataframe
     parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_IBS_masked.tif")))
-    
+
     m.df_wide <- raster::as.data.frame(parcels_brick, na.rm = TRUE, xy = TRUE, centroids = TRUE)
-    
+
     m.df_wide <- m.df_wide %>% dplyr::rename(lon = x, lat = y)
     m.df_wide <- st_as_sf(m.df_wide, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
-    
+
     # Remove here parcels that are not within the catchment area of a given size (defined by catchment radius)
     # coordinates of all mills (crs is indonesian crs, unit is meter)
     within <- st_is_within_distance(m.df_wide, mills_prj, dist = catchment_radius)
     m.df_wide <- m.df_wide %>% dplyr::filter(lengths(within) >0)
     m.df_wide <- m.df_wide %>% st_drop_geometry()
-    
+
     rm(within, parcels_brick)
-    
-    
+
+
     ## 3. Reshaping to long format
     # make parcel id
     island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
     m.df_wide$parcel_id <- paste0(island_id, c(1:nrow(m.df_wide))) %>% as.numeric()
-    
+
     # vector of the names in the wide format of our time varying variables
     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
     # the layer index (1-18) indeed corresponds to the year (2001-2018) because, in aggregate_lucpfip, at the end,
     # rasterlist is ordered along 2001-2018 and this order is preserved when the layers are bricked.
     varying_vars <- paste0(parcels_brick_name, "_IBS_masked.", seq(from = 1, to = 18))
-    
+
     # reshape to long
     m.df <- stats::reshape(m.df_wide,
                            varying = varying_vars,
-                           v.names = paste0("lucpfip_",dyna,"_pixelcount"), # not precising that it is total primary forest in var name, as we do not compute intact and degraded but only total. 
+                           v.names = paste0("lucpfip_",dyna,"_pixelcount"), # not precising that it is total primary forest in var name, as we do not compute intact and degraded but only total.
                            sep = ".",
                            timevar = "year",
                            idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
                            ids = "parcel_id",
                            direction = "long",
                            new.row.names = seq(from = 1, to = nrow(m.df_wide)*length(years), by = 1))
-    
+
     rm(varying_vars, m.df_wide)
     # replace the indices from the raster::as.data.frame with actual years.
     m.df <- mutate(m.df, year = years[year])
-    
+
     m.df <- setorder(m.df, parcel_id, year)
     saveRDS(m.df,
             file = file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
@@ -680,7 +690,7 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
                                     parcel_size/1000,"km_",
                                     catchment_radius/1000,"km_IBS_CR_",
                                     "total.rds")))
-    
+
     
     ### UML
     
@@ -757,7 +767,7 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
     # reshape to long
     m.df <- stats::reshape(m.df_wide,
                            varying = varying_vars,
-                           v.names = paste0("lucpfip_",dyna,"pixelcount_total"),
+                           v.names = paste0("lucpfip_",dyna,"_pixelcount"),
                            sep = ".",
                            timevar = "year",
                            idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
@@ -799,29 +809,29 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
 # Only if their outputs have not been already computed
 
 ### Prepare a 30m pixel map of lucfp for each Island
-IslandS <- c("Sumatra", "Kalimantan")
+IslandS <- c("Sumatra", "Kalimantan")# 
 for(Island in IslandS){
-    prepare_pixel_lucpfip_dynamics(Island)
+  prepare_pixel_lucpfip_dynamics(Island)
 }
 
 ### Aggregate this Island map to a chosen parcel size (3km, 6km and 9km for instance)
 PS <- 3000
-IslandS <- c("Sumatra", "Kalimantan")
+IslandS <- c("Sumatra", "Kalimantan")#
 for(Island in IslandS){
-    aggregate_lucpfip_dynamics(island = Island,
-                                parcel_size = PS)
+  aggregate_lucpfip_dynamics(island = Island,
+                             parcel_size = PS)
 }
 
 ### For that Island and for each aggregation factor, extract panels of parcels within different catchment area sizes 
 # (radius of 10km, 30km and 50km)
 PS <- 3000
-IslandS <- c("Sumatra", "Kalimantan")
+IslandS <- c("Sumatra","Kalimantan")#
 for(Island in IslandS){
   CR <- 10000 # i.e. 10km radius
   while(CR < 60000){
     to_panel_within_CR_dynamics(island = Island,
-                                 parcel_size = PS,
-                                 catchment_radius = CR)
+                                parcel_size = PS,
+                                catchment_radius = CR)
     
     CR <- CR + 20000
   }

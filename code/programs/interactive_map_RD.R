@@ -391,7 +391,7 @@ save_d_clean_cs_ls <- d_clean_cs_ls
 
 # both <- d_clean_cs_ls[[1]][d_clean_cs_ls[[1]]$parcel_id%in%d_clean_cs_ls[[2]]$parcel_id,]# in 2008, 189 parcels are in both groups (have a positive lucpfIp and lucpfSMp over all period)
 # both[both$avg_lucpfip_ha_total==both$avg_lucpfsmp_ha_total,] %>% nrow() # only 3 have the same average over the period. 
-# let's just plot d_clean_cs_ls[[1]] and d_clean_cs_ls[[2]] without respect for this overlap. 
+# # let's just plot d_clean_cs_ls[[1]] and d_clean_cs_ls[[2]] without respect for this overlap. 
 
 #### DISTRICTS #### 
 island_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/island_sf"))

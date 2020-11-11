@@ -333,16 +333,28 @@ to_panel_within_UML_CA <- function(island, parcel_size){
   
   ### Preparing UML data
   
-  uml <- read_xlsx(file.path("input_data/uml/mills_20200129.xlsx"))
-  uml$latitude <- as.numeric(uml$latitude)
-  uml$longitude <- as.numeric(uml$longitude)
-  uml$lat <- uml$latitude
-  uml$lon <- uml$longitude
-  uml <- st_as_sf(uml,	coords	=	c("longitude",	"latitude"), crs = 4326)
+  # uml <- read_xlsx(file.path("input_data/uml/mills_20200129.xlsx"))
+  # uml <- uml %>% as.data.frame()
+  # uml$latitude <- as.numeric(uml$latitude)
+  # uml$longitude <- as.numeric(uml$longitude)
+  # uml$lat <- uml$latitude
+  # uml$lon <- uml$longitude
+  # uml <- st_as_sf(uml,	coords	=	c("longitude",	"latitude"), crs = 4326)
+  # uml_geom <- st_geometry(uml)
+  # uml_prj <- st_transform(uml_geom, crs = indonesian_crs)
+  # 
+  # # there is no island column in this dataset, hence we select mills on the specific island geographically
+  # select_within <- st_within(x = uml_prj, y = island_sf_prj[island_sf_prj$shape_des == island,])
+  # uml_prj <- uml_prj[lengths(select_within)>0,]
+  # uml <- uml[lengths(select_within)>0,]
+  
+  # above is the old code, with older version of UML. We actually want this one, that has 10 more mills, and that we wanna use because it has
+  # est_year variables that we need in the annual calcultations later on (and both steps need to be based on the same set of mills)
+  uml <- read.dta13(file.path("temp_data/processed_UML/UML_valentin_imputed_est_year.dta"))
+  uml <- st_as_sf(uml,	coords	=	c("lon",	"lat"), crs = 4326)
   uml_geom <- st_geometry(uml)
   uml_prj <- st_transform(uml_geom, crs = indonesian_crs)
   
-  # there is no island column in this dataset, hence we select mills on the specific island geographically
   select_within <- st_within(x = uml_prj, y = island_sf_prj[island_sf_prj$shape_des == island,])
   uml_prj <- uml_prj[lengths(select_within)>0,]
   uml <- uml[lengths(select_within)>0,]
@@ -462,106 +474,107 @@ to_panel_within_UML_CA <- function(island, parcel_size){
     }
   }
   
-  ### Selecting parcels within travel times, and reshaping, for dynamics outcomes (lucpfip_replace, lucpfip_rapid, lucpfip_slow)
-  for(forest in forestS){
-    
-    # Now mask rasters for all outcomes
-    parcels_brick_name <- paste0("parcel_lucpfip_",dyna,"_",island,"_",parcel_size/1000,"km_total")
-    parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, ".tif")))
-    
-    mask(x = parcels_brick, mask = total_uml_ca_sp,
-         filename = file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_UML_masked.tif")),
-         datatype = "INT4U",
-         overwrite = TRUE)
-    
-    rm(parcels_brick)
-    
-    # Turn the masked raster to a sf data frame
-    parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_UML_masked.tif")))
-    
-    # note the na.rm = TRUE 
-    uml_msk_df <- raster::as.data.frame(parcels_brick, na.rm = TRUE, xy = TRUE, centroids = TRUE)
-    
-    # the whole point of the below is to merge more safely the duration matrix and the parcel data frame. 
-    uml_msk_df <- uml_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
-    uml_msk_df <- st_as_sf(uml_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
-    uml_msk_df <- st_transform(uml_msk_df, crs = 4326)
-    uml_msk_df$lon <- st_coordinates(uml_msk_df)[,"X"]
-    uml_msk_df$lat <- st_coordinates(uml_msk_df)[,"Y"]
-    uml_msk_df <- mutate(uml_msk_df, lonlat = paste0(lon, lat))
-    uml_msk_df <- st_drop_geometry(uml_msk_df)
-    
-    # Besides, make IDs 
-    island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
-    uml_msk_df$parcel_id <- paste0(island_id, c(1:nrow(uml_msk_df))) %>% as.numeric()
-    
-    # Durations are in minutes, and we impose a restriction of no more than 2, 4 or 6 hours of travel between plantation and mill.
-    for(travel_time in c(2,4,6)){
-      
-      # keep only the parcels that satisfy the travel time condition for at least one mill in the whole period.
-      dur_mat_log <- dur_mat/(60) < travel_time
-      dur_mat_log <- as.data.frame(dur_mat_log)
-      
-      # The row.names have been computed the same way the uml_msk_df$lonlat column was is computed above. 
-      colnames(dur_mat_log) <- paste0("firm_id_",colnames(dur_mat_log))
-      dur_mat_log$lonlat <- row.names(dur_mat_log)
-      
-      uml_msk_TT_df <- merge(uml_msk_df, dur_mat_log, by = "lonlat", all = FALSE)
-      uml_msk_TT_df <- uml_msk_TT_df[base::rowSums(uml_msk_TT_df[,grepl("firm_id",colnames(uml_msk_TT_df))], na.rm = TRUE)>0,]
-      # na.rm = TRUE is in case of mills for which no duration could be computed. 
-      # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
-      
-      uml_msk_TT_df <- uml_msk_TT_df[,!grepl("firm_id",colnames(uml_msk_TT_df))]
-      uml_msk_TT_df <- dplyr::select(uml_msk_TT_df, -lonlat)
-      
-      # dur_mat[is.na(dur_mat[1:3,])]
-      # uml[uml$firm_id %in% c(4096, 4097,51432,54268),"uml_matched_sample"]
-      # uml[uml$firm_id==51432,]
-      # uml[uml$uml_matched_sample ==0,] %>% nrow()
-      # is.na(dur_mat[1,]) %>% sum()
-      
-      # vector of the names in the wide format of our time varying variables
-      # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
-      # the layer index (1-18) indeed corresponds to the year (2001-2018) because, in aggregate_lucpfip, at the end, 
-      # rasterlist is ordered along 2001-2018 and this order is preserved when the layers are bricked. 
-      varying_vars <- paste0(parcels_brick_name, "_UML_masked.", seq(from = 1, to = 18))
-      years <- seq(from = 2001, to = 2018, by = 1)
-      
-      # reshape to long
-      uml_msk_TT_long_df <- stats::reshape(uml_msk_TT_df,
-                                           varying = varying_vars,
-                                           v.names = paste0("lucpfip_",dyna,"_pixelcount"), # not precising that it is total primary forest in var name, as we do not compute intact and degraded but only total. 
-                                           sep = ".",
-                                           timevar = "year",
-                                           idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
-                                           ids = "parcel_id",
-                                           direction = "long",
-                                           new.row.names = seq(from = 1, to = nrow(uml_msk_TT_df)*length(years), by = 1)) # this last line is just to make the function work, but not for used row names (they get renamed after)
-      
-      # replace the indices from the raster::as.data.frame with actual years.
-      uml_msk_TT_long_df <- mutate(uml_msk_TT_long_df, year = years[year])
-      
-      uml_msk_TT_long_df <- dplyr::arrange(uml_msk_TT_long_df, parcel_id, year)
-      
-      # Add columns of converted pixel counts to hectares.
-      uml_msk_TT_long_df$inha <- uml_msk_TT_long_df[,grepl("pixelcount",colnames(uml_msk_TT_long_df))]*(27.8*27.6)/(1e4)
-      
-      names(uml_msk_TT_long_df)[names(uml_msk_TT_long_df)=="inha"] <- paste0("lucpfip_",dyna,"ha")
-      
-      
-      saveRDS(uml_msk_TT_long_df,
-              file = file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
-                                      dyna,"_",
-                                      island,"_",
-                                      parcel_size/1000,"km_",
-                                      travel_time,"h_UML_CA_", 
-                                      "total.rds")))
-      
-      rm(dur_mat_log, varying_vars, uml_msk_TT_df, uml_msk_TT_long_df)
-    }
-    
-    rm(uml_msk_df)
-  }
+  ### Selecting parcels within travel times, and reshaping, for DYNAMICS OUTCOMES (lucpfip_replace, lucpfip_rapid, lucpfip_slow)
+  
+  # for(forest in forestS){
+  #   
+  #   # Now mask rasters for all outcomes
+  #   parcels_brick_name <- paste0("parcel_lucpfip_",dyna,"_",island,"_",parcel_size/1000,"km_total")
+  #   parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, ".tif")))
+  #   
+  #   mask(x = parcels_brick, mask = total_uml_ca_sp,
+  #        filename = file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_UML_masked.tif")),
+  #        datatype = "INT4U",
+  #        overwrite = TRUE)
+  #   
+  #   rm(parcels_brick)
+  #   
+  #   # Turn the masked raster to a sf data frame
+  #   parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_UML_masked.tif")))
+  #   
+  #   # note the na.rm = TRUE 
+  #   uml_msk_df <- raster::as.data.frame(parcels_brick, na.rm = TRUE, xy = TRUE, centroids = TRUE)
+  #   
+  #   # the whole point of the below is to merge more safely the duration matrix and the parcel data frame. 
+  #   uml_msk_df <- uml_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
+  #   uml_msk_df <- st_as_sf(uml_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
+  #   uml_msk_df <- st_transform(uml_msk_df, crs = 4326)
+  #   uml_msk_df$lon <- st_coordinates(uml_msk_df)[,"X"]
+  #   uml_msk_df$lat <- st_coordinates(uml_msk_df)[,"Y"]
+  #   uml_msk_df <- mutate(uml_msk_df, lonlat = paste0(lon, lat))
+  #   uml_msk_df <- st_drop_geometry(uml_msk_df)
+  #   
+  #   # Besides, make IDs 
+  #   island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
+  #   uml_msk_df$parcel_id <- paste0(island_id, c(1:nrow(uml_msk_df))) %>% as.numeric()
+  #   
+  #   # Durations are in minutes, and we impose a restriction of no more than 2, 4 or 6 hours of travel between plantation and mill.
+  #   for(travel_time in c(2,4,6)){
+  #     
+  #     # keep only the parcels that satisfy the travel time condition for at least one mill in the whole period.
+  #     dur_mat_log <- dur_mat/(60) < travel_time
+  #     dur_mat_log <- as.data.frame(dur_mat_log)
+  #     
+  #     # The row.names have been computed the same way the uml_msk_df$lonlat column was is computed above. 
+  #     colnames(dur_mat_log) <- paste0("firm_id_",colnames(dur_mat_log))
+  #     dur_mat_log$lonlat <- row.names(dur_mat_log)
+  #     
+  #     uml_msk_TT_df <- merge(uml_msk_df, dur_mat_log, by = "lonlat", all = FALSE)
+  #     uml_msk_TT_df <- uml_msk_TT_df[base::rowSums(uml_msk_TT_df[,grepl("firm_id",colnames(uml_msk_TT_df))], na.rm = TRUE)>0,]
+  #     # na.rm = TRUE is in case of mills for which no duration could be computed. 
+  #     # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
+  #     
+  #     uml_msk_TT_df <- uml_msk_TT_df[,!grepl("firm_id",colnames(uml_msk_TT_df))]
+  #     uml_msk_TT_df <- dplyr::select(uml_msk_TT_df, -lonlat)
+  #     
+  #     # dur_mat[is.na(dur_mat[1:3,])]
+  #     # uml[uml$firm_id %in% c(4096, 4097,51432,54268),"uml_matched_sample"]
+  #     # uml[uml$firm_id==51432,]
+  #     # uml[uml$uml_matched_sample ==0,] %>% nrow()
+  #     # is.na(dur_mat[1,]) %>% sum()
+  #     
+  #     # vector of the names in the wide format of our time varying variables
+  #     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
+  #     # the layer index (1-18) indeed corresponds to the year (2001-2018) because, in aggregate_lucpfip, at the end, 
+  #     # rasterlist is ordered along 2001-2018 and this order is preserved when the layers are bricked. 
+  #     varying_vars <- paste0(parcels_brick_name, "_UML_masked.", seq(from = 1, to = 18))
+  #     years <- seq(from = 2001, to = 2018, by = 1)
+  #     
+  #     # reshape to long
+  #     uml_msk_TT_long_df <- stats::reshape(uml_msk_TT_df,
+  #                                          varying = varying_vars,
+  #                                          v.names = paste0("lucpfip_",dyna,"_pixelcount"), # not precising that it is total primary forest in var name, as we do not compute intact and degraded but only total. 
+  #                                          sep = ".",
+  #                                          timevar = "year",
+  #                                          idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
+  #                                          ids = "parcel_id",
+  #                                          direction = "long",
+  #                                          new.row.names = seq(from = 1, to = nrow(uml_msk_TT_df)*length(years), by = 1)) # this last line is just to make the function work, but not for used row names (they get renamed after)
+  #     
+  #     # replace the indices from the raster::as.data.frame with actual years.
+  #     uml_msk_TT_long_df <- mutate(uml_msk_TT_long_df, year = years[year])
+  #     
+  #     uml_msk_TT_long_df <- dplyr::arrange(uml_msk_TT_long_df, parcel_id, year)
+  #     
+  #     # Add columns of converted pixel counts to hectares.
+  #     uml_msk_TT_long_df$inha <- uml_msk_TT_long_df[,grepl("pixelcount",colnames(uml_msk_TT_long_df))]*(27.8*27.6)/(1e4)
+  #     
+  #     names(uml_msk_TT_long_df)[names(uml_msk_TT_long_df)=="inha"] <- paste0("lucpfip_",dyna,"ha")
+  #     
+  #     
+  #     saveRDS(uml_msk_TT_long_df,
+  #             file = file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+  #                                     dyna,"_",
+  #                                     island,"_",
+  #                                     parcel_size/1000,"km_",
+  #                                     travel_time,"h_UML_CA_", 
+  #                                     "total.rds")))
+  #     
+  #     rm(dur_mat_log, varying_vars, uml_msk_TT_df, uml_msk_TT_long_df)
+  #   }
+  #   
+  #   rm(uml_msk_df)
+  # }
   rm(dur_mat)
 }
 
@@ -598,7 +611,7 @@ rm(to_panel_within_UML_CA)
 
 #### Gather the lucfip variables for each parcel_size and catchment area combinations. ####
 PS <- 3000
-sampleS <- c("IBS", "UML")
+sampleS <- c("UML")#"IBS", 
 travel_timeS <- c(2,4,6)
   for(sample in sampleS){
     for(TT in travel_timeS){

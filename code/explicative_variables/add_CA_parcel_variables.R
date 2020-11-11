@@ -44,7 +44,7 @@
 # see this project's README for a better understanding of how packages are handled in this project. 
 
 # These are the packages needed in this particular script. 
-neededPackages = c("plyr", "dplyr", "readstata13", "foreign", "sjmisc",
+neededPackages = c("plyr", "tidyr","dplyr", "readstata13", "foreign", "sjmisc",
                    "rgdal", "sf", 
                    "DataCombine")
 #install.packages("sf", source = TRUE)
@@ -92,7 +92,7 @@ lapply(neededPackages, library, character.only = TRUE)
 indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
 
 ### IBS YEARS 
-years <- seq(1998, 2016, 1)
+years <- seq(1998, 2015, 1)
 
 ### GRID CELL SIZE
 parcel_size <- 3000
@@ -104,6 +104,10 @@ parcel_size <- 3000
 
 
 ### PREPARE SPATIAL DATA 
+# island
+island_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/island_sf"))
+names(island_sf)[names(island_sf)=="island"] <- "shape_des"
+island_sf_prj <- st_transform(island_sf, crs = indonesian_crs)
 
 # province
 province_sf <- st_read(file.path("input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp"))
@@ -115,47 +119,136 @@ district_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/district
 district_sf_prj <- st_transform(district_sf, crs = indonesian_crs)
 
 ### PREPARE IBS AND UML DATA
-# read the sample panel of IBS geolocalized mills
-ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
-# keep only those that are matched with UML. 
-ibsuml <- ibs[ibs$uml_matched_sample==1,]
-# make it a cross section
-ibsuml <- ibsuml[!duplicated(ibsuml$firm_id),]
-ibsuml <- ibsuml[!is.na(ibsuml$lat),]
-ibsuml <- st_as_sf(ibsuml, coords = c("lon", "lat"), remove = TRUE, crs = 4326)
-ibsuml <- st_transform(ibsuml, crs = indonesian_crs)
+# # read the sample panel of IBS geolocalized mills
+# ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
+# # keep only those that are matched with UML. 
+# ibsuml <- ibs[ibs$uml_matched_sample==1,]
+# # make it a cross section
+# ibsuml <- ibsuml[!duplicated(ibsuml$firm_id),]
+# ibsuml <- ibsuml[!is.na(ibsuml$lat),]
+# ibsuml <- st_as_sf(ibsuml, coords = c("lon", "lat"), remove = TRUE, crs = 4326)
+# ibsuml <- st_transform(ibsuml, crs = indonesian_crs)
 
 # read the most complete version of UML we have. 
 uml <- read.dta13(file.path("temp_data/processed_UML/UML_valentin_imputed_est_year.dta"))
 uml <- uml[!is.na(uml$lat),]
 uml <- st_as_sf(uml, coords = c("lon", "lat"), remove = TRUE, crs = 4326)
 uml <- st_transform(uml, crs = indonesian_crs)
+# there is no island column in this dataset, hence we select mills on the specific island geographically
+select_within <- st_within(x = uml, y = island_sf_prj[island_sf_prj$shape_des == "Sumatra",])
+uml_sumatra <- uml[lengths(select_within)>0,]
+select_within <- st_within(x = uml, y = island_sf_prj[island_sf_prj$shape_des == "Kalimantan",])
+uml_kalimantan <- uml[lengths(select_within)>0,]
+rm(select_within)
 
 
+# island <- "Sumatra"
+# travel_time <- 4
+# t <- 8
 
 
-
-
+#### ADD N_REACHABLE_UML AND GEOGRAPHIC VARIABLES AND THEIR TRENDS and QUEEN NEIGHBORS #### 
   
-  ### ADD A 2016 LINE 
-  # it will be relevant in regressions where we use only lagged RHS variables.
-  
-  cs_2016 <- parcels[parcels$year==2015,]
-  cs_2016$year <- 2016
-  parcels <- rbind(parcels, cs_2016)
-  parcels <- arrange(parcels, parcel_id, year)
-  rm(cs_2016)
-
-
-
-#### ADD GEOGRAPHIC VARIABLES AND THEIR TRENDS ####
-
+# this needs to be done at the island level, because it involves OSRM durations, that are relevant to compute at this level. 
 for(travel_time in c(2,4,6)){
+  
+  # as the computations on n_reachable_uml requires using parcels at the level of island, we store the results in a list to 
+  # be able to append parcels over islands after. 
+  isl_parcel_list <- list()
+  
+  for(island in c("Sumatra", "Kalimantan")){
+    
   # read the parcel panel as outputted from wa_at_parcels_durations
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
+                                      island,"_",
                                       parcel_size/1000,"km_",
                                       travel_time,"h_CA.rds")))
   
+  parcels$n_reachable_uml <- rep(NA, nrow(parcels))
+  
+  # loop over years to get the annual number of reachable uml mills
+  years <- seq(from = 1998, to = 2015, by = 1)
+  for(t in 1:length(years)){
+  
+      # take the annual cross section of it (parcels' coordinates are constant over time)
+      parcels_centro <- parcels[parcels$year == years[t], c("parcel_id", "year", "lat", "lon")]
+      # and of the uml data set (only useful for the checks)
+      if(island == "Sumatra"){
+        uml_cs <- uml_sumatra[uml_sumatra$est_year_imp <= years[t] | is.na(uml_sumatra$est_year_imp),]
+      }
+      if(island == "Kalimantan"){
+        uml_cs <- uml_kalimantan[uml_kalimantan$est_year_imp <= years[t] | is.na(uml_kalimantan$est_year_imp),]
+      }
+      
+      # read the duration matrix. 
+      # This is the driving travel time (duration) matrix between each pair of parcel and mill. 
+      # no matter the t, this matrix has the same amount of rows (parcels_centro) as parcels_centro
+      dur_mat <- readRDS(file.path(paste0("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_",travel_time,"h_UML_",years[t])))
+      dur_mat <- dur_mat$durations
+      
+      # below are several checks that we are allocating the right duration to the right pair of parcel-mill. 
+      if(nrow(uml_cs) != ncol(dur_mat)){stop(paste0("duration matrix and mill cross section don't match in ",island,"_",parcel_size/1000,"km_",travel_time,"h_UML_",years[t]))}
+      
+      # for more safety, merge the dur_mat with the parcels_centro centro based on coordinates identifiers
+      dur_mat <- as.data.frame(dur_mat)
+      dur_mat$lonlat <- row.names(dur_mat)
+      parcels_centro <- mutate(parcels_centro, lonlat = paste0(lon, lat))
+      
+      # sort = FALSE is MEGA IMPORTANT because otherwise dur_mat get sorted in a different way than
+      dur_mat <- merge(dur_mat, parcels_centro[,c("lonlat", "parcel_id")], by = "lonlat", all = FALSE, sort = FALSE)
+      row.names(dur_mat) <- dur_mat$lonlat
+      # so there should be the same amount of parcels_centro which coordinates matched, as the total amount of parcels.
+      if(nrow(dur_mat) != nrow(parcels_centro)){stop(paste0("duration matrix and parcel cross section did not merge in ",island,"_",parcel_size/1000,"km_",travel_time,"h_UML_",years[t]))}
+      
+      # # additional check:
+      row.names(parcels_centro) <- parcels_centro$lonlat
+    
+      parcels_centro <- dplyr::arrange(parcels_centro, parcel_id)
+      dur_mat <- dplyr::arrange(dur_mat, parcel_id)
+      
+      if(!(all.equal(row.names(parcels_centro), row.names(dur_mat)))){stop()}
+      
+      # nest the sets of reachable mills within each parcel row.
+      dur_mat <- dplyr::select(dur_mat, -lonlat, -parcel_id)
+      dur_mat <- as.matrix(dur_mat)
+      
+      # convert durations (in minutes) into logical whether each parcel-mill pair's travel time is inferior to a threshold travel_time
+      dur_mat_log <- dur_mat/(60) < travel_time
+      
+      # replace the few NAs with FALSE
+      #anyNA(dur_mat_log)
+      dur_mat_log <- tidyr::replace_na(dur_mat_log, replace = FALSE)
+      #anyNA(dur_mat_log)
+      
+      # count reachable mills from each parcel  
+      parcels_centro$n_reachable_uml <- sapply(1:nrow(parcels_centro), FUN = function(i){sum(dur_mat_log[i,])})
+    
+      # rearrange the panel, so that within cross sections, it's ordred by parcel_id. 
+      #parcels <- dplyr::arrange(parcels, year, parcel_id)
+      
+      # this makes sure that the n_reachable_uml cross section is integrated into the panel in face of the right parcel_id. 
+      parcels[parcels$year==years[t], c("parcel_id", "year", "n_reachable_uml")] <- inner_join(parcels[, c("parcel_id", "year")], 
+                                                                                               parcels_centro[,c("parcel_id", "year", "n_reachable_uml")], 
+                                                                                               by = c("parcel_id", "year"))
+      rm(parcels_centro, uml_cs, dur_mat, dur_mat_log)
+    }# closes loop over years
+
+  # make the island variable now
+  parcels$island <- island
+  
+  # store these parcels of a specific island in the dedicated list
+  isl_parcel_list[[match(island, c("Sumatra", "Kalimantan"))]] <- parcels
+
+  rm(parcels)
+  }# closes loop over islands.
+  
+  # make the object of all parcels across the two islands
+  parcels <- bind_rows(isl_parcel_list)
+    
+  
+  
+  
+  ### ADD GEOGRAPHIC VARIABLES AND THEIR TRENDS 
   
   parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
   
@@ -187,34 +280,42 @@ for(travel_time in c(2,4,6)){
                    by = "parcel_id")
   
   
-  ### NEIGHBOR VARIABLE
-  # # create a grouping variable at the cross section (9 is to recall the the group id includes the 8 neighbors + the central grid cell.)
-  # parcels_cs <- parcels[!duplicated(parcels$parcel_id),c("parcel_id", "year", "idncrs_lat", "idncrs_lon")]
-  # 
-  # # spatial
-  # parcels_cs <- st_as_sf(parcels_cs, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
-  # 
-  # # identify neighbors
-  # # this definition of neighbors includes the 8 closest, surrounding, grid cells. 
-  # parcels_buf <- st_buffer(parcels_cs, dist = parcel_size - 10)
-  # row.names(parcels_buf) <- parcels_buf$parcel_id
-  # sgbp <- st_intersects(parcels_buf)
-  
-  
-  
-  
-  
   # SPATIAL TRENDS VARIABLES
   parcels$island_year <- paste0(parcels$island,"_",parcels$year)
   parcels$province_year <- paste0(parcels$province,"_",parcels$year)
   parcels$district_year <- paste0(parcels$district,"_",parcels$year)
   
+  
+  
+  ### NEIGHBORS VARIABLE
+  # create a grouping variable at the cross section (9 is to recall the the group id includes the 8 neighbors + the central grid cell.)
+  parcels_cs <- parcels[!duplicated(parcels$parcel_id),c("parcel_id", "year", "idncrs_lat", "idncrs_lon")]
+
+  # spatial
+  parcels_cs <- st_as_sf(parcels_cs, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
+
+  # identify neighbors
+  # this definition of neighbors includes the 8 closest, surrounding, grid cells.
+  parcels_buf <- st_buffer(parcels_cs, dist = parcel_size - 10)
+  row.names(parcels_buf) <- parcels_buf$parcel_id
+  sgbp <- st_intersects(parcels_buf)
+  
+  neighbors <- list()
+  length(neighbors) <- nrow(parcels_cs)
+  parcels_cs$neighbors <- neighbors
+  parcels_cs$neighbors <- lapply(1:nrow(parcels_cs), FUN = function(i){parcels_cs$parcel_id[sgbp[[i]]]}) 
+  
+  parcels <- merge(parcels, parcels_cs[,c("parcel_id", "neighbors")], by = "parcel_id", all = TRUE)
+  
+  
+  
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_CA.rds")))
+  
+  rm(parcels, parcels_cs)
 }
 
-# parcels_list[[match(catchment_radius, catchment_radiuseS)]] <- parcels
 
 
 
@@ -238,7 +339,7 @@ for(travel_time in c(2,4,6)){
                  #"wa_pko_price_imp1",       "wa_pko_price_imp2",       "wa_prex_pko_imp1",        "wa_prex_pko_imp2",       
                  "wa_pct_own_cent_gov_imp", "wa_pct_own_loc_gov_imp",  "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp",     
                  #"wa_concentration_10",     "wa_concentration_30", "wa_concentration_50",     
-                 "n_reachable_ibs", )#"n_reachable_uml", "n_reachable_ibsuml",   "sample_coverage"
+                 "n_reachable_uml")#"n_reachable_ibs", "n_reachable_ibsuml",   "sample_coverage"
   
   for(voi in variables){
     ## lags
@@ -446,6 +547,7 @@ for(travel_time in c(2,4,6)){
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_CA.rds")))  
+  rm(parcels)
 } # closes the loop on travel_time
 
 

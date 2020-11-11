@@ -75,7 +75,7 @@ lapply(neededPackages, library, character.only = TRUE)
 
 
 ### NEW FOLDERS USED IN THIS SCRIPT 
-dir.create("temp_data/processed_parcels/temp_cs_wa_explanatory2")
+dir.create("temp_data/processed_parcels/temp_cs_wa_explanatory")
 
 
 ### INDONESIAN CRS ### 
@@ -107,10 +107,10 @@ years <- seq(from = 1998, to = 2015, by = 1)
 # parcels[["geometry"]][parcels$parcel_id == i]
 # parcels[parcels$parcel_id == i, "geometry"]
 # 
-island <- "Sumatra"
-parcel_size <- 3000
-travel_time <- 2
-t <- 7
+# island <- "Kalimantan"
+# parcel_size <- 3000
+# travel_time <- 6
+# t <- 7
 
 
 parcel_set_w_average <- function(island, parcel_size, travel_time){
@@ -171,19 +171,19 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
     ## Define the task 
     # (Computes cross-sectional weighted averages of mill variables at parcels)
     annual_w_averages <- function(t){
-      #let's not be year specific in this function, and we will rename and append everything after.
-
-      ## Attribute to each parcel centroid the sf data frame of reachable mills
+      #let's not be year specific in this function, and we will rename and append everything after. 
+      
+      ## Attribute to each parcel centroid the sf data frame of reachable mills 
 
       dur_mat <- readRDS(file.path(paste0("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_",years[t])))
       dur_mat <- dur_mat$durations
-
+      
       if(nrow(ibs_cs[[t]]) != ncol(dur_mat)){stop(paste0("duration matrix and mill cross section don't match in ",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_",years[t]))}
-
-
-      # This is the driving travel time (duration) matrix between each pair of parcel and mill.
+      
+      
+      # This is the driving travel time (duration) matrix between each pair of parcel and mill. 
       # no matter the t, this matrix has the same amount of rows (parcels) as parcels_centro
-
+      
       # for more safety, merge the dur_mat with the parcels centro based on coordinates identifiers
       dur_mat <- as.data.frame(dur_mat)
       dur_mat$lonlat <- row.names(dur_mat)
@@ -196,103 +196,91 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
       # additional check:
       parcels <- parcels_centro
       row.names(parcels) <- parcels$lonlat
-
+      
       parcels <- dplyr::arrange(parcels,parcel_id)
       dur_mat <- dplyr::arrange(dur_mat,parcel_id)
-
+  
       if(!(all.equal(row.names(parcels), row.names(dur_mat)))){stop()}
 
       # parcels <- parcels[1:2500,]
       # dur_mat <- dur_mat[1:2500,]
-
+      
       # nest the sets of reachable mills within each parcel row.
       dur_mat <- dplyr::select(dur_mat, -lonlat, -parcel_id)
       dur_mat <- as.matrix(dur_mat)
-
+      
       # convert durations (in minutes) into logical whether each parcel-mill pair's travel time is inferior to a threshold travel_time
       dur_mat_log <- dur_mat/(60) < travel_time
 
-      anyNA(dur_mat_log)
+      #anyNA(dur_mat_log)
       dur_mat_log <- replace_na(dur_mat_log, replace = FALSE)
-      anyNA(dur_mat_log)
-
+      #anyNA(dur_mat_log)
+      
       list_col <- list()
       length(list_col) <- nrow(parcels)
       parcels$reachable <- list_col
       rm(list_col)
-
-
-      # nest reachable mills within each parcel record.
+      
+      
+      # nest reachable mills within each parcel record. 
       parcels$reachable <- lapply(1:nrow(parcels), FUN = function(i){ibs_cs[[t]][dur_mat_log[i,],]})
 
       # select non empty reachable nested data frames (data frames of reachable mills) - programming purpose
       s <- sapply(parcels$reachable, FUN = nrow)>0
-
+    
       # compute the number of reachable mills at each parcel - informative purpose
       parcels[,"n_reachable_ibs"] <- sapply(parcels$reachable, FUN = nrow)
-
-
+          
+      
       # for(i in 1:nrow(parcels[s,])){
-      #   # add to this reachable mill data set a variable for their respective durations to parcel i.
+      #   # add to this reachable mill data set a variable for their respective durations to parcel i. 
       #   parcels[s,][i,]$reachable[[1]]$durations <- dur_mat[s,][i,dur_mat_log[s,][i,]] #%>% as.vector()
-      # }
-
+      # } 
+      
       parcels$reachable[s] <- lapply(row.names(parcels)[s],
                                   FUN = function(ids){
                                     mutate(parcels[ids,]$reachable[[1]],
                                            durations = dur_mat[ids,dur_mat_log[ids,]]) %>% as.vector()
                                   })
-
+      
       # compute the inverse of this duration
       parcels$reachable[s] <- lapply(parcels$reachable[s], mutate, w = 1/durations)
 
-      
-      parcels["98.00524087692564.42566807199589",]$reachable[[1]] %>% ncol()
-      parcels[ids,]$reachable[[1]]
-      ids <- "103.048821259831-1.59157153981874"
-      dur_mat[ids,dur_mat_log[ids,]]
 
+      # Define the variables of interest we want to compute the weighted averages of. 
+      # variables <- "ffb_price_imp1"
+      variables <- c("ffb_price_imp1", "ffb_price_imp2", # "in_ton_ffb_imp1", "in_ton_ffb_imp2", "in_val_ffb_imp1", "in_val_ffb_imp2",
+                     "cpo_price_imp1", "cpo_price_imp2", # "out_ton_cpo_imp1", "out_ton_cpo_imp2", "out_val_cpo_imp1", "out_val_cpo_imp2",
+                     "prex_cpo_imp1", "prex_cpo_imp2",
+                     "pko_price_imp1","pko_price_imp2", # "out_ton_pko_imp1", "out_ton_pko_imp2", "out_val_pko_imp1", "out_val_pko_imp2",
+                     # "prex_pko_imp1", "prex_pko_imp2",
+                     # "export_pct_imp", "revenue_total", "workers_total_imp3",
+                     # "est_year_imp", # "min_year", "est_year", "max_year",
+                     "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", 
+                     "pct_own_nat_priv_imp", "pct_own_for_imp")
       
-       for(ids in row.names(parcels)[s]){
-        if(!all.equal(as.character(parcels[ids,]$reachable[[1]]$firm_id), names(dur_mat[ids,])[dur_mat_log[ids,]])){stop("PB")}
-       }     
       
-
-      
-      
-      # Define the variables of interest we want to compute the weighted averages of.
-      variables <- "ffb_price_imp1"
-      # variables <- c("est_year_imp", # "min_year", "est_year", "max_year",
-      #                "ffb_price_imp1", "ffb_price_imp2", # "in_ton_ffb_imp1", "in_ton_ffb_imp2", "in_val_ffb_imp1", "in_val_ffb_imp2",
-      #                "cpo_price_imp1", "cpo_price_imp2", # "out_ton_cpo_imp1", "out_ton_cpo_imp2", "out_val_cpo_imp1", "out_val_cpo_imp2",
-      #                "prex_cpo_imp1", "prex_cpo_imp2",
-      #                "pko_price_imp1","pko_price_imp2", # "out_ton_pko_imp1", "out_ton_pko_imp2", "out_val_pko_imp1", "out_val_pko_imp2",
-      #                "prex_pko_imp1", "prex_pko_imp2",
-      #                # "export_pct_imp", "revenue_total", "workers_total_imp3",
-      #                "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp")
-      #
-      #
       # make the variable specific sum of the inverse of durations over all the reachable mills that have no missing on this variable.
       for(voi in variables){
-        parcels$reachable[s] <- lapply(parcels$parcel_id[s],
+        parcels$reachable[s] <- lapply(parcels$parcel_id[s], 
                                        FUN =function(i){
-                                         voi_missing <- parcels$reachable[parcels$parcel_id == i][[1]][,voi] %>% is.na() %>% as.vector()
-
+                                         voi_missing <- parcels$reachable[parcels$parcel_id == i][[1]][,voi] %>% is.na() %>% as.vector() 
+                                         
                                          mutate(parcels$reachable[parcels$parcel_id == i][[1]],
-                                                !!as.symbol(paste0("sum_w_",voi)) := ifelse(voi_missing,
-                                                                                            yes = NA,
+                                                !!as.symbol(paste0("sum_w_",voi)) := ifelse(voi_missing, 
+                                                                                            yes = NA, 
                                                                                             no = sum(w[!voi_missing])))
                                        })
-
+        
         # for(i in parcels$parcel_id[s]){
-        #   voi_missing <- parcels$reachable[parcels$parcel_id == i][[1]][,voi] %>% st_drop_geometry() %>% is.na() %>% as.vector()
+        #   voi_missing <- parcels$reachable[parcels$parcel_id == i][[1]][,voi] %>% st_drop_geometry() %>% is.na() %>% as.vector() 
         #   parcels$reachable[parcels$parcel_id == i][[1]][voi_missing, paste0("sum_w_",voi)] <- NA
         # } # this solution takes 4.85s. rather than 7.3 with "full looping"
-        # # the whole time is taken by the for loop, but I cannot think of a way to do this
-        # # replace with NA within the lapply
-
-
-        parcels$reachable[s] <- lapply(parcels$parcel_id[s],
+        # # the whole time is taken by the for loop, but I cannot think of a way to do this 
+        # # replace with NA within the lapply  
+        
+        
+        parcels$reachable[s] <- lapply(parcels$parcel_id[s], 
                                        FUN =function(i){
                                          mutate(parcels$reachable[parcels$parcel_id == i][[1]],
                                                 # make the standardized weights. They are variable specific too.
@@ -302,35 +290,37 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
                                                 !!as.symbol(paste0("w_var_", voi)) := !!as.symbol(paste0("std_w_", voi))*(!!as.symbol(voi))
                                          )
                                        })
-
+        
         # build the column in parcels in which every cell is the weighted average of voi
         # sum these weighted terms and hence compute the weighted averages
         # it makes sure that parcels whose reachable mills are all NA on a voi don't get a 0 but a NA for weighted mean)
-        parcels$var_template <- rep(NA, nrow(parcels))
+        parcels$var_template <- rep(NA, nrow(parcels)) 
         colnames(parcels)[colnames(parcels) == "var_template"] <- paste0("wa_", voi)
-        parcels[s,paste0("wa_", voi)] <- sapply(parcels$reachable[s],
-                                                FUN = function(x) x[,paste0("w_var_",voi)]
+        parcels[s,paste0("wa_", voi)] <- sapply(parcels$reachable[s], 
+                                                FUN = function(x) x[,paste0("w_var_",voi)] 
                                                 %>% is.na()
-                                                %>% all()
+                                                %>% all() 
                                                 %>% ifelse(yes = NA, no = sum(x[,paste0("w_var_",voi)],na.rm = T)))
-
+      
+      print(paste0("the calculus have completed for voi ",voi,"in ",years[t]," of file ",
+                   island,"_",parcel_size/1000,"km_",travel_time,"h_CA"))  
       }# closes the loop on variables
-
-      parcels <- mutate(parcels,
+      
+      parcels <- mutate(parcels, 
                         reachable = NULL)
-
+      
       # remove the lonlat ids
       parcels <- dplyr::select(parcels, -lonlat)
-      row.names(parcels) <- NULL
-
-      # give year specific variable names to the variables built in this function
-      names(parcels) <- names(parcels) %>% paste0(".", years[t])
-
-
-
-      saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/temp_cs_wa_explanatory2/cs_wa_explanatory_",
-                                        island,"_",parcel_size/1000,"km_",travel_time,"h_CA_",years[t],".rds")))
+      row.names(parcels) <- NULL      
       
+      # give the right year to this cross sections' year variable, otherwise it's always 2001, the first yeqr of the template parcels_centro
+      # give year specific variable names to the variables built in this function 
+      names(parcels) <- names(parcels) %>% paste0(".", years[t])
+      
+
+      
+      saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/temp_cs_wa_explanatory/cs_wa_explanatory_",
+                                        island,"_",parcel_size/1000,"km_",travel_time,"h_CA_",years[t],".rds")))
     }# closes annual_w_averages
     
     
@@ -339,7 +329,7 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
     registerDoParallel(cores = ncores) 
     
     ## define foreach object 
-    foreach(t = 1:4, #length(years)
+    foreach(t = 1:length(years), #
             #.combine = cbind,
             .multicombine = TRUE, # not necessary if .combine = cbind because then the default multicombine is TRUE anyways
             .inorder = FALSE, # we don't care that the results be combined in the same order they were submitted
@@ -349,18 +339,21 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
   }# closes parallel_w_averages
   
   ### Execute it
-  system.time(
   parallel_w_averages(detectCores() - 1)
-  )
+  
   
   
   ### Read annual cross-sections and bind them 
-  annual_parcel_paths <- list.files(path = file.path("temp_data/processed_parcels/temp_cs_wa_explanatory2/"), 
+  annual_parcel_paths <- list.files(path = file.path("temp_data/processed_parcels/temp_cs_wa_explanatory/"), 
                                     pattern = paste0("cs_wa_explanatory_",island,"_",parcel_size/1000,"km_",travel_time,"h_CA_"), 
                                     full.names = TRUE) 
   
   wide_parcels <- lapply(annual_parcel_paths, 
                          FUN = function(x){readRDS(x)}) %>% bind_cols()
+  
+  # for(year in years){
+  #   wide_parcels[,colnames(wide_parcels)==paste0("year.",year)] <- year
+  # }
   
   # manage repetitions of parcel_id variables over years
   wide_parcels$parcel_id <- wide_parcels$parcel_id.1998
@@ -409,6 +402,11 @@ for(ISL in c("Sumatra", "Kalimantan")){
   }
 }
 
+
+
+
+# this part below is not useful, as parcels still need to be computed per island at the beginning of add_CA_parcel_variables,
+# and they are stacked over islands there. 
 
 ### Gather the lucfip variables for each parcel_size and catchment area combinations. ####
 PS <- 3000

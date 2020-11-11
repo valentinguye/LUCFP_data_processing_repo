@@ -237,6 +237,7 @@ rsource using "install_R_project_packages.R"
 		* 			input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_2015_WGS1984.tif
 		*			input_data/margono_primary_forest/timeseq_change00_12.tif
 		*			temp_data/IBS_UML_panel_final.dta
+		*			input_data/uml/mills_20200129.xlsx
 
 		* output: 
 		*		Main raster outputs 
@@ -258,6 +259,7 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_lu/austin_ioppm_2015_Kalimantan_aligned.tif
 		*			temp_data/processed_lu/austin_ioppm_2015_Papua_aligned.tif
 		*			temp_data/IBS_UML_panel_final.dta
+		*			input_data/uml/mills_20200129.xlsx
 
 		* output: 
 		*		Main raster outputs 
@@ -274,6 +276,28 @@ rsource using "install_R_project_packages.R"
 
 		* output:	temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
 		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
+
+
+	*** prepare parcel maps of annual LUC from primary forest to industrial plantations, WITH DISTINCTIONS OF DYNAMICS
+		rsource using "code/outcome_variables/prepare_lucpfip_dyn"
+		* input:	input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_2000_WGS1984.tif
+		*			temp_data/processed_indonesia_spatial/island_sf
+		*			temp_data/processed_lu/gfc_loss_ISLAND_30th_prj.tif for ISLAND = (Sumatra, Kalimantan)
+		*			temp_data/processed_lu/margono_primary_forest_ISLAND_aligned.tif for ISLAND = (Sumatra, Kalimantan)
+		*			temp_data/processed_mill_geolocalization/IBS_UML_panel.dta
+		*			input_data/uml/mills_20200129.xlsx
+
+		*output: 	temp_data/processed_lu/austin_earliest_detected_ISLAND_aligned.tif for ISLAND = (Sumatra, Kalimantan)
+		*			temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_ISLAND.tif for ISLAND = (Sumatra, Kalimantan)
+		*			temp_data/processed_lu/loss_in_iopp_ISLAND.tif for ISLAND = (Sumatra, Kalimantan)
+		*			temp_data/processed_lu/loss_to_iopp_rapid_ISLAND.tif for ISLAND = (Sumatra, Kalimantan)
+		*			temp_data/processed_lu/loss_to_iopp_slow_ISLAND.tif for ISLAND = (Sumatra, Kalimantan)
+		*			temp_data/processed_lu/lucpfip_DYNA_ISLAND_total.tif for ISLAND = (Sumatra, Kalimantan); DYNA = (replace,rapid, slow)
+		*			temp_data/processed_lu/annual_maps/lucpfip_DYNA_ISLAND_total_YEARS.tif for ISLAND = (Sumatra, Kalimantan); DYNA = (replace,rapid, slow); YEARS = 2001:2018
+		*			temp_data/processed_lu/annual_maps/parcel_lucpfip_DYNA_ISLAND_PS_total_YEARS.tif for ISLAND = (Sumatra, Kalimantan); DYNA = (replace,rapid, slow); PS = 3km; YEARS = 2001:2018
+		*			temp_data/processed_lu/annual_maps/parcel_lucpfip_DYNA_ISLAND_PS_total.tif for ISLAND = (Sumatra, Kalimantan); DYNA = (replace,rapid, slow); PS = 3km
+
+
 
 	*** prepare driving travel time between every pairs of parcels and mills. 
 	capture "code/programs/make_osrm_durations"

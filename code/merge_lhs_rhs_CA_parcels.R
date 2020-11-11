@@ -69,9 +69,9 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   
 
   
-  # keep only year before 2015 (after they mean nothing since plantation data are from 2015)
-  lucpfp <- lucpfp[lucpfp$year<=2016,] # now runs from 2001-1998
-  #lucfp <- lucfp[lucfp$year<=2016,] # now runs from 2001-1998
+  # keep only years up to 2015 (after they mean nothing since plantation data are from 2015)
+  lucpfp <- lucpfp[lucpfp$year<=2015,] # now runs from 2001-1998
+  #lucfp <- lucfp[lucfp$year<=2015,] # now runs from 2001-1998
   lucpfip_dyn <- lucpfip_dyn[lucpfip_dyn$year<=2015,]
   
   
@@ -101,9 +101,18 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   # check that rapid + slow = total ? 
   
   
-  ### EXPLICATIVE VARIABLES (runs from 1998-2015) SOON UP TO 2016!!
+  ### EXPLICATIVE VARIABLES (runs from 1998-2015) 
   RHS <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
                                    parcel_size/1000,"km_",travel_time,"h_CA.rds")))
+  
+  # ### ADD A 2016 LINE 
+  # # it will be relevant in regressions where we use only lagged RHS variables.
+  # 
+  # cs_2016 <- parcels[parcels$year==2015,]
+  # cs_2016$year <- 2016
+  # parcels <- rbind(parcels, cs_2016)
+  # parcels <- arrange(parcels, parcel_id, year)
+  # rm(cs_2016)
   
   # MERGE
   # years 1998 - 2000 from RHS will not match, we don't need to keep them because the information 

@@ -3,7 +3,7 @@
 # The first part selects cells within catchment area (CA) for outcome variables, not annually. 
 # The second part does the same but annually (the annual variation is whether mills are there or not), for explanatory variables (computed in wa_at_parcels_durations.R)
 
-# The first part is repeated for the IBS and the UML sets of mills.  
+# Both parts are repeated for the IBS and the UML sets of mills.  
 
 
 
@@ -200,7 +200,7 @@ for(island in c("Sumatra", "Kalimantan")){ #"Papua" does not work with IBS mills
   ibs_msk_df_sp <- as(ibs_msk_df, "Spatial")
   ibs_sp <- as(ibs, "Spatial")
 
-  # See the notes below and in Evernote on OSRM
+  # See the notes above on OSRM
   osrmr::run_server(osrm_path = osrm_path, map_name = map_name)
 
   dur_list <-  osrmTable(src = ibs_msk_df_sp, dst = ibs_sp)
@@ -217,17 +217,28 @@ for(island in c("Sumatra", "Kalimantan")){ #"Papua" does not work with IBS mills
   
   ## 0. Preparing
   
-  uml <- read_xlsx(file.path("input_data/uml/mills_20200129.xlsx"))
-  uml <- uml %>% as.data.frame()
-  uml$latitude <- as.numeric(uml$latitude)
-  uml$longitude <- as.numeric(uml$longitude)
-  uml$lat <- uml$latitude
-  uml$lon <- uml$longitude
-  uml <- st_as_sf(uml,	coords	=	c("longitude",	"latitude"), crs = 4326)
+  # uml <- read_xlsx(file.path("input_data/uml/mills_20200129.xlsx"))
+  # uml <- uml %>% as.data.frame()
+  # uml$latitude <- as.numeric(uml$latitude)
+  # uml$longitude <- as.numeric(uml$longitude)
+  # uml$lat <- uml$latitude
+  # uml$lon <- uml$longitude
+  # uml <- st_as_sf(uml,	coords	=	c("longitude",	"latitude"), crs = 4326)
+  # uml_geom <- st_geometry(uml)
+  # uml_prj <- st_transform(uml_geom, crs = indonesian_crs)
+  # 
+  # # there is no island column in this dataset, hence we select mills on the specific island geographically
+  # select_within <- st_within(x = uml_prj, y = island_sf_prj[island_sf_prj$shape_des == island,])
+  # uml_prj <- uml_prj[lengths(select_within)>0,]
+  # uml <- uml[lengths(select_within)>0,]
+  
+  # above is the old code, with older version of UML. We actually want this one, that has 10 more mills, and that we wanna use because it has
+  # est_year variables that we need in the annual calcultations later on (and both steps need to be based on the same set of mills)
+  uml <- read.dta13(file.path("temp_data/processed_UML/UML_valentin_imputed_est_year.dta"))
+  uml <- st_as_sf(uml,	coords	=	c("lon",	"lat"), crs = 4326)
   uml_geom <- st_geometry(uml)
   uml_prj <- st_transform(uml_geom, crs = indonesian_crs)
   
-  # there is no island column in this dataset, hence we select mills on the specific island geographically
   select_within <- st_within(x = uml_prj, y = island_sf_prj[island_sf_prj$shape_des == island,])
   uml_prj <- uml_prj[lengths(select_within)>0,]
   uml <- uml[lengths(select_within)>0,]
@@ -293,15 +304,18 @@ for(island in c("Sumatra", "Kalimantan")){ #"Papua" does not work with IBS mills
   
 }
 
-island <- "Sumatra"
-travel_time <- 6
-t <- 1998
+
+
+
 
 
 #### OSRM ANNUAL DURATIONS ####  
 # this part cannot be executed right after the part above, because make_osrm_CA.R needs to be executed first, and it 
 # requires the outputs from the part above. 
-### IBS YEARS
+
+### FOR IBS MILLS
+
+## IBS years
 years <- seq(from = 1998, to = 2015, by = 1)
 
 for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
@@ -325,7 +339,7 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
     # turn it into a sf object
     parcels_centro <- st_as_sf(parcels_centro, coords = c("lon", "lat"), remove = FALSE, crs = 4326)
 
-    # give row names to source and destinations data to retrieve them more surely
+    # give row names to source data to retrieve them more surely
     row.names(parcels_centro) <- mutate(parcels_centro, lonlat = paste0(lon, lat))$lonlat
 
     # transform to Spatial is necessary for osrm v.3.0.0
@@ -338,7 +352,9 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
       # ibs_cs <- ibs[ibs$min_year <= t & ibs$max_year >=t,]  # this line is for the computation of n_reachable_ibs_imp, not for the main workflow
       ibs_cs <- ibs[ibs$year == t,]
       
+      # give row names to destination data to retrieve them more surely
       row.names(ibs_cs) <- ibs_cs$firm_id
+      
       ibs_cs_sp <- as(ibs_cs, "Spatial")
       
       dur_list <-  osrmTable(src = parcels_centro_sp, dst = ibs_cs_sp) 
@@ -356,13 +372,98 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
 }
 rm(years)
 
+# 
+# island <- "Sumatra"
+# travel_time <- 6
+# t <- 2015
 
 
+### FOR UML MILLS
+# this is necessary to compute n_reachable_uml, and it's corresponding to the first part of add_CR_parcel_variables.R
 
+years <- seq(from = 1998, to = 2015, by = 1)
 
+for(island in c("Sumatra", "Kalimantan")){ 
+  
+  # there is no island column in this dataset, hence we select mills on the specific island geographically
 
-
-### ALTERNATIVE OSRM WITH PUBLIC SERVER (BUT TAKES A WHILE !)
+  uml <- read.dta13(file.path("temp_data/processed_UML/UML_valentin_imputed_est_year.dta"))
+  uml <- st_as_sf(uml,	coords	=	c("lon",	"lat"), crs = 4326)
+  uml_prj <- st_transform(uml, crs = indonesian_crs)
+  
+  select_within <- st_within(x = uml_prj, y = island_sf_prj[island_sf_prj$shape_des == island,])
+  uml_prj <- uml_prj[lengths(select_within)>0,]
+  uml <- uml[lengths(select_within)>0,]
+  
+  rm(select_within)
+  
+  for(travel_time in c(2,4,6)){#,6
+    
+    ### PREPARE PARCELS
+    
+    # Import a parcel panel outputed from make_osrm_CA.R for a given island and a given maximum travel time. 
+    # /!\/!\/!\  NOTE THE IBS_CA IN THE NAME: IT IS ON PURPOSE /!\ /!\ /!\ 
+    # because we want to compute these annual durations to UML mills, only for the set of parcels that can reach an IBS mills, so that we can compute n_reachable_uml, 
+    # but we are interested in computing this for the parcels in the analysis, i.e. only those that can reach a IBS mill. 
+    parcels_centro <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_CA_total.rds")))
+    
+    # keep only one cross-section, no matter which. 
+    parcels_centro <- parcels_centro[!duplicated(parcels_centro$parcel_id),]
+    # turn it into a sf object
+    parcels_centro <- st_as_sf(parcels_centro, coords = c("lon", "lat"), remove = FALSE, crs = 4326)
+    
+    # give row names to source and destinations data to retrieve them more surely
+    row.names(parcels_centro) <- mutate(parcels_centro, lonlat = paste0(lon, lat))$lonlat
+    
+    # transform to Spatial is necessary for osrm v.3.0.0
+    parcels_centro_sp <- as(parcels_centro, "Spatial")
+    
+    osrmr::run_server(osrm_path = osrm_path, map_name = map_name)
+    
+    for(t in years){#c(1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005)
+      uml_cs <- uml[uml$est_year_imp <= t | is.na(uml$est_year_imp),]
+      
+      # give row names to destination data to retrieve them more surely
+      row.names(uml_cs) <- uml_cs$trase_code
+      
+      uml_cs_sp <- as(uml_cs, "Spatial")
+      
+      dur_list <-  osrmTable(src = parcels_centro_sp, dst = uml_cs_sp) 
+      
+      saveRDS(dur_list, file.path(paste0("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_",travel_time,"h_UML_",t)))
+      
+      rm(dur_list, uml_cs, uml_cs_sp)
+    }  
+    
+    osrmr::quit_server()
+    
+    rm(parcels_centro, parcels_centro_sp)
+  }
+  rm(uml, uml_prj, select_within)  
+}
+rm(years)  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  ### ALTERNATIVE OSRM WITH PUBLIC SERVER (BUT TAKES A WHILE !)
 # dur_mat <- matrix(nrow = nrow(m.df_wide_lonlat), ncol = nrow(mills))
 # 
 # if(nrow(mills) > 200){
