@@ -130,20 +130,20 @@ district_sf_prj <- st_transform(district_sf, crs = indonesian_crs)
 # ibsuml <- st_transform(ibsuml, crs = indonesian_crs)
 
 # read the most complete version of UML we have. 
-uml <- read.dta13(file.path("temp_data/processed_UML/UML_valentin_imputed_est_year.dta"))
-uml <- uml[!is.na(uml$lat),]
-uml <- st_as_sf(uml, coords = c("lon", "lat"), remove = TRUE, crs = 4326)
-uml <- st_transform(uml, crs = indonesian_crs)
-# there is no island column in this dataset, hence we select mills on the specific island geographically
-select_within <- st_within(x = uml, y = island_sf_prj[island_sf_prj$shape_des == "Sumatra",])
-uml_sumatra <- uml[lengths(select_within)>0,]
-select_within <- st_within(x = uml, y = island_sf_prj[island_sf_prj$shape_des == "Kalimantan",])
-uml_kalimantan <- uml[lengths(select_within)>0,]
-rm(select_within)
+# uml <- read.dta13(file.path("temp_data/processed_UML/UML_valentin_imputed_est_year.dta"))
+# uml <- uml[!is.na(uml$lat),]
+# uml <- st_as_sf(uml, coords = c("lon", "lat"), remove = TRUE, crs = 4326)
+# uml <- st_transform(uml, crs = indonesian_crs)
+# # there is no island column in this dataset, hence we select mills on the specific island geographically
+# select_within <- st_within(x = uml, y = island_sf_prj[island_sf_prj$shape_des == "Sumatra",])
+# uml_sumatra <- uml[lengths(select_within)>0,]
+# select_within <- st_within(x = uml, y = island_sf_prj[island_sf_prj$shape_des == "Kalimantan",])
+# uml_kalimantan <- uml[lengths(select_within)>0,]
+# rm(select_within)
 
 
 # island <- "Sumatra"
-# travel_time <- 4
+# travel_time <- 2
 # t <- 8
 
 
@@ -173,12 +173,12 @@ for(travel_time in c(2,4,6)){
       # take the annual cross section of it (parcels' coordinates are constant over time)
       parcels_centro <- parcels[parcels$year == years[t], c("parcel_id", "year", "lat", "lon")]
       # and of the uml data set (only useful for the checks)
-      if(island == "Sumatra"){
-        uml_cs <- uml_sumatra[uml_sumatra$est_year_imp <= years[t] | is.na(uml_sumatra$est_year_imp),]
-      }
-      if(island == "Kalimantan"){
-        uml_cs <- uml_kalimantan[uml_kalimantan$est_year_imp <= years[t] | is.na(uml_kalimantan$est_year_imp),]
-      }
+      # if(island == "Sumatra"){
+      #   uml_cs <- uml_sumatra[uml_sumatra$est_year_imp <= years[t] | is.na(uml_sumatra$est_year_imp),]
+      # }
+      # if(island == "Kalimantan"){
+      #   uml_cs <- uml_kalimantan[uml_kalimantan$est_year_imp <= years[t] | is.na(uml_kalimantan$est_year_imp),]
+      # }
       
       # read the duration matrix. 
       # This is the driving travel time (duration) matrix between each pair of parcel and mill. 
@@ -187,7 +187,7 @@ for(travel_time in c(2,4,6)){
       dur_mat <- dur_mat$durations
       
       # below are several checks that we are allocating the right duration to the right pair of parcel-mill. 
-      if(nrow(uml_cs) != ncol(dur_mat)){stop(paste0("duration matrix and mill cross section don't match in ",island,"_",parcel_size/1000,"km_",travel_time,"h_UML_",years[t]))}
+      # if(nrow(uml_cs) != ncol(dur_mat)){stop(paste0("duration matrix and mill cross section don't match in ",island,"_",parcel_size/1000,"km_",travel_time,"h_UML_",years[t]))}
       
       # for more safety, merge the dur_mat with the parcels_centro centro based on coordinates identifiers
       dur_mat <- as.data.frame(dur_mat)
@@ -321,7 +321,7 @@ for(travel_time in c(2,4,6)){
 
 
 #### TIME DYNAMICS VARIABLES ####
-for(travel_time in c(2,4,6)){ 
+for(travel_time in c(6)){ #2,4,
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
                                       parcel_size/1000,"km_",
                                       travel_time,"h_CA.rds")))
@@ -614,7 +614,7 @@ ts <- dplyr::select(ts, year,
 ts <- ts[!duplicated(ts$year),]
 
 
-for(travel_time in c(2,4,6)){ 
+for(travel_time in c(2,4)){ #,6
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
                                       parcel_size/1000,"km_",
                                       travel_time,"h_CA.rds")))
@@ -634,6 +634,7 @@ for(travel_time in c(2,4,6)){
     
     parcels$rspo_cert[parcels$year == y][lengths(sgbp) == 1] <- TRUE
     
+    rm(parcels_cs, rspo_cs, sgbp)
   }
   
   ### OIL PALM CONCESSIONS
@@ -644,7 +645,7 @@ for(travel_time in c(2,4,6)){
   sgbp <- st_within(parcels_cs, cns)
   parcels_cs$concession <- rep(FALSE, nrow(parcels_cs))
   parcels_cs$concession[lengths(sgbp) > 0] <- TRUE
-  
+  rm(sgbp)
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
@@ -702,7 +703,7 @@ for(travel_time in c(2,4,6)){
       parcels[,paste0("iv",SP,"_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_lag1")]*parcels[,paste0("spread",SP)] 
     }
   }
-  
+  rm(IMP, SP)
   # lag the iv variables
   ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
   
@@ -717,7 +718,7 @@ for(travel_time in c(2,4,6)){
                                   keepInvalid = TRUE)  
     parcels <- dplyr::arrange(parcels, parcel_id, year)
   }
-  
+  rm(IV, ivS)
   # View(parcels[!is.na(parcels$wa_prex_cpo_imp1_lag1) &
   #                parcels$year>2007 &
   #                parcels$wa_prex_cpo_imp1_lag1!=0 ,c("parcel_id" ,"year", paste0("wa_prex_cpo_imp",c(1,2),"_lag1"),
@@ -732,8 +733,10 @@ for(travel_time in c(2,4,6)){
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_CA.rds")))
+  
+  rm(parcels, parcels_cs)
 }
 
-rm(cns, llu, parcels, parcels_cs, rspo, rspo_cs, sgbp, ts)
+rm(cns, llu, rspo, ts)
 
 

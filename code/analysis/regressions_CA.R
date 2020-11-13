@@ -277,7 +277,8 @@ rm(d_CA4)
 
 
 make_base_reg <- function(island,
-                          outcome_variable = "lucpfip_pixelcount_total", # LHS. One of "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount_total"p
+                          outcome_variable = "lucpfip_pixelcount_total", # LHS. One of "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount_total"
+                          all_producers = FALSE, # whether industrial and smallholders plantations should be added. 
                           alt_ca = FALSE, # logical, if TRUE, Sumatra's catchment area is based on 4 hour driving times, and Kalimantan on 2 hours.  
                           commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo"), commodities the price signals of which should be included in the RHS
                           x_pya = 3, # either 2, 3, or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
@@ -414,7 +415,7 @@ make_base_reg <- function(island,
   
   ### DATA FOR REGRESSIONS
   
-  # Catchment radius
+  # Catchment area
   if(island == "Sumatra" & alt_cr == FALSE){
     d <- d_CA2_suma
   }
@@ -432,6 +433,16 @@ make_base_reg <- function(island,
   }
   if(island == "all" & alt_cr == TRUE){
     d <- rbind(d_CA4_suma, d_CA2_kali, d_CA2_papu)
+  }
+  
+  # add pixel counts of lUcfp from industrial and from small and medium sized plantations. 
+  if(all_producers & grepl("lucp", outcome_variable)){
+    d$lucpfp_pixelcount <- d$lucpfip_pixelcount_total + d$lucpfsmp_pixelcount_total
+    outcome_variable <- "lucpfp_pixelcount"
+  }
+  if(all_producers & grepl("lucf", outcome_variable)){
+    d$lucfp_pixelcount <- d$lucfip_pixelcount_total + d$lucfsmp_pixelcount_total
+    outcome_variable <- "lucfp_pixelcount"
   }
   
   ## Keep observations that: 

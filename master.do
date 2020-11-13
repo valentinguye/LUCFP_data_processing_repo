@@ -213,11 +213,14 @@ rsource using "install_R_project_packages.R"
 	*			temp_data/IBS_UML_panel_final.dta
 
 
-**** Prepare Indonesian island shapes
+**** Prepare Indonesian island and district shapes
 		rsource using "code/prepare_island_sf.R"
 		* input 	input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp
+		*			input_data/indonesia_spatial/district_shapefiles/district_2015_base2000.shp
+		*			temp_data/processed_indonesia_spatial/province_district_code_names_93_2016.dta
 		*
 		* output 	temp_data/processed_indonesia_spatial/island_sf
+		*			temp_data/processed_indonesia_spatial/district2000_sf
 
 
 **** Build outcome variables at the parcel level
@@ -364,7 +367,7 @@ rsource using "install_R_project_packages.R"
 
 	/* Distribute geolocalized IBS mill variables to square parcels with distance-weighted averages.  
 	 Parcels are grouped in dataframes according to their size (3x3km only currently - i.e. PS = 3000 (meters)) and 
-	 how many they are (what is the catchment radius: CR = 10km, 30km, 50km).  
+	 how many they are (what is the catchment radius: CR = 10km, 30km, 50km, or the catchment area: 2h, 4h, 6h).  
 	
 	Note that prepare_OUTCOME_VAR scripts outputted dataframes for catchment radii of both IBS and UML mill sets, and hence this is specified in file names. 
 	However, in further RHS-related scripts, we always use parcels within IBS catchment radii, and hence do not specify it in file names.  
@@ -383,7 +386,7 @@ rsource using "install_R_project_packages.R"
 	/* Or ditribute to the same square parcels but within a travel time catchment AREA and with DURATION-weighted averages. 
 	 It is different than wa_at_parcels_distances.R because it runs the analysis by ISLAND. 
 	 And because it uses an additional input: the duration matrices annually computed by a program (make_osrm_durations.R) that requires a local OSRM server. 
-	 Contrary to its "distance" counterparts, it requires the parcel template (lucpfip_panel typically) the ISLAND LEVEL. 
+	 Contrary to its "distance" counterparts, it requires the parcel template (lucpfip_panel typically, as outputted from make_osrm_CA.R) at the ISLAND LEVEL. 
 	 The end of the script stacks the two islands together. 
 	 */
 	rsource using "code/explicative_variables/wa_at_parcels_durations.R"
@@ -392,7 +395,7 @@ rsource using "install_R_project_packages.R"
 	*			input_data/local_osrm_outputs/osrm_driving_durations_ISLAND_PS_TT_YEAR for ISLAND = (Sumatra, Kalimantan); PS = 3km, TT = (2h_IBS, 4h_IBS, 6h_IBS); YEAR = 1998:2015
 
 	* output 	temp_data/processed_parcels/temp_cs_wa_explanatory/cs_wa_explanatory_ISLAND_PS_CA_YEAR.rds for ISLAND = (Sumatra, Kalimantan); PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) and YEAR = (1998-2015)
-	*			temp_data/processed_parcels/wa_panel_parcels_ISLAND_PS_CA.rds for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA)
+	*			temp_data/processed_parcels/wa_panel_parcels_ISLAND_PS_CA.rds for ISLAND = (Sumatra, Kalimantan); PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA)
 	*			temp_data/processed_parcels/wa_panel_parcels_PS_CA.rds for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
 
 
@@ -426,13 +429,14 @@ rsource using "install_R_project_packages.R"
 	In particular, this differs from the CR counterpart because this one does not compute n_reachable_uml nor sample_coverage variables.
 	*/
 	rsource using "code/explicative_variables/add_CA_parcel_variables.R"
-		* input:	input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp
-		*			input_data/indonesia_spatial/district_shapefiles/district_2015_base2000.shp
+		* input:	input_data/local_osrm_outputs/osrm_driving_durations_ISLAND_PS_CA_YEAR of CA = (2h_UML, 4h_UML, 6h_UML) 
+		*			input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp
+		*			temp_data/processed_indonesia_spatial/district2000_sf
 		*			temp_data/processed_indonesia_spatial/province_district_code_names_93_2016.dta
 		*			input_data/RSPO_supply_bases/RSPO-certified_oil_palm_supply_bases_in_Indonesia.shp
 		*			input_data/oil_palm_concessions
 		*			input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp
-		*   	 	temp_data/processed_parcels/wa_panel_parcels_PS_CA.rds for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
+		*   	 	temp_data/processed_parcels/wa_panel_parcels_ISLAND_PS_CA.rds for ISLAND = (Sumatra, Kalimantan); PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
 
 		* output: 	temp_data/processed_parcels/parcels_panel_geovars_PS_CA for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
 		*			temp_data/processed_parcels/parcels_panel_w_dyn_PS_CA for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 

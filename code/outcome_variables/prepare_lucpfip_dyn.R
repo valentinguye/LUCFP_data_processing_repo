@@ -578,7 +578,6 @@ aggregate_lucpfip_dynamics <- function(island, parcel_size){
 # Then, parcels that remain (i.e. are not masked) are not discarded by st_is_within_distance,
 # even if parts of their areas are in the sea, as long as their centroids are less than a given distance. 
 
-#### to_panel_within_CR function #### 
 to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
   
   ### Function description

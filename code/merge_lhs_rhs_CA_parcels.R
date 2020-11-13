@@ -67,7 +67,6 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   lucpfip_dyn <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfp_panel_dynamics_",
                                           parcel_size/1000,"km_",travel_time,"h_IBS_CA.rds")))
   
-
   
   # keep only years up to 2015 (after they mean nothing since plantation data are from 2015)
   lucpfp <- lucpfp[lucpfp$year<=2015,] # now runs from 2001-1998
@@ -83,7 +82,7 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   
   ### THIS NEEDS TO BE CHANGED WHEN WE HAVE LUCFP
   #  LHS <- lucpfp
-  nrow(lucpfp) == nrow(lucpfip_dyn)
+  if(nrow(lucpfp) != nrow(lucpfip_dyn)){stop("LHS datasets don't all have the same number of rows")}
   LHS <- base::merge(lucpfp, lucpfip_dyn, by = c("parcel_id", "lon", "lat", "year"))
   
   rm(lucpfp, lucpfip_dyn)
@@ -116,10 +115,12 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   
   # MERGE
   # years 1998 - 2000 from RHS will not match, we don't need to keep them because the information 
-  # from these years is captured in add_parcel_variables.R within lag variables. Hence all = FALSE
-  parcels <- base::merge(LHS, RHS, by = c("parcel_id", "lat", "lon", "year"), all = FALSE)  
+  # from these years is captured in add_parcel_variables.R within lag variables. Hence the inner_join
+  RHS$lat <- round(RHS$lat,6)
+  RHS$lon <- round(RHS$lon,6)
+  parcels <- inner_join(LHS, RHS, by = c("parcel_id", "lat", "lon", "year"))  
   
-  if(nrow(parcels) != nrow(RHS) | nrow(parcels) != nrow(LHS)){stop("LHS and RHS don't have the exact same set of parcels")}
+  if(nrow(parcels) != nrow(LHS)){stop("LHS and RHS don't have the exact same set of parcels")}
   rm(LHS, RHS)
   
   
@@ -192,7 +193,7 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   bfe <- dplyr::select(bfe, -lat,  -lon, -idncrs_lat,-idncrs_lon)
   
   # merge it with our parcel panel
-  parcels <- base::merge(parcels, 
+  parcels <- left_join(parcels, 
                          dplyr::select(bfe, -fc2000_30th_ha, -pfc2000_total_ha), 
                          by = "parcel_id")
   
@@ -286,10 +287,11 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
 
 
 PS <- 3000 
-for(TT in c(2,4,6)){
+for(TT in c(2,4)){#s,6
   merge_lhs_rhs(parcel_size = PS, 
                 travel_time = TT)
 }
+rm(merge_lhs_rhs)
 
 
 

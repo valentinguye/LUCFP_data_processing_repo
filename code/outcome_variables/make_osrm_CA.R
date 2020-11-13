@@ -27,7 +27,7 @@
 # see this project's README for a better understanding of how packages are handled in this project. 
 
 # These are the packages needed in this particular script. 
-neededPackages = c("data.table", "dplyr", "readstata13", "readxl",
+neededPackages = c("data.table", "plyr", "dplyr", "readstata13", "readxl",
                    "raster", "rgdal", "sp", "sf", 
                    "doParallel", "foreach", "parallel")
 
@@ -140,8 +140,8 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
       ibs_msk_df <- ibs_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
       ibs_msk_df <- st_as_sf(ibs_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
       ibs_msk_df <- st_transform(ibs_msk_df, crs = 4326)
-      ibs_msk_df$lon <- st_coordinates(ibs_msk_df)[,"X"]
-      ibs_msk_df$lat <- st_coordinates(ibs_msk_df)[,"Y"]
+      ibs_msk_df$lon <- st_coordinates(ibs_msk_df)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
+      ibs_msk_df$lat <- st_coordinates(ibs_msk_df)[,"Y"]%>% round(6) 
       ibs_msk_df <- mutate(ibs_msk_df, lonlat = paste0(lon, lat))
       ibs_msk_df <- st_drop_geometry(ibs_msk_df)
       
@@ -159,7 +159,8 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
         # The row.names have been computed the same way the ibs_msk_df$lonlat column was is computed above. 
         colnames(dur_mat_log) <- paste0("firm_id_",colnames(dur_mat_log))
         dur_mat_log$lonlat <- row.names(dur_mat_log)
-
+        
+        # THIS IS THE LINES THAT SELECT PARCELS ON THEIR BEING WITHIN THE CATCHMENT AREA
         ibs_msk_TT_df <- merge(ibs_msk_df, dur_mat_log, by = "lonlat", all = FALSE)
         ibs_msk_TT_df <- ibs_msk_TT_df[base::rowSums(ibs_msk_TT_df[,grepl("firm_id",colnames(ibs_msk_TT_df))], na.rm = TRUE)>0,]
         # na.rm = TRUE is in case of mills for which no duration could be computed. 
@@ -218,8 +219,7 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
   }
   
   ### Selecting parcels within travel times, and reshaping, for dynamics outcomes (lucpfip_replace, lucpfip_rapid, lucpfip_slow)
-  for(forest in forestS){
-
+  for(dyna in c("rapid", "slow", "replace")){ # it's important that replace be not in first position in the loop, for the reason explained below at the if(dyna=="replace") level
       # Now mask rasters for all outcomes
       parcels_brick_name <- paste0("parcel_lucpfip_",dyna,"_",island,"_",parcel_size/1000,"km_total")
       parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, ".tif")))
@@ -241,10 +241,24 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
       ibs_msk_df <- ibs_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
       ibs_msk_df <- st_as_sf(ibs_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
       ibs_msk_df <- st_transform(ibs_msk_df, crs = 4326)
-      ibs_msk_df$lon <- st_coordinates(ibs_msk_df)[,"X"]
-      ibs_msk_df$lat <- st_coordinates(ibs_msk_df)[,"Y"]
+      ibs_msk_df$lon <- st_coordinates(ibs_msk_df)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
+      ibs_msk_df$lat <- st_coordinates(ibs_msk_df)[,"Y"]%>% round(6) 
       ibs_msk_df <- mutate(ibs_msk_df, lonlat = paste0(lon, lat))
       ibs_msk_df <- st_drop_geometry(ibs_msk_df)
+      
+      # In Kalimantan, replace has slightly more observations (than any other data frame, dynamic or not, at this stage), probably because it is not built on the raster primary forest
+      # and therefore, where the primary forest layer had some NA at the margins because of re-projecting, and transferred these NAs, this did not happen for the replace layer. 
+      # to handle this, we restrict now the replace grid cell observations to the those from the other outcomes. 
+      # it is necessary to do that here, other wise the size of replace does not match with the size of dur_mat_log and the CA are erroneous for replace
+      
+      if(dyna == "rapid"){
+        correct_set_of_lonlat <- ibs_msk_df$lonlat
+      }
+      if(dyna == "replace"){
+        ibs_msk_df <- ibs_msk_df[ibs_msk_df$lonlat %in% correct_set_of_lonlat,]
+        rm(correct_set_of_lonlat)
+      }
+      
       
       # Besides, make IDs 
       island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
@@ -301,7 +315,7 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
         # Add columns of converted pixel counts to hectares.
         ibs_msk_TT_long_df$inha <- ibs_msk_TT_long_df[,grepl("pixelcount",colnames(ibs_msk_TT_long_df))]*(27.8*27.6)/(1e4)
         
-        names(ibs_msk_TT_long_df)[names(ibs_msk_TT_long_df)=="inha"] <- paste0("lucpfip_",dyna,"ha")
+        names(ibs_msk_TT_long_df)[names(ibs_msk_TT_long_df)=="inha"] <- paste0("lucpfip_",dyna,"_ha")
         
         
         saveRDS(ibs_msk_TT_long_df,
@@ -313,10 +327,10 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
                                         "total.rds")))
         
         rm(dur_mat_log, varying_vars, ibs_msk_TT_df, ibs_msk_TT_long_df)
-      }
+      }# closes loop on travel_time
       
       rm(ibs_msk_df)
-    }
+  } # closes loop on dynamics 
   
   
   rm(dur_mat)
@@ -403,8 +417,8 @@ to_panel_within_UML_CA <- function(island, parcel_size){
       uml_msk_df <- uml_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
       uml_msk_df <- st_as_sf(uml_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
       uml_msk_df <- st_transform(uml_msk_df, crs = 4326)
-      uml_msk_df$lon <- st_coordinates(uml_msk_df)[,"X"]
-      uml_msk_df$lat <- st_coordinates(uml_msk_df)[,"Y"]
+      uml_msk_df$lon <- st_coordinates(uml_msk_df)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
+      uml_msk_df$lat <- st_coordinates(uml_msk_df)[,"Y"]%>% round(6) 
       uml_msk_df <- mutate(uml_msk_df, lonlat = paste0(lon, lat))
       uml_msk_df <- st_drop_geometry(uml_msk_df)
       
@@ -499,8 +513,8 @@ to_panel_within_UML_CA <- function(island, parcel_size){
   #   uml_msk_df <- uml_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
   #   uml_msk_df <- st_as_sf(uml_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
   #   uml_msk_df <- st_transform(uml_msk_df, crs = 4326)
-  #   uml_msk_df$lon <- st_coordinates(uml_msk_df)[,"X"]
-  #   uml_msk_df$lat <- st_coordinates(uml_msk_df)[,"Y"]
+  #   uml_msk_df$lon <- st_coordinates(uml_msk_df)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
+  #   uml_msk_df$lat <- st_coordinates(uml_msk_df)[,"Y"]%>% round(6)
   #   uml_msk_df <- mutate(uml_msk_df, lonlat = paste0(lon, lat))
   #   uml_msk_df <- st_drop_geometry(uml_msk_df)
   #   
@@ -559,7 +573,7 @@ to_panel_within_UML_CA <- function(island, parcel_size){
   #     # Add columns of converted pixel counts to hectares.
   #     uml_msk_TT_long_df$inha <- uml_msk_TT_long_df[,grepl("pixelcount",colnames(uml_msk_TT_long_df))]*(27.8*27.6)/(1e4)
   #     
-  #     names(uml_msk_TT_long_df)[names(uml_msk_TT_long_df)=="inha"] <- paste0("lucpfip_",dyna,"ha")
+  #     names(uml_msk_TT_long_df)[names(uml_msk_TT_long_df)=="inha"] <- paste0("lucpfip_",dyna,"_ha")
   #     
   #     
   #     saveRDS(uml_msk_TT_long_df,
@@ -611,7 +625,7 @@ rm(to_panel_within_UML_CA)
 
 #### Gather the lucfip variables for each parcel_size and catchment area combinations. ####
 PS <- 3000
-sampleS <- c("UML")#"IBS", 
+sampleS <- c("IBS","UML")# 
 travel_timeS <- c(2,4,6)
   for(sample in sampleS){
     for(TT in travel_timeS){
@@ -643,7 +657,7 @@ travel_timeS <- c(2,4,6)
 
       saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucpfp_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
 
-      rm(indo_df, pf_df_list)
+      rm(indo_df, pf_df_list, df_small, df_medium, df_indus, df)
 
 
 
@@ -679,7 +693,8 @@ travel_timeS <- c(2,4,6)
 
 #### Gather the lucfip_dynamics variables for each parcel_size and catchment area combinations. ####
 PS <- 3000
-sampleS <- c("IBS", "UML")
+Island <- "Kalimantan"
+sampleS <- c("IBS")#, "UML"
 travel_timeS <- c(2,4,6)
   for(sample in sampleS){
     for(TT in travel_timeS){
@@ -695,11 +710,12 @@ travel_timeS <- c(2,4,6)
         df_rapid    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_rapid_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
         df_slow    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_slow_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
         
-        df_replace <- dplyr::select(df_replace, -idncrs_lon, -idncrs_lat, -lon, -lat)
-        df <- inner_join(df_slow, df_replace, by = c("parcel_id", "year"))
+        df_replace <- dplyr::select(df_replace, -parcel_id, -idncrs_lon, -idncrs_lat)#, -lon, -lat
+        df <- inner_join(df_slow, df_replace, by = c("lon", "lat", "year"))#
+
+        df_rapid <- dplyr::select(df_rapid, -parcel_id, -idncrs_lon, -idncrs_lat)#, -lon, -lat
+        pf_df_list[[match(Island, IslandS)]] <- inner_join(df, df_rapid, by = c("lon", "lat", "year"))
         
-        df_rapid <- dplyr::select(df_rapid, -idncrs_lon, -idncrs_lat, -lon, -lat)
-        pf_df_list[[match(Island, IslandS)]] <- inner_join(df, df_rapid, by = c("parcel_id", "year"))
         
       }
       
@@ -711,7 +727,38 @@ travel_timeS <- c(2,4,6)
       
       saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucpfp_panel_dynamics_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
       
-      rm(indo_df, pf_df_list)
+      rm(indo_df, pf_df_list, df_replace, df_rapid, df_slow, df)
       
   }
 }
+# nrow(df_replace) # 1169982 in Sumatra dynammics
+# nrow(df_small) # 1181088 in Sumatra small
+# # while in Kalimantan they all have 434358
+# 434358+1169982
+# 434358+1181088 # this equates nrow(lucpfp) = 1615446
+# 
+# 
+# 1181088 - 1169982
+# nrow(lucpfp)- nrow(lucpfip_dyn) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

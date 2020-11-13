@@ -165,7 +165,9 @@ for(island in c("Sumatra", "Kalimantan")){ #"Papua" does not work with IBS mills
   rm(total_ibs_ca, ibs_ca, ibs_geom)
 
 
-  ## 1. Masking one typical raster
+  ## 1. Preparing data
+  
+  # Masking one typical raster
   # (they are all the same dimensions across the measured outcomes - lucpfip, lucfip, lucfsp, etc.)
   # Probably more efficient as the st_is_within does not need to be executed over all Indonesian cells but only those within the largest catchment_radius.
   parcels_brick_name <- paste0("parcel_lucpfip_",island,"_",parcel_size/1000,"km_total")
@@ -184,14 +186,13 @@ for(island in c("Sumatra", "Kalimantan")){ #"Papua" does not work with IBS mills
   # note the na.rm = TRUE. Due to the mask, this keeps in the df object only the parcel within 80km of a mill at least one year.
   ibs_msk_df <- raster::as.data.frame(parcels_brick, na.rm = TRUE, xy = TRUE, centroids = TRUE)
 
+  # give row names to source and destinations data to retrieve them more surely
   ibs_msk_df <- ibs_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
   ibs_msk_df <- st_as_sf(ibs_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
   ibs_msk_df <- st_transform(ibs_msk_df, crs = 4326)
-  ibs_msk_df$lon <- st_coordinates(ibs_msk_df)[,"X"]
-  ibs_msk_df$lat <- st_coordinates(ibs_msk_df)[,"Y"]
+  ibs_msk_df$lon <- st_coordinates(ibs_msk_df)[,"X"] %>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
+  ibs_msk_df$lat <- st_coordinates(ibs_msk_df)[,"Y"] %>% round(6)
 
-  ## 2. REQUESTING THE OSRM DURATIONS
-  # give row names to source and destinations data to retrieve them more surely
   row.names(ibs_msk_df) <- mutate(ibs_msk_df, lonlat = paste0(lon, lat))$lonlat
   row.names(ibs) <- ibs$firm_id
 
@@ -200,6 +201,8 @@ for(island in c("Sumatra", "Kalimantan")){ #"Papua" does not work with IBS mills
   ibs_msk_df_sp <- as(ibs_msk_df, "Spatial")
   ibs_sp <- as(ibs, "Spatial")
 
+  
+  ## 2. REQUESTING THE OSRM DURATIONS
   # See the notes above on OSRM
   osrmr::run_server(osrm_path = osrm_path, map_name = map_name)
 
@@ -278,8 +281,8 @@ for(island in c("Sumatra", "Kalimantan")){ #"Papua" does not work with IBS mills
   uml_msk_df <- uml_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
   uml_msk_df <- st_as_sf(uml_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
   uml_msk_df <- st_transform(uml_msk_df, crs = 4326)
-  uml_msk_df$lon <- st_coordinates(uml_msk_df)[,"X"]
-  uml_msk_df$lat <- st_coordinates(uml_msk_df)[,"Y"]
+  uml_msk_df$lon <- st_coordinates(uml_msk_df)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
+  uml_msk_df$lat <- st_coordinates(uml_msk_df)[,"Y"]%>% round(6)
   
   ## 2. REQUESTING THE OSRM DURATIONS 
   # give row names to source and destinations data to retrieve them more surely
