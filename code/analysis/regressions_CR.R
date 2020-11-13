@@ -272,7 +272,7 @@ rm(d_50)
 # remaining_forest = TRUE
 # offset = TRUE
 # lag_or_not = "_lag1"
-# controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")
+# controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")#"wa_pct_own_loc_gov_imp",
 # interaction_terms = NULL
 # interacted = "regressors"
 # spatial_control = FALSE
@@ -296,7 +296,7 @@ make_base_reg <- function(island,
                             remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
                             offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                             lag_or_not = "_lag1", # either "_lag1", or  "", should the 
-                            controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # character vectors of names of control variables (don't specify lags in their names)
+                            controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # character vectors of names of control variables (don't specify lags in their names)
                             interaction_terms = NULL, # may be one or several of the controls specified above. 
                             interacted = "regressors",
                             spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
@@ -822,7 +822,7 @@ for(OV in ov_list){
                                        outcome_variable = OV,
                                        dynamics = FALSE,
                                        yoyg = FALSE,
-                                       illegal = "no_ill2",
+                                       illegal = "all",
                                        commo = COMMO,
                                        remaining_forest = FALSE,
                                        offset = FALSE)

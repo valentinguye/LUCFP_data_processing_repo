@@ -332,17 +332,36 @@ for(travel_time in c(6)){ #2,4,
   parcels$wa_prex_cpo_imp2 <- parcels$wa_prex_cpo_imp2/100 
   
   
-  ### LAGS AND LEADS OF A LARGE SET OF VARIABLES 
+  ### Short lags of other variables than prices 
   
-  variables <- c("wa_ffb_price_imp1", "wa_ffb_price_imp2", 
-                 "wa_cpo_price_imp1", "wa_cpo_price_imp2", "wa_prex_cpo_imp1","wa_prex_cpo_imp2",       
-                 #"wa_pko_price_imp1",       "wa_pko_price_imp2",       "wa_prex_pko_imp1",        "wa_prex_pko_imp2",       
+  variables <- c("wa_prex_cpo_imp1","wa_prex_cpo_imp2",       
                  "wa_pct_own_cent_gov_imp", "wa_pct_own_loc_gov_imp",  "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp",     
                  #"wa_concentration_10",     "wa_concentration_30", "wa_concentration_50",     
                  "n_reachable_uml")#"n_reachable_ibs", "n_reachable_ibsuml",   "sample_coverage"
   
   for(voi in variables){
     ## lags
+      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- DataCombine::slide(parcels,
+                                    Var = voi, 
+                                    TimeVar = "year",
+                                    GroupVar = "parcel_id",
+                                    NewVar = paste0(voi,"_lag1"),
+                                    slideBy = -1, 
+                                    keepInvalid = TRUE)
+      parcels <- dplyr::arrange(parcels, parcel_id, year)
+  }
+  
+  #parcels1 <- parcels
+  
+  
+  ### Operations relating contemporaneous to past information - on prices only
+  variables <- c("wa_ffb_price_imp1", "wa_ffb_price_imp2", 
+                 "wa_cpo_price_imp1", "wa_cpo_price_imp2") #,"wa_pko_price_imp1", "wa_pko_price_imp2"
+  
+  for(voi in variables){
+    
+    ## short to long lags
     for(lag in c(1:5)){
       parcels <- dplyr::arrange(parcels, parcel_id, year)
       parcels <- DataCombine::slide(parcels,
@@ -355,7 +374,6 @@ for(travel_time in c(6)){ #2,4,
       parcels <- dplyr::arrange(parcels, parcel_id, year)
       
     }
-    
     # ## leads                               
     # for(lag in c(1:5)){
     #   parcels <- dplyr::arrange(parcels, parcel_id, year)
@@ -368,19 +386,8 @@ for(travel_time in c(6)){ #2,4,
     #                                 keepInvalid = TRUE) 
     #   parcels <- dplyr::arrange(parcels, parcel_id, year)
     # } 
-  }
-  
-  #parcels1 <- parcels
-  
-  
-  ### Operations relating contemporaneous to past information - on prices only
-  variables <- c("wa_ffb_price_imp1", "wa_ffb_price_imp2", 
-                 "wa_cpo_price_imp1", "wa_cpo_price_imp2") #,"wa_pko_price_imp1", "wa_pko_price_imp2"
-  
-  for(voi in variables){
     
     for(py in c(2,3,4)){
-      
       ## Past-year averages (2, 3 and 4 years) - LONG RUN MEASURE - 
       parcels$newv <- rowMeans(x = parcels[,paste0(voi,"_lag",c(1:py))], na.rm = FALSE)
       parcels[is.nan(parcels$newv),"newv"] <- NA
@@ -399,26 +406,26 @@ for(travel_time in c(6)){ #2,4,
       parcels <- dplyr::arrange(parcels, parcel_id, year)
       
       
-      ## and absolute deviation - SHORT RUN MEASURE -
-      parcels <- mutate(parcels,
-                        !!as.symbol(paste0(voi,"_dev_",py,"pya")) := !!as.symbol(paste0(voi)) - 
-                          !!as.symbol(paste0(voi,"_",py,"pya")))
-      # # and relative deviation
+      # ## and absolute deviation - SHORT RUN MEASURE -
       # parcels <- mutate(parcels,
-      #                   !!as.symbol(paste0(voi,"_rdev_",py,"pya")) := (!!as.symbol(paste0(voi)) - 
-      #                                                               !!as.symbol(paste0(voi,"_",py,"pya"))) /
-      #  
-      
-      # Lag these deviations by one year
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = paste0(voi,"_dev_",py,"pya"), 
-                                    TimeVar = "year",
-                                    GroupVar = "parcel_id",
-                                    NewVar = paste0(voi,"_dev_",py,"pya_lag1"),
-                                    slideBy = -1, 
-                                    keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      #                   !!as.symbol(paste0(voi,"_dev_",py,"pya")) := !!as.symbol(paste0(voi)) - 
+      #                     !!as.symbol(paste0(voi,"_",py,"pya")))
+      # # # and relative deviation
+      # # parcels <- mutate(parcels,
+      # #                   !!as.symbol(paste0(voi,"_rdev_",py,"pya")) := (!!as.symbol(paste0(voi)) - 
+      # #                                                               !!as.symbol(paste0(voi,"_",py,"pya"))) /
+      # #  
+      # 
+      # # Lag these deviations by one year
+      # parcels <- dplyr::arrange(parcels, parcel_id, year)
+      # parcels <- DataCombine::slide(parcels,
+      #                               Var = paste0(voi,"_dev_",py,"pya"), 
+      #                               TimeVar = "year",
+      #                               GroupVar = "parcel_id",
+      #                               NewVar = paste0(voi,"_dev_",py,"pya_lag1"),
+      #                               slideBy = -1, 
+      #                               keepInvalid = TRUE)  
+      # parcels <- dplyr::arrange(parcels, parcel_id, year)
       
       ## and mean of contemporaneous and pya - OVERALL MEASURE - 
       
@@ -674,8 +681,9 @@ for(travel_time in c(2,4)){ #,6
   parcels_cs <- st_drop_geometry(parcels_cs)
   
   parcels <- merge(parcels, parcels_cs[,c("parcel_id", "llu")], by = "parcel_id")
+  rm(parcels_cs)
   
-  unique(parcels$llu)
+  #unique(parcels$llu)
   ### ILLEGAL LUCFP 
   # one possible link to shed light on accronyms http://documents1.worldbank.org/curated/pt/561471468197386518/pdf/103486-WP-PUBLIC-DOC-107.pdf
   
@@ -695,46 +703,46 @@ for(travel_time in c(2,4)){ #,6
   
   
   ### TIME SERIES & IV
-  parcels <- merge(parcels, ts, by = "year")
-  
-  # Make the SHIFT SHARE INSTRUMENTAL VARIABLES 
-  for(IMP in c(1,2)){
-    for(SP in c(1:6)){
-      parcels[,paste0("iv",SP,"_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_lag1")]*parcels[,paste0("spread",SP)] 
-    }
-  }
-  rm(IMP, SP)
-  # lag the iv variables
-  ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
-  
-  for(IV in ivS){
-    parcels <- dplyr::arrange(parcels, parcel_id, year)
-    parcels <- DataCombine::slide(parcels,
-                                  Var = IV, 
-                                  TimeVar = "year",
-                                  GroupVar = "parcel_id",
-                                  NewVar = paste0(IV,"_lag1"),
-                                  slideBy = -1, 
-                                  keepInvalid = TRUE)  
-    parcels <- dplyr::arrange(parcels, parcel_id, year)
-  }
-  rm(IV, ivS)
-  # View(parcels[!is.na(parcels$wa_prex_cpo_imp1_lag1) &
-  #                parcels$year>2007 &
-  #                parcels$wa_prex_cpo_imp1_lag1!=0 ,c("parcel_id" ,"year", paste0("wa_prex_cpo_imp",c(1,2),"_lag1"),
-  #                                                      paste0("spread",c(1:4)),
-  #                                                      paste0("iv",c(1:4),"_imp1"),
-  #                                                      paste0("iv",c(1:4),"_imp2"), 
-  #                                                      paste0("iv",c(1:4),"_imp1_lag1"))])
-  
-  
-  
+  # parcels <- merge(parcels, ts, by = "year")
+  # 
+  # # Make the SHIFT SHARE INSTRUMENTAL VARIABLES 
+  # for(IMP in c(1,2)){
+  #   for(SP in c(1:6)){
+  #     parcels[,paste0("iv",SP,"_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_lag1")]*parcels[,paste0("spread",SP)] 
+  #   }
+  # }
+  # rm(IMP, SP)
+  # # lag the iv variables
+  # ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
+  # 
+  # for(IV in ivS){
+  #   parcels <- dplyr::arrange(parcels, parcel_id, year)
+  #   parcels <- DataCombine::slide(parcels,
+  #                                 Var = IV, 
+  #                                 TimeVar = "year",
+  #                                 GroupVar = "parcel_id",
+  #                                 NewVar = paste0(IV,"_lag1"),
+  #                                 slideBy = -1, 
+  #                                 keepInvalid = TRUE)  
+  #   parcels <- dplyr::arrange(parcels, parcel_id, year)
+  # }
+  # rm(IV, ivS)
+  # # View(parcels[!is.na(parcels$wa_prex_cpo_imp1_lag1) &
+  # #                parcels$year>2007 &
+  # #                parcels$wa_prex_cpo_imp1_lag1!=0 ,c("parcel_id" ,"year", paste0("wa_prex_cpo_imp",c(1,2),"_lag1"),
+  # #                                                      paste0("spread",c(1:4)),
+  # #                                                      paste0("iv",c(1:4),"_imp1"),
+  # #                                                      paste0("iv",c(1:4),"_imp2"), 
+  # #                                                      paste0("iv",c(1:4),"_imp1_lag1"))])
+  # 
+  # 
+  # 
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
                                     parcel_size/1000,"km_",
                                     travel_time,"h_CA.rds")))
   
-  rm(parcels, parcels_cs)
+  rm(parcels)
 }
 
 rm(cns, llu, rspo, ts)

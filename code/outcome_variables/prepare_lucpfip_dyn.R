@@ -864,23 +864,23 @@ for(sample in sampleS){
     indo_df <- bind_rows(df_list)
     
     
-    ### Add columns of converted pixel counts to hectares.
-    pixel_area <- (27.8*27.6)/(1e4)
-    # replace
-    indo_df <- mutate(indo_df, lucpfip_replace_ha = lucpfip_replace_pixelcount*pixel_area) 
-    # rapid
-    indo_df <- mutate(indo_df, lucpfip_rapid_ha = lucpfip_rapid_pixelcount*pixel_area) 
-    # slow
-    indo_df <- mutate(indo_df, lucpfip_slow_ha = lucpfip_slow_pixelcount*pixel_area) 
-    
-    indo_df <- dplyr::select(indo_df, parcel_id, year, 
-                             lucpfip_replace_ha,
-                             lucpfip_rapid_ha, 
-                             lucpfip_slow_ha,
-                             lucpfip_replace_pixelcount,
-                             lucpfip_rapid_pixelcount, 
-                             lucpfip_slow_pixelcount,
-                             everything())
+    # ### Add columns of converted pixel counts to hectares.
+    # pixel_area <- (27.8*27.6)/(1e4)
+    # # replace
+    # indo_df <- mutate(indo_df, lucpfip_replace_ha = lucpfip_replace_pixelcount*pixel_area) 
+    # # rapid
+    # indo_df <- mutate(indo_df, lucpfip_rapid_ha = lucpfip_rapid_pixelcount*pixel_area) 
+    # # slow
+    # indo_df <- mutate(indo_df, lucpfip_slow_ha = lucpfip_slow_pixelcount*pixel_area) 
+    # 
+    # indo_df <- dplyr::select(indo_df, parcel_id, year, 
+    #                          lucpfip_replace_ha,
+    #                          lucpfip_rapid_ha, 
+    #                          lucpfip_slow_ha,
+    #                          lucpfip_replace_pixelcount,
+    #                          lucpfip_rapid_pixelcount, 
+    #                          lucpfip_slow_pixelcount,
+    #                          everything())
     
     
     saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/lucpfip_panel_dynamics_",PS/1000,"km_",CR/1000,"km_",sample,"_CR.rds")))

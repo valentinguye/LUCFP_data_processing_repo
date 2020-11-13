@@ -199,9 +199,9 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
         ibs_msk_TT_long_df <- dplyr::arrange(ibs_msk_TT_long_df, parcel_id, year)
         
         # Add columns of converted pixel counts to hectares.
-        ibs_msk_TT_long_df$inha <- ibs_msk_TT_long_df[,grepl("pixelcount",colnames(ibs_msk_TT_long_df))]*(27.8*27.6)/(1e4)
-        
-        names(ibs_msk_TT_long_df)[names(ibs_msk_TT_long_df)=="inha"] <- paste0(lucf,size,"p_ha_",forest)
+        # ibs_msk_TT_long_df$inha <- ibs_msk_TT_long_df[,grepl("pixelcount",colnames(ibs_msk_TT_long_df))]*(27.8*27.6)/(1e4)
+        # 
+        # names(ibs_msk_TT_long_df)[names(ibs_msk_TT_long_df)=="inha"] <- paste0(lucf,size,"p_ha_",forest)
         
         
         saveRDS(ibs_msk_TT_long_df,
@@ -313,9 +313,9 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
         ibs_msk_TT_long_df <- dplyr::arrange(ibs_msk_TT_long_df, parcel_id, year)
         
         # Add columns of converted pixel counts to hectares.
-        ibs_msk_TT_long_df$inha <- ibs_msk_TT_long_df[,grepl("pixelcount",colnames(ibs_msk_TT_long_df))]*(27.8*27.6)/(1e4)
-        
-        names(ibs_msk_TT_long_df)[names(ibs_msk_TT_long_df)=="inha"] <- paste0("lucpfip_",dyna,"_ha")
+        # ibs_msk_TT_long_df$inha <- ibs_msk_TT_long_df[,grepl("pixelcount",colnames(ibs_msk_TT_long_df))]*(27.8*27.6)/(1e4)
+        # 
+        # names(ibs_msk_TT_long_df)[names(ibs_msk_TT_long_df)=="inha"] <- paste0("lucpfip_",dyna,"_ha")
         
         
         saveRDS(ibs_msk_TT_long_df,
@@ -469,9 +469,9 @@ to_panel_within_UML_CA <- function(island, parcel_size){
         uml_msk_TT_long_df <- dplyr::arrange(uml_msk_TT_long_df, parcel_id, year)
         
         # Add columns of converted pixel counts to hectares.
-        uml_msk_TT_long_df$inha <- uml_msk_TT_long_df[,grepl("pixelcount",colnames(uml_msk_TT_long_df))]*(27.8*27.6)/(1e4)
-        
-        names(uml_msk_TT_long_df)[names(uml_msk_TT_long_df)=="inha"] <- paste0(lucf,size,"p_ha_",forest)
+        # uml_msk_TT_long_df$inha <- uml_msk_TT_long_df[,grepl("pixelcount",colnames(uml_msk_TT_long_df))]*(27.8*27.6)/(1e4)
+        # 
+        # names(uml_msk_TT_long_df)[names(uml_msk_TT_long_df)=="inha"] <- paste0(lucf,size,"p_ha_",forest)
         
         
         saveRDS(uml_msk_TT_long_df,
@@ -725,7 +725,7 @@ travel_timeS <- c(2,4,6)
       indo_df <- dplyr::select(indo_df, parcel_id, year,
                                everything())
       
-      saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucpfp_panel_dynamics_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
+      saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucpfip_panel_dynamics_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
       
       rm(indo_df, pf_df_list, df_replace, df_rapid, df_slow, df)
       

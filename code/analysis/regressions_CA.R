@@ -252,28 +252,29 @@ rm(d_CA4)
 
 # Prefered specifications are passed as default arguments. 
 # Currently, the returned object is a fixest object, of *ONE* regression.  
-# outcome_variable = "lucpfip_pixelcount_total"
-# island = "Sumatra"
-# alt_cr = FALSE
-# commo = c("ffb", "cpo")
-# x_pya = 3
-# dynamics = TRUE
-# log_prices = TRUE
-# yoyg = FALSE
-# short_run = "full"
-# imp = 1
-# distribution = "quasipoisson"
-# fe = "parcel_id + district_year"
-# remaining_forest = TRUE
-# offset = TRUE
-# lag_or_not = "_lag1"
-# controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")
-# interaction_terms = NULL
-# interacted = "regressors"
-# spatial_control = FALSE
-# pya_ov = FALSE
-# illegal = "all"
-# weights = FALSE
+island = "Kalimantan"
+outcome_variable = "lucpfip_rapid_pixelcount"
+all_producers = FALSE
+alt_ca = TRUE
+commo = c("cpo")#"ffb", 
+x_pya = 3
+dynamics = FALSE
+log_prices = TRUE
+yoyg = FALSE
+short_run = "full"
+imp = 1
+distribution = "quasipoisson"
+fe = "parcel_id + district_year"
+lag_or_not = "_lag1"
+controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")
+remaining_forest = FALSE
+offset = TRUE
+interaction_terms = NULL
+interacted = "regressors"
+spatial_control = FALSE
+pya_ov = FALSE
+illegal = "all"
+weights = FALSE
 
 
 make_base_reg <- function(island,
@@ -289,10 +290,10 @@ make_base_reg <- function(island,
                           imp = 1, # either 1 or 2. 1 selects the data cleaned with the stronger imputations. 
                           distribution = "quasipoisson", # either "poisson", "quasipoisson", or "negbin"
                           fe = "parcel_id + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
-                          offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                           lag_or_not = "_lag1", # either "_lag1", or  "", should the 
                           controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # character vectors of names of control variables (don't specify lags in their names)
                           remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
+                          offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                           interaction_terms = NULL, # may be one or several of the controls specified above. 
                           interacted = "regressors",
                           spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
@@ -413,29 +414,33 @@ make_base_reg <- function(island,
     interaction_vars <- sapply(interaction_terms, FUN = make_int_term)
   }else{interacted <- NULL}
   
+
+    
   ### DATA FOR REGRESSIONS
   
   # Catchment area
-  if(island == "Sumatra" & alt_cr == FALSE){
+  if(island == "Sumatra" & alt_ca == FALSE){
     d <- d_CA2_suma
   }
-  if(island == "Sumatra" & alt_cr == TRUE){
+  if(island == "Sumatra" & alt_ca == TRUE){
     d <- d_CA4_suma
   }
-  if(island == "Kalimantan" & alt_cr == FALSE){
+  if(island == "Kalimantan" & alt_ca == FALSE){
     d <- d_CA4_kali
   }
-  if(island == "Kalimantan" & alt_cr == TRUE){
+  if(island == "Kalimantan" & alt_ca == TRUE){
     d <- d_CA2_kali
   }
-  if(island == "all" & alt_cr == FALSE){
+  if(island == "all" & alt_ca == FALSE){
     d <- rbind(d_CA2_suma, d_CA4_kali, d_CA4_papu)
   }
-  if(island == "all" & alt_cr == TRUE){
+  if(island == "all" & alt_ca == TRUE){
     d <- rbind(d_CA4_suma, d_CA2_kali, d_CA2_papu)
   }
   
-  # add pixel counts of lUcfp from industrial and from small and medium sized plantations. 
+  # add pixel counts of lucfp from industrial and from small and medium sized plantations. 
+  # note that for some observations, this is a sum of 0 and a positive term, and for some others it's a sum of two positive terms. 
+  # In the latter case, this grounds on the assumption that the industrial and the S&M plantation maps do not overlap. 
   if(all_producers & grepl("lucp", outcome_variable)){
     d$lucpfp_pixelcount <- d$lucpfip_pixelcount_total + d$lucpfsmp_pixelcount_total
     outcome_variable <- "lucpfp_pixelcount"
@@ -444,6 +449,24 @@ make_base_reg <- function(island,
     d$lucfp_pixelcount <- d$lucfip_pixelcount_total + d$lucfsmp_pixelcount_total
     outcome_variable <- "lucfp_pixelcount"
   }
+  
+  ## group all the variables necessary in the regression
+  # important to do that after outcome_variable, regressors controls etc. have been (re)defined. 
+  used_vars <- c(outcome_variable, regressors, interacted, controls,
+                 "parcel_id", "year", "lat", "lon", "district", "province", "island", "district_year", "province_year")
+                 #"n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
+                 #"remain_f30th_pixelcount","remain_pf_pixelcount"
+  
+  # if we use an offset (for now only remaining forest possible) then it should be in the necessary variables, but not among the controls. 
+  if(offset){
+    if(grepl("lucpf", outcome_variable)){
+      used_vars <- c(used_vars, "remain_pf_pixelcount")
+    }
+    if(grepl("lucf", outcome_variable)){
+      used_vars <- c(used_vars, "remain_f30th_pixelcount")
+    }
+  } 
+  
   
   ## Keep observations that: 
   
@@ -515,17 +538,15 @@ make_base_reg <- function(island,
     d <- d[d$illegal2 == TRUE, ]
   }
   
-  # - have no NA on any of the variables used (otherwise they get removed by {fixest})
-  used_vars <- c(outcome_variable, regressors, interacted, controls,
-                 "parcel_id", "year", "lat", "lon", "district", "province", "island", "district_year", "province_year",
-                 "n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
-                 #"remain_f30th_pixelcount",
-                 "remain_pf_pixelcount")
-  
-  filter_vec <- base::rowSums(!is.na(d[,used_vars]))
+  # - have no NA nor INF on any of the variables used (otherwise they get removed by {fixest})
+  usable <- lapply(used_vars, FUN = function(var){is.finite(d[,var]) | is.character(d[,var])})
+  names(usable) <- used_vars            
+  usable <- bind_cols(usable)
+  filter_vec <- base::rowSums(usable)
   filter_vec <- filter_vec == length(used_vars)
   d_nona <- d[filter_vec, c(used_vars)]
   if(anyNA(d_nona)){stop()}
+  rm(filter_vec, usable)
   
   # - sometimes there are a couple obs. that have 0 ibs reachable despite being in the sample 
   # probably due to some small distance calculation difference between this variable computation and wa_at_parcels.R script. 
@@ -668,12 +689,16 @@ etable(res_list_dst,
        #coefstat = "confint",
        subtitles = c("Sumatra", "Kalimantan","Sumatra", "Kalimantan"))
 
+# preview in R 
+etable(reg_res, se = "cluster")
+
 # In LateX
 # title
 
 #table_title_dyn <- paste0("LUCFP semi-elasticities to short and medium-run price signals") 
 
 table_title_dyn <- paste0("LUCFP elasticities to short and medium-run price signals") 
+
 
 #table_title_dyn <- paste0("LUCFP semi-elasticities to short and medium-run y-o-y growth rates of price signals") 
 
@@ -1209,7 +1234,7 @@ schart <- function(data, labels=NA, highlight=NA, n=1, index.est=1, index.se=2, 
 ## We now produce the "data" argument for the function schart, i.e. we run one regression, and bind in a dataframe 
 # the coefficients, the SE, and indicator variables for the correponding specifications. 
 make_spec_chart_df <- function(island,
-                               alt_cr = FALSE, # logical, if TRUE, Sumatra's catchment radius is 50000 meters, and Kalimantan's is 30000. 
+                               alt_ca = FALSE, # logical, if TRUE, Sumatra's catchment radius is 50000 meters, and Kalimantan's is 30000. 
                                outcome_variable = "lucpfip_pixelcount_total", # LHS. One of "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount_total"p
                                commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo")), commodities the price signals of which should be included in the RHS
                                log_prices = TRUE, # Logical, should the price variables be included as their logarithms instead of levels. No effect if yoyg is TRUE.    
@@ -1264,8 +1289,8 @@ make_spec_chart_df <- function(island,
     "offset" = FALSE,
     "larger_forest_def" = FALSE,
     # sample
-    "CR_30km" = FALSE,
-    "CR_50km" = FALSE,
+    "CA_2h" = FALSE,
+    "CA_4h" = FALSE,
     "imp1" = FALSE, 
     # distribution assumptions
     "poisson" = FALSE,
@@ -1300,21 +1325,21 @@ make_spec_chart_df <- function(island,
   if(grepl("0th", outcome_variable)){ind_var[,"larger_forest_def"] <- TRUE}
   
   # sample  
-  # change the CR indicator variable to TRUE for the corresponding CR
+  # change the CA indicator variable to TRUE for the corresponding CA
   # Catchment radius
   if(island == "Sumatra"){
-    catchment_radius <- 3e4
+    travel_time <- 2
   }else{
-    catchment_radius <- 5e4}
+    travel_time <- 4}
   
-  if(alt_cr){  
+  if(alt_ca){  
     if(island == "Sumatra"){
-      catchment_radius <- 5e4
+      travel_time <- 4
     }else{
-      catchment_radius <- 3e4
+      travel_time <- 2
     }
   }
-  ind_var[,grepl(paste0("CR_", catchment_radius/1000,"km"), colnames(ind_var))] <- TRUE
+  ind_var[,grepl(paste0("CA_", travel_time,"h"), colnames(ind_var))] <- TRUE
   
   # set the indicator variable for the data imputation 
   if(imp == 1){ind_var[,"imp1"] <- TRUE}
@@ -1405,7 +1430,7 @@ for(ISL in c("Sumatra", "Kalimantan")){
         reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
                                                          outcome_variable = OV,
                                                          offset = OFF,
-                                                         alt_cr = TRUE,
+                                                         alt_ca = TRUE,
                                                          weights = WGH,
                                                          variable = VAR)
         i <- i+1
@@ -1567,7 +1592,7 @@ rownames(reg_stats_indvar) <- seq(1, nrow(reg_stats_indvar))
 # find position of model to highlight in original data frame
 a <- reg_stats_indvar
 a <- a[a$imp1 &
-         #a$CR_30km &  
+         #a$CA_2h &  
          a$quasipoisson &
          a$pya_4 &
          a$lag_or_not &
@@ -1581,9 +1606,9 @@ a <- a[a$imp1 &
          a$oneway_cluster, ] 
 
 if(ISL == "Sumatra"){
-  model_idx <- a[a$CR_30km, ] %>% rownames() 
+  model_idx <- a[a$CA_2h, ] %>% rownames() 
 }else{  
-  model_idx <- a[a$CR_50km, ] %>% rownames() 
+  model_idx <- a[a$CA_4h, ] %>% rownames() 
 }
 
 # this is our baseline model(s)

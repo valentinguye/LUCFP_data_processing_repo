@@ -714,7 +714,7 @@ for(sample in sampleS){
     
     # For each Island, join columns of plantation type variable 
     df_list <- list()
-    IslandS <- c("Sumatra", "Kalimantan", "Papua")
+    IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
     for(Island in IslandS){
       
       df_small   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsp_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
@@ -730,18 +730,18 @@ for(sample in sampleS){
     
     
     ### Add columns of converted pixel counts to hectares.
-    pixel_area <- (27.8*27.6)/(1e4)
-    # small-sized plantations
-    indo_df <- mutate(indo_df, lucpfsp_ha_total = lucpfsp_pixelcount_total*pixel_area) 
-    # medium-sized plantations
-    indo_df <- mutate(indo_df, lucpfmp_ha_total = lucpfmp_pixelcount_total*pixel_area) 
-    
-    indo_df <- dplyr::select(indo_df, parcel_id, year, 
-                             lucpfsp_ha_total,
-                             lucpfmp_ha_total, 
-                             lucpfsp_pixelcount_total,
-                             lucpfmp_pixelcount_total,
-                             everything())
+    # pixel_area <- (27.8*27.6)/(1e4)
+    # # small-sized plantations
+    # indo_df <- mutate(indo_df, lucpfsp_ha_total = lucpfsp_pixelcount_total*pixel_area) 
+    # # medium-sized plantations
+    # indo_df <- mutate(indo_df, lucpfmp_ha_total = lucpfmp_pixelcount_total*pixel_area) 
+    # 
+    # indo_df <- dplyr::select(indo_df, parcel_id, year, 
+    #                          lucpfsp_ha_total,
+    #                          lucpfmp_ha_total, 
+    #                          lucpfsp_pixelcount_total,
+    #                          lucpfmp_pixelcount_total,
+    #                          everything())
     
     
     saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",PS/1000,"km_",CR/1000,"km_",sample,"_CR.rds")))

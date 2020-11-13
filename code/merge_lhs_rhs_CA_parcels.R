@@ -64,7 +64,7 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   #                                    parcel_size/1000,"km_",travel_time,"h_IBS_CA.rds")))  
   
   # This one has outcomes only for industrial plantations, but with dynamics: replacement, rapid and slow (the two latter on total primary forest)
-  lucpfip_dyn <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfp_panel_dynamics_",
+  lucpfip_dyn <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_dynamics_",
                                           parcel_size/1000,"km_",travel_time,"h_IBS_CA.rds")))
   
   
@@ -91,7 +91,7 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   
   ## make variable that counts lucfp events on both small and medium sized plantations 
   LHS$lucpfsmp_pixelcount_total <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
-  LHS$lucpfsmp_ha_total <- LHS$lucpfsp_ha_total + LHS$lucpfmp_ha_total
+  # LHS$lucpfsmp_ha_total <- LHS$lucpfsp_ha_total + LHS$lucpfmp_ha_total
   
   # LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
   # LHS$lucfsmp_ha_30th <- LHS$lucfsp_ha_30th + LHS$lucfmp_ha_30th
