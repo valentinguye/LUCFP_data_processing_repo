@@ -148,7 +148,7 @@ district_sf_prj <- st_transform(district_sf, crs = indonesian_crs)
 
 
 #### ADD N_REACHABLE_UML AND GEOGRAPHIC VARIABLES AND THEIR TRENDS and QUEEN NEIGHBORS #### 
-  
+
 # this needs to be done at the island level, because it involves OSRM durations, that are relevant to compute at this level. 
 for(travel_time in c(2,4,6)){
   
@@ -158,18 +158,18 @@ for(travel_time in c(2,4,6)){
   
   for(island in c("Sumatra", "Kalimantan")){
     
-  # read the parcel panel as outputted from wa_at_parcels_durations
-  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
-                                      island,"_",
-                                      parcel_size/1000,"km_",
-                                      travel_time,"h_CA.rds")))
-  
-  parcels$n_reachable_uml <- rep(NA, nrow(parcels))
-  
-  # loop over years to get the annual number of reachable uml mills
-  years <- seq(from = 1998, to = 2015, by = 1)
-  for(t in 1:length(years)){
-  
+    # read the parcel panel as outputted from wa_at_parcels_durations
+    parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
+                                        island,"_",
+                                        parcel_size/1000,"km_",
+                                        travel_time,"h_CA.rds")))
+    
+    parcels$n_reachable_uml <- rep(NA, nrow(parcels))
+    
+    # loop over years to get the annual number of reachable uml mills
+    years <- seq(from = 1998, to = 2015, by = 1)
+    for(t in 1:length(years)){
+      
       # take the annual cross section of it (parcels' coordinates are constant over time)
       parcels_centro <- parcels[parcels$year == years[t], c("parcel_id", "year", "lat", "lon")]
       # and of the uml data set (only useful for the checks)
@@ -202,7 +202,7 @@ for(travel_time in c(2,4,6)){
       
       # # additional check:
       row.names(parcels_centro) <- parcels_centro$lonlat
-    
+      
       parcels_centro <- dplyr::arrange(parcels_centro, parcel_id)
       dur_mat <- dplyr::arrange(dur_mat, parcel_id)
       
@@ -222,7 +222,7 @@ for(travel_time in c(2,4,6)){
       
       # count reachable mills from each parcel  
       parcels_centro$n_reachable_uml <- sapply(1:nrow(parcels_centro), FUN = function(i){sum(dur_mat_log[i,])})
-    
+      
       # rearrange the panel, so that within cross sections, it's ordred by parcel_id. 
       #parcels <- dplyr::arrange(parcels, year, parcel_id)
       
@@ -232,19 +232,19 @@ for(travel_time in c(2,4,6)){
                                                                                                by = c("parcel_id", "year"))
       rm(parcels_centro, uml_cs, dur_mat, dur_mat_log)
     }# closes loop over years
-
-  # make the island variable now
-  parcels$island <- island
-  
-  # store these parcels of a specific island in the dedicated list
-  isl_parcel_list[[match(island, c("Sumatra", "Kalimantan"))]] <- parcels
-
-  rm(parcels)
+    
+    # make the island variable now
+    parcels$island <- island
+    
+    # store these parcels of a specific island in the dedicated list
+    isl_parcel_list[[match(island, c("Sumatra", "Kalimantan"))]] <- parcels
+    
+    rm(parcels)
   }# closes loop over islands.
   
   # make the object of all parcels across the two islands
   parcels <- bind_rows(isl_parcel_list)
-    
+  
   
   
   
@@ -290,10 +290,10 @@ for(travel_time in c(2,4,6)){
   ### NEIGHBORS VARIABLE
   # create a grouping variable at the cross section (9 is to recall the the group id includes the 8 neighbors + the central grid cell.)
   parcels_cs <- parcels[!duplicated(parcels$parcel_id),c("parcel_id", "year", "idncrs_lat", "idncrs_lon")]
-
+  
   # spatial
   parcels_cs <- st_as_sf(parcels_cs, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
-
+  
   # identify neighbors
   # this definition of neighbors includes the 8 closest, surrounding, grid cells.
   parcels_buf <- st_buffer(parcels_cs, dist = parcel_size - 10)
@@ -321,7 +321,7 @@ for(travel_time in c(2,4,6)){
 
 
 #### TIME DYNAMICS VARIABLES ####
-for(travel_time in c(6)){ #2,4,
+for(travel_time in c(4,6)){ #2,4,
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
                                       parcel_size/1000,"km_",
                                       travel_time,"h_CA.rds")))
@@ -341,15 +341,15 @@ for(travel_time in c(6)){ #2,4,
   
   for(voi in variables){
     ## lags
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = voi, 
-                                    TimeVar = "year",
-                                    GroupVar = "parcel_id",
-                                    NewVar = paste0(voi,"_lag1"),
-                                    slideBy = -1, 
-                                    keepInvalid = TRUE)
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+    parcels <- dplyr::arrange(parcels, parcel_id, year)
+    parcels <- DataCombine::slide(parcels,
+                                  Var = voi, 
+                                  TimeVar = "year",
+                                  GroupVar = "parcel_id",
+                                  NewVar = paste0(voi,"_lag1"),
+                                  slideBy = -1, 
+                                  keepInvalid = TRUE)
+    parcels <- dplyr::arrange(parcels, parcel_id, year)
   }
   
   #parcels1 <- parcels
@@ -559,69 +559,72 @@ for(travel_time in c(6)){ #2,4,
 
 
 ##### ADD RSPO, CONCESSIONS, LEGAL LAND USE, & TIME SERIES - IV ##### 
-### RSPO
-rspo <- st_read("input_data/RSPO_supply_bases/RSPO-certified_oil_palm_supply_bases_in_Indonesia.shp")
-rspo <- st_transform(rspo, crs = indonesian_crs)
-# set up a year variable $
-# we assume that the year of probable behavior change is the year after the date of the icletdate variable
-# BUT THIS MAY CHANGE 
-rspo$year <- sub(pattern = ".*, ", 
-                 replacement = "", 
-                 x = rspo$icletdate)
-rspo$year[rspo$year=="no letter"] <- "2015"
-rspo$year <- rspo$year %>% as.integer()
-rspo$year <- rspo$year +1
-# min(rspo$year)
-# summary(rspo$year)
-# rspo$icdate
-# rspo$icletdate
-
-### OIL PALM CONCESSIONS
-cns <- st_read(file.path("input_data/oil_palm_concessions"))
-cns <- st_transform(cns, crs = indonesian_crs)
-
-### LEGAL LAND USE 
-llu <- st_read(file.path("input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp"))
-llu <- st_transform(llu, crs = indonesian_crs)
-unique(llu$Fungsi)
-names(llu)[names(llu) == "Fungsi"] <- "llu"
-
-# restrict llu to provinces of interest
-llu <- llu[llu$Province == "Sumatra Utara" |
-             llu$Province == "Riau" |
-             llu$Province == "Sumatra Selantan" |
-             #llu$Province == "Papua Barat" |
-             llu$Province == "Kalimantan Timur" |
-             llu$Province == "Kalimantan Selatan" |
-             llu$Province == "Kalimantan Tengah" |
-             llu$Province == "Kalimantan Barat" |
-             llu$Province == "Bengkulu" |
-             llu$Province == "Lampung" |
-             llu$Province == "Jambi" |
-             llu$Province == "Bangka Belitung" |
-             llu$Province == "Kepuluan Riau" |
-             llu$Province == "Sumatra Barat" |
-             llu$Province == "Aceh", ]
 
 
-### TIME SERIES 
-ts <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
-ts <- dplyr::select(ts, year, 
-                    taxeffectiverate,
-                    ref_int_cpo_price,
-                    cif_rtdm_cpo,
-                    dom_blwn_cpo,
-                    fob_blwn_cpo,
-                    spread_int_dom_paspi,
-                    rho,
-                    dom_blwn_pko,
-                    cif_rtdm_pko,
-                    spread1, spread2, spread3, spread4, spread5, spread6)
-# we only need the time series
-ts <- ts[!duplicated(ts$year),]
-
-
-for(travel_time in c(2,4)){ #,6
+for(travel_time in c(2, 4)){ #6 is too heavy for now
+  # load data in the loop, not time efficient but here the constraint is rather the memory so we want to be able to remove objects asap
+  ### RSPO
+  rspo <- st_read("input_data/RSPO_supply_bases/RSPO-certified_oil_palm_supply_bases_in_Indonesia.shp")
+  rspo <- st_transform(rspo, crs = indonesian_crs)
+  # set up a year variable $
+  # we assume that the year of probable behavior change is the year after the date of the icletdate variable
+  # BUT THIS MAY CHANGE 
+  rspo$year <- sub(pattern = ".*, ", 
+                   replacement = "", 
+                   x = rspo$icletdate)
+  rspo$year[rspo$year=="no letter"] <- "2015"
+  rspo$year <- rspo$year %>% as.integer()
+  rspo$year <- rspo$year +1
+  # min(rspo$year)
+  # summary(rspo$year)
+  # rspo$icdate
+  # rspo$icletdate
+  
+  ### OIL PALM CONCESSIONS
+  cns <- st_read(file.path("input_data/oil_palm_concessions"))
+  cns <- st_transform(cns, crs = indonesian_crs)
+  
+  ### LEGAL LAND USE 
+  llu <- st_read(file.path("input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp"))
+  llu <- st_transform(llu, crs = indonesian_crs)
+  unique(llu$Fungsi)
+  names(llu)[names(llu) == "Fungsi"] <- "llu"
+  
+  # restrict llu to provinces of interest
+  llu <- llu[llu$Province == "Sumatra Utara" |
+               llu$Province == "Riau" |
+               llu$Province == "Sumatra Selantan" |
+               #llu$Province == "Papua Barat" |
+               llu$Province == "Kalimantan Timur" |
+               llu$Province == "Kalimantan Selatan" |
+               llu$Province == "Kalimantan Tengah" |
+               llu$Province == "Kalimantan Barat" |
+               llu$Province == "Bengkulu" |
+               llu$Province == "Lampung" |
+               llu$Province == "Jambi" |
+               llu$Province == "Bangka Belitung" |
+               llu$Province == "Kepuluan Riau" |
+               llu$Province == "Sumatra Barat" |
+               llu$Province == "Aceh", ]
+  
+  
+  ### TIME SERIES 
+  ts <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
+  ts <- dplyr::select(ts, year, 
+                      taxeffectiverate,
+                      ref_int_cpo_price,
+                      cif_rtdm_cpo,
+                      dom_blwn_cpo,
+                      fob_blwn_cpo,
+                      spread_int_dom_paspi,
+                      rho,
+                      dom_blwn_pko,
+                      cif_rtdm_pko,
+                      spread1, spread2, spread3, spread4, spread5, spread6)
+  # we only need the time series
+  ts <- ts[!duplicated(ts$year),]
+  
+  
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
                                       parcel_size/1000,"km_",
                                       travel_time,"h_CA.rds")))
@@ -643,6 +646,7 @@ for(travel_time in c(2,4)){ #,6
     
     rm(parcels_cs, rspo_cs, sgbp)
   }
+  rm(rspo)
   
   ### OIL PALM CONCESSIONS
   
@@ -656,8 +660,8 @@ for(travel_time in c(2,4)){ #,6
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- merge(parcels, parcels_cs[,c("parcel_id", "concession")], by = "parcel_id")
-  
+  parcels <- left_join(parcels, parcels_cs[,c("parcel_id", "concession")], by = "parcel_id")
+  rm(cns, parcels_cs)
   # note that some parcels fall within more than one concession record. There may be several reasons for concession overlaps 
   # like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
   # concession record. 
@@ -680,7 +684,7 @@ for(travel_time in c(2,4)){ #,6
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- merge(parcels, parcels_cs[,c("parcel_id", "llu")], by = "parcel_id")
+  parcels <- left_join(parcels, parcels_cs[,c("parcel_id", "llu")], by = "parcel_id")
   rm(parcels_cs)
   
   #unique(parcels$llu)
@@ -696,7 +700,7 @@ for(travel_time in c(2,4)){ #,6
                                                         llu == "HP" |
                                                         llu == "HPT" |
                                                         llu == "HL")))
-  
+  rm(llu)
   # yields many missing in illegal because many grid cells are within a mising land use legal classification
   # parcels[!duplicated(parcels$parcel_id) & !is.na(parcels$llu), c("parcel_id", "concession", "llu", "illegal1", "illegal2")]
   
@@ -736,7 +740,7 @@ for(travel_time in c(2,4)){ #,6
   # #                                                      paste0("iv",c(1:4),"_imp1_lag1"))])
   # 
   # 
-  # 
+  # rm(ts)
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
                                     parcel_size/1000,"km_",
@@ -744,7 +748,4 @@ for(travel_time in c(2,4)){ #,6
   
   rm(parcels)
 }
-
-rm(cns, llu, rspo, ts)
-
 

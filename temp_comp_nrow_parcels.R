@@ -114,7 +114,7 @@ df_slow    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_pane
 df_rapid <- dplyr::select(df_rapid, -lon, -lat)
 df <- inner_join(df_replace, df_rapid, by = c("parcel_id", "year"))
 
-nrow(df_replace) == nrow(df_rapid) == nrow(df)# 173412
+nrow(df_replace) == nrow(df_rapid) # 173412
 nrow(df_rapid) == nrow(df)# 173412
 
 

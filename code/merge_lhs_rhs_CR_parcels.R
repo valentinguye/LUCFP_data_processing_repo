@@ -100,12 +100,14 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   if(nrow(lucpfip)!=nrow(lucfip) |
   # nrow(lucpfsmp)!=nrow(lucfsmp) |
   # nrow(lucpfip)!=nrow(lucfsmp) |
-  nrow(lucpfip)!=nrow(lucpfip_dyn)){stop("LHS datasets don't all have the same number of rows")}
+  nrow(lucpfip)!=nrow(lucpfip_dyn)){print("LHS datasets don't all have the same number of rows")} # print and not stop(), see comment just below in caps
   
-  LHS <- inner_join(lucpfip, lucfip, by = c("parcel_id", "lat", "lon" , "year"))
+  LHS <- left_join(lucpfip, lucfip, by = c("parcel_id", "lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
+  anyNA(LHS$lucfip_pixelcount_30th)
+  anyNA(LHS$lucpfip_pixelcount_30th)
   LHS <- inner_join(LHS, lucpfsmp, by = c("parcel_id", "lat", "lon" , "year"))
   #LHS <- base::merge(LHS, lucfsmp, by = c("parcel_id", "lat", "lon", "year"))
-  LHS <- inner_join(LHS, lucpfip_dyn, by = c("parcel_id", "lat", "lon" , "year"))
+  LHS <- inner_join(LHS, lucpfip_dyn, by = c("lat", "lon" , "year"))#"parcel_id", 
   
   if(nrow(LHS) != nrow(lucpfip)){stop("LHS datasets don't all have the same sets of parcels")}
   
@@ -308,7 +310,7 @@ for(CR in catchment_radiuseS){
   merge_lhs_rhs(parcel_size = PS, 
                 catchment_radius = CR)
 }
-
+rm(merge_lhs_rhs)
 
 
 ### Write to Stata if analyses/tests are to be done there...

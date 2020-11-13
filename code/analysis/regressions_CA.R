@@ -16,7 +16,7 @@ neededPackages = c("tibble", "plyr", "dplyr", "data.table",
                    "foreign", "readstata13", "readxl",
                    "raster", "rgdal",  "sp", "sf",
                    "knitr", "kableExtra",
-                   "fixest", "sandwich", "lmtest", "boot", 
+                   "car", "fixest", "sandwich", "lmtest", "boot", 
                    "ggplot2")
 # "pglm", "multiwayvcov", "clusterSEs", "alpaca", "clubSandwich",
 
@@ -74,6 +74,7 @@ getFixest_nthreads()
 
 ### Set dictionary for names of variables to display in regression tables 
 setFixest_dict(c(parcel_id = "grid cell",
+                 lucpfp_pixelcount = "All",
                  lucpfip_ha_total = "LUCPFIP (ha)", 
                  lucpfip_pixelcount_total = "Land use change from primary forest to industrial oil palm plantations", 
                  lucpfsmp_ha_total = "LUCPFSMP (ha)", 
@@ -266,7 +267,7 @@ imp = 1
 distribution = "quasipoisson"
 fe = "parcel_id + district_year"
 lag_or_not = "_lag1"
-controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")
+controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")#"wa_pct_own_loc_gov_imp",
 remaining_forest = FALSE
 offset = TRUE
 interaction_terms = NULL
@@ -291,10 +292,10 @@ make_base_reg <- function(island,
                           distribution = "quasipoisson", # either "poisson", "quasipoisson", or "negbin"
                           fe = "parcel_id + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
                           lag_or_not = "_lag1", # either "_lag1", or  "", should the 
-                          controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # character vectors of names of control variables (don't specify lags in their names)
+                          controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # character vectors of names of control variables (don't specify lags in their names)
                           remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
                           offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
-                          interaction_terms = NULL, # may be one or several of the controls specified above. 
+                          interaction_terms = controls, # may be one or several of the controls specified above. 
                           interacted = "regressors",
                           spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
                           pya_ov = FALSE, # logical, whether the pya (defined by x_pya) of the outcome_variable should be added in controls
@@ -563,6 +564,7 @@ make_base_reg <- function(island,
   # note that obs2remove has to be the last filtering operation on data, otherwise some units (along fe dimension)
   # may become "only-zero-outcome" units after other data removal.  
   
+  # make the interaction variables in the data
   if(length(interaction_terms)>0){
     for(con in interaction_terms){
       actual_ <- controls[grepl(con, controls)]
@@ -574,7 +576,7 @@ make_base_reg <- function(island,
   
   ### REGRESSIONS
   
-  # Formula
+  # Model specification
   fe_model <- as.formula(paste0(outcome_variable,
                                 " ~ ",
                                 paste0(regressors, collapse = "+"),
@@ -596,7 +598,7 @@ make_base_reg <- function(island,
   }
   
   
-  
+  # Estimation
   if(offset == TRUE){
     if(distribution != "negbin"){ # i.e. if it's poisson or quasipoisson or gaussian
       if(weights == TRUE){
@@ -656,6 +658,200 @@ make_base_reg <- function(island,
 }
 
 
+##### TABLE 1 - ELASTICITIES ##### 
+# pass arguments from make_base_reg in lapply to get alternative specifications
+
+ov_list <- list("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
+isl_list <- list("all", "Sumatra", "Kalimantan")
+
+
+## Elasticities 
+
+# ALL
+res_list_all <- list()
+res_list_all[[1]] <- make_base_reg(island = "all", 
+                                   all_producers = TRUE,
+                                   outcome_variable = "lucpfip_pixelcount_total", # with all_producers = TRUE, this indicates whether we want primary forest or not, "ip_" or "smp_" does not matter as they will be added
+                                   commo = c("cpo"), #
+                                   offset = FALSE)
+# Industrial
+res_list_dst_ind <- lapply(isl_list, make_base_reg,
+                           outcome_variable = "lucpfip_pixelcount_total",
+                           commo = c("cpo"), #
+                           offset = FALSE) 
+
+# Smallholders
+res_list_dst_sm <- lapply(isl_list, make_base_reg,
+                          outcome_variable = "lucpfsmp_pixelcount_total",
+                          commo = c("cpo"),#
+                          offset = FALSE) 
+
+res_list_dst <- append(res_list_all, res_list_dst_ind, res_list_dst_sm)
+rm(res_list_all, res_list_dst_ind, res_list_dst_sm)
+# preview in R 
+etable(res_list_dst, 
+       se = "cluster", 
+       #coefstat = "confint",
+       subtitles = c("All", "All industrial", "Sumatra industrial", "Kalimantan industrial", "All smallholders", "Sumatra smallholders", "Kalimantan smallholders"))
+
+
+### LATEX
+
+#table_title_dyn <- paste0("LUCFP semi-elasticities to medium-run price signals") 
+table_title_dyn <- paste0("LUCFP elasticities to medium-run price signals") 
+#table_title_dyn <- paste0("LUCFP semi-elasticities to medium-run y-o-y growth rates of price signals") 
+
+etable(res_list_dst, 
+       #cluster = oneway_cluster,
+       se = "cluster",
+       tex = TRUE,
+       # file = table_file, 
+       # replace = TRUE,
+       title = table_title_dyn,
+       subtitles = c(" ", "All", "Sumatra", "Kalimantan", "All", "Sumatra", "Kalimantan"), # first empty subtitle is for the overall (islands and sizes) column 
+       #family = TRUE,
+       #drop = c("own", "reachable"),
+       #coefstat = "confint",
+       sdBelow = TRUE,
+       yesNo = "X",
+       fitstat = c("sq.cor"),
+       convergence = TRUE,
+       dict = TRUE, 
+       style=list("model:"),
+       powerBelow = -7)
+
+rm(res_list_dst)
+
+
+#### TABLE 2 - APE #### 
+
+# helper function that transforms the list of results into a data frame of average partial effects (APEs) and their standard errors (SEs)
+# make_APE <- function(res){
+#   
+#   # Write here the delta Method code. 
+#   
+#   coeff <- res$coefficients[[1]]
+#   price_change <- -(1/coeff) 
+#   col <- as.matrix(c(0.1,0.5,1)*price_change)
+#   colnames(col) <- "colname"
+#   return(col)
+# }
+# df <- bind_cols(lapply(res_list_dst, FUN = make_price_change)) %>% as.matrix()
+# 
+# # prepare df for kable
+# row.names(df) <- paste0(c(10, 50, 100),"% LUCFP reduction")
+# df <- df*100
+# df <- df %>% round(digits = 0)
+# df <- df %>% as.data.frame()
+# df <- apply(df, c(1,2), paste0,"%")
+# colnames(df) <- NULL
+# 
+# 
+# options(knitr.table.format = "latex") 
+# kable(df, booktabs = T, align = "r", 
+#       caption = "Price distortions against deforestation-based products to achieve different reductions in LUCFP ") %>% 
+#   kable_styling(latex_options = c("scale_down", "hold_position")) %>% 
+#   add_header_above(c(" " = 1, 
+#                      "FFB" = 1, "CPO" = 1,
+#                      #"FFB" = 1, #"CPO" = 1,
+#                      #"FFB" = 1, "CPO" = 1,
+#                      #"FFB" = 1, 
+#                      "CPO" = 1
+#   ), 
+#   bold = F, 
+#   align = "c") %>% 
+#   add_header_above(c(" " = 1, 
+#                      "Sumatra" = 3
+#                      #"Kalimantan" = 1,
+#                      #"Sumatra" = 2,
+#                      #"Kalimantan" = 1
+#   ), 
+#   align = "c", 
+#   strikeout = F) %>% 
+#   
+#   add_header_above(c(" " = 1, 
+#                      "Industrial plantations" = 2, 
+#                      "Smallholder plantations" = 1), 
+#                    bold = T, 
+#                    align = "c") %>% 
+#   column_spec(column = c(2:(ncol(df)+1)),
+#               width = "5em", 
+#               latex_valign = "b") 
+
+
+
+
+#### TABLE 3 - APE for LEGAL AND ILLEGAL #### 
+# Reiterate steps from tables 1-2 but do not print LateX for table 1. 
+
+# infrastructure to store results
+res_list_dst_ill <- list()
+elm <- 1
+
+# legality definition
+ill_def <- 2
+ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def))
+
+for(ILL in ill_status){
+   res_list_dst_ill[[elm]] <- make_base_reg(island = "all", 
+                                            all_producers = TRUE,
+                                            outcome_variable = "lucpfip_pixelcount_total",
+                                            illegal = ILL,
+                                            commo = c("cpo"), #"ffb",
+                                            offset = FALSE)
+  elm <- elm + 1
+}
+ov_list <- list("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
+isl_list <- list("all", "Sumatra", "Kalimantan")
+for(OV in ov_list){
+  for(ISL in isl_list){
+    for(ILL in ill_status){
+      res_list_dst_ill[[elm]] <- make_base_reg(island = ISL, 
+                                               outcome_variable = OV,
+                                               illegal = ILL,
+                                               commo = c("cpo"), #"ffb",
+                                               offset = FALSE)
+      elm <- elm + 1
+    }
+  }
+}
+# elm should be 15 here
+
+
+
+
+#### TABLE 4 - APE for RAPID AND SLOW #### 
+# Reiterate steps from tables 1-2 but do not print LateX for table 1. 
+
+
+# infrastructure to store results
+res_list_dst_dyn <- list()
+elm <- 1
+
+ov_list <- list("lucpfip_rapid_pixelcount", "lucpfip_slow_pixelcount")
+isl_list <- list("all", "Sumatra", "Kalimantan")
+for(OV in ov_list){
+  for(ISL in isl_list){
+    res_list_dst_dyn[[elm]] <- make_base_reg(island = ISL, 
+                                             outcome_variable = OV,
+                                             commo = c("cpo"), #"ffb",
+                                             offset = FALSE)
+    elm <- elm + 1
+  }
+}
+# elm should be 7 here
+elm
+
+
+#### TABLE 5 - COMPARISONS OF APEs ACROSS MAIN GROUPS #### 
+
+#### TABLE 5 - COMPARISONS OF APEs ACROSS OTHER GROUPS #### 
+
+
+
+
+####-------------------------------------------------------------BELOW IS PREVIOUS VERSION OF DISPLAYING RESULTS--------------------------------------------------------------------------####
+# we do not delete it now to compare the CA results with the CR in the leaflet currently
 
 ##### TABLES OF ELASTICITIES ##### 
 # pass arguments from make_base_reg in lapply to get alternative specifications
@@ -689,8 +885,6 @@ etable(res_list_dst,
        #coefstat = "confint",
        subtitles = c("Sumatra", "Kalimantan","Sumatra", "Kalimantan"))
 
-# preview in R 
-etable(reg_res, se = "cluster")
 
 # In LateX
 # title
