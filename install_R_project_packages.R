@@ -34,7 +34,7 @@ neededPackages <- c("data.table", "plyr", "tidyr", "dplyr",  "Hmisc", "sjmisc", 
                     "doParallel", "foreach", "snow", 
                     "knitr", "kableExtra",
                     "DataCombine", 
-                    "car", "fixest", "sandwich", "lmtest", "broom", "glmhdfe",
+                    "msm", "car", "fixest", "sandwich", "lmtest", "broom", "glmhdfe",
                     "ggeffects",
                     "ggplot2", "leaflet")
 
@@ -112,6 +112,7 @@ if(FALSE){
   #library(ExPanDaR)
   library(DataCombine)
   library(car)
+  library(msm)
   library(fixest)
   #library(effects)
   #library(glmhdfe)
@@ -135,7 +136,7 @@ if(FALSE){
 }
 
 # If new packages are needed along the project data processing workflow, one should: 
-new_pck <- c("car")
+new_pck <- c("msm")
 # 1. install the packages in the project library (the default if you are within the project)
 install.packages(new_pck)
 # devtools::install_github("julianhinz/R_glmhdfe")

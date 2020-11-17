@@ -398,6 +398,13 @@
       "Repository": "CRAN",
       "Hash": "3c6172c42b4146924cdf7b65e5685694"
     },
+    "expm": {
+      "Package": "expm",
+      "Version": "0.999-5",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "6da939036c445e851f7ef690e349cc2c"
+    },
     "fansi": {
       "Package": "fansi",
       "Version": "0.4.0",
@@ -712,6 +719,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "eaee7d2a6f3ed4491df868611cb064cc"
+    },
+    "msm": {
+      "Package": "msm",
+      "Version": "1.6.8",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "5458188099f0deae645462e550345c8b"
     },
     "munsell": {
       "Package": "munsell",

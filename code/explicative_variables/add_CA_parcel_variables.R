@@ -538,16 +538,17 @@ for(travel_time in c(4,6)){ #2,4,
   
   
   ### PRICE LOGARITHMS
-  # select prices for which it's relevant/useful to compute the log
-  price_variables <- names(parcels)[grepl(pattern = "price_", x = names(parcels)) &
-                                      !grepl(pattern = "pko", x = names(parcels)) &
-                                      !grepl(pattern = "dev", x = names(parcels)) &
-                                      !grepl(pattern = "yoyg", x = names(parcels))]
-  
-  
-  for(var in price_variables){
-    parcels[,paste0("ln_",var)] <- log(parcels[,var])
-  }
+  # Eventhough they are useful, we builod them within the regression function, to make the data sets a bit lighter. 
+  # # select prices for which it's relevant/useful to compute the log
+  # price_variables <- names(parcels)[grepl(pattern = "price_", x = names(parcels)) &
+  #                                     !grepl(pattern = "pko", x = names(parcels)) &
+  #                                     !grepl(pattern = "dev", x = names(parcels)) &
+  #                                     !grepl(pattern = "yoyg", x = names(parcels))]
+  # 
+  # 
+  # for(var in price_variables){
+  #   parcels[,paste0("ln_",var)] <- log(parcels[,var])
+  # }
   
   
   

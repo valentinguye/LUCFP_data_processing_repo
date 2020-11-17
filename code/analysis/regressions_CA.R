@@ -16,7 +16,7 @@ neededPackages = c("tibble", "plyr", "dplyr", "data.table",
                    "foreign", "readstata13", "readxl",
                    "raster", "rgdal",  "sp", "sf",
                    "knitr", "kableExtra",
-                   "car", "fixest", "sandwich", "lmtest", "boot", 
+                   "msm", "car", "fixest", "sandwich", "lmtest", "boot", 
                    "ggplot2")
 # "pglm", "multiwayvcov", "clusterSEs", "alpaca", "clubSandwich",
 
@@ -228,23 +228,30 @@ setFixest_dict(c(parcel_id = "grid cell",
 
 ## WITHIN CATCHMENT AREA
 # They are outputs of merge_lhs_rhs_CA_parcels.R
+
+# 2 hour catchment area
 d_CA2 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
                                   parcel_size/1000,"km_",
                                   "2h_CA.rds")))
+
 # Split them into islands of interest
 d_CA2_suma <- d_CA2[d_CA2$island == "Sumatra",]
 d_CA2_kali <- d_CA2[d_CA2$island == "Kalimantan",]
 
 rm(d_CA2)
 
+# 4 hour catchment area
 d_CA4 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
                                   parcel_size/1000,"km_",
                                   "4h_CA.rds")))
+
+
 # Split them into islands of interest
 d_CA4_suma <- d_CA4[d_CA4$island == "Sumatra",]
 d_CA4_kali <- d_CA4[d_CA4$island == "Kalimantan",]
 
 rm(d_CA4)
+
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
@@ -253,10 +260,10 @@ rm(d_CA4)
 
 # Prefered specifications are passed as default arguments. 
 # Currently, the returned object is a fixest object, of *ONE* regression.  
-island = "Kalimantan"
-outcome_variable = "lucpfip_rapid_pixelcount"
-all_producers = FALSE
-alt_ca = TRUE
+island = "all"
+outcome_variable = "lucpfip_pixelcount_total"
+all_producers = TRUE
+alt_ca = FALSE
 commo = c("cpo")#"ffb", 
 x_pya = 3
 dynamics = FALSE
@@ -269,7 +276,7 @@ fe = "parcel_id + district_year"
 lag_or_not = "_lag1"
 controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")#"wa_pct_own_loc_gov_imp",
 remaining_forest = FALSE
-offset = TRUE
+offset = FALSE
 interaction_terms = NULL
 interacted = "regressors"
 spatial_control = FALSE
@@ -380,9 +387,9 @@ make_base_reg <- function(island,
     }
   }
   
-  if(log_prices == TRUE & yoyg == FALSE){
-    regressors <- paste0("ln_", regressors)
-  }
+  # if(log_prices == TRUE & yoyg == FALSE){
+  #   regressors <- paste0("ln_", regressors)
+  # }
   
   ## CONTROLS
   # add pya outcome variable 
@@ -405,16 +412,6 @@ make_base_reg <- function(island,
     
     offset <- FALSE
   }
-  
-  ## INTERACTIONS
-  # here we produce the names of the actual interaction variables
-  if(length(interaction_terms)>0){
-    # unless variables of interest to be interacted are specified, they are all the presently defined regressors
-    if(interacted == "regressors"){interacted <- regressors}
-    make_int_term <- function(x){int_term <- controls[grepl(x,controls)] %>% paste0("X",interacted)}
-    interaction_vars <- sapply(interaction_terms, FUN = make_int_term)
-  }else{interacted <- NULL}
-  
 
     
   ### DATA FOR REGRESSIONS
@@ -427,33 +424,52 @@ make_base_reg <- function(island,
     d <- d_CA4_suma
   }
   if(island == "Kalimantan" & alt_ca == FALSE){
-    d <- d_CA4_kali
-  }
-  if(island == "Kalimantan" & alt_ca == TRUE){
     d <- d_CA2_kali
   }
+  if(island == "Kalimantan" & alt_ca == TRUE){
+    d <- d_CA4_kali
+  }
   if(island == "all" & alt_ca == FALSE){
-    d <- rbind(d_CA2_suma, d_CA4_kali, d_CA4_papu)
+    d <- rbind(d_CA2_suma, d_CA2_kali)#, d_CA4_papu
   }
   if(island == "all" & alt_ca == TRUE){
-    d <- rbind(d_CA4_suma, d_CA2_kali, d_CA2_papu)
+    d <- rbind(d_CA4_suma, d_CA4_kali)#, d_CA2_papu
   }
+  
+  # create variable of sum of rapid and slow, in case we want to distinguish we the other measure of lucpfip_pixelcount_total, that might include some replacement within plantations
+  if(outcome_variable == "lucpfip_pixelcount_rapidslow"){
+    d$lucpfip_pixelcount_rapidslow <- d$lucpfip_rapid_pixelcount + d$lucpfip_slow_pixelcount
+  }  
   
   # add pixel counts of lucfp from industrial and from small and medium sized plantations. 
   # note that for some observations, this is a sum of 0 and a positive term, and for some others it's a sum of two positive terms. 
   # In the latter case, this grounds on the assumption that the industrial and the S&M plantation maps do not overlap. 
-  if(all_producers & grepl("lucp", outcome_variable)){
-    d$lucpfp_pixelcount <- d$lucpfip_pixelcount_total + d$lucpfsmp_pixelcount_total
+  if(all_producers & grepl("lucpfip", outcome_variable)){
+    d$lucpfp_pixelcount <- d[,outcome_variable] + d$lucpfsmp_pixelcount_total
     outcome_variable <- "lucpfp_pixelcount"
   }
-  if(all_producers & grepl("lucf", outcome_variable)){
-    d$lucfp_pixelcount <- d$lucfip_pixelcount_total + d$lucfsmp_pixelcount_total
+  if(all_producers & grepl("lucfip", outcome_variable)){
+    d$lucfp_pixelcount <- d[,outcome_variable] + d$lucfsmp_pixelcount_total
     outcome_variable <- "lucfp_pixelcount"
   }
+
+  
+  
+  # Logarithms
+  if(log_prices){
+    for(reg in regressors){
+      d[,paste0("ln_",reg)] <- log(d[,reg])
+    }
+    regressors <- paste0("ln_", regressors)
+    rm(reg)
+  }
+  
+  
   
   ## group all the variables necessary in the regression
   # important to do that after outcome_variable, regressors controls etc. have been (re)defined. 
-  used_vars <- c(outcome_variable, regressors, interacted, controls,
+  # (interactions do not need to be in there as they are fully built from the used_vars)
+  used_vars <- c(outcome_variable, regressors, controls,
                  "parcel_id", "year", "lat", "lon", "district", "province", "island", "district_year", "province_year")
                  #"n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
                  #"remain_f30th_pixelcount","remain_pf_pixelcount"
@@ -564,7 +580,21 @@ make_base_reg <- function(island,
   # note that obs2remove has to be the last filtering operation on data, otherwise some units (along fe dimension)
   # may become "only-zero-outcome" units after other data removal.  
   
+  
+  
   # make the interaction variables in the data
+  
+  ## INTERACTIONS
+  # here we produce the names of the actual interaction variables
+  if(length(interaction_terms)>0){
+    # unless variables of interest to be interacted are specified, they are all the presently defined regressors
+    if(interacted == "regressors"){interacted <- regressors}
+    # this function selects the actual controls (lagged if necessary) into the interaction terms
+    make_int_term <- function(x){int_term <- controls[grepl(x,controls)] %>% paste0("X",interacted)}
+    interaction_vars <- sapply(interaction_terms, FUN = make_int_term)
+  }else{interacted <- NULL}
+ 
+  # and here we build the interactions 
   if(length(interaction_terms)>0){
     for(con in interaction_terms){
       actual_ <- controls[grepl(con, controls)]
@@ -652,47 +682,71 @@ make_base_reg <- function(island,
     }
   }
   
-  rm(d, d_nona, d_clean)
-  return(reg_res)
+  rm(d, d_nona)
+  toreturn <- list(reg_res, d_clean)
+  return(toreturn)
   
 }
 
 
-##### TABLE 1 - ELASTICITIES ##### 
+
+#### MAIN - RUN REGRESSIONS #### 
 # pass arguments from make_base_reg in lapply to get alternative specifications
 
-ov_list <- list("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
-isl_list <- list("all", "Sumatra", "Kalimantan")
+isl_list <- list("Sumatra", "Kalimantan", "all")
 
 
 ## Elasticities 
 
-# ALL
-res_list_all <- list()
-res_list_all[[1]] <- make_base_reg(island = "all", 
-                                   all_producers = TRUE,
-                                   outcome_variable = "lucpfip_pixelcount_total", # with all_producers = TRUE, this indicates whether we want primary forest or not, "ip_" or "smp_" does not matter as they will be added
-                                   commo = c("cpo"), #
-                                   offset = FALSE)
 # Industrial
-res_list_dst_ind <- lapply(isl_list, make_base_reg,
-                           outcome_variable = "lucpfip_pixelcount_total",
+res_data_list_ind <- lapply(isl_list, make_base_reg,
+                           outcome_variable = "lucpfip_rapid_pixelcount",
+                           interaction_terms = c("wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "n_reachable_uml"),#, "wa_pct_own_for_imp" ),
                            commo = c("cpo"), #
-                           offset = FALSE) 
+                           offset = FALSE)
+
+names(res_data_list_ind) <- paste0(isl_list, " industrial")
+res_list_ind <- lapply(res_data_list_ind, FUN = function(x){x[[1]]})
 
 # Smallholders
-res_list_dst_sm <- lapply(isl_list, make_base_reg,
+res_data_list_sm <- lapply(isl_list, make_base_reg,
                           outcome_variable = "lucpfsmp_pixelcount_total",
+                          interaction_terms =  c("wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "n_reachable_uml"),#, "wa_pct_own_for_imp"),
                           commo = c("cpo"),#
                           offset = FALSE) 
 
-res_list_dst <- append(res_list_all, res_list_dst_ind, res_list_dst_sm)
-rm(res_list_all, res_list_dst_ind, res_list_dst_sm)
-# preview in R 
-etable(res_list_dst, 
-       se = "cluster", 
+names(res_data_list_sm) <- paste0(isl_list, " smallholders")
+res_list_sm <- lapply(res_data_list_sm, FUN = function(x){x[[1]]})
+
+# ALL
+res_data_list_all <- make_base_reg(island = "all", 
+                                   all_producers = TRUE,
+                                   outcome_variable = "lucpfip_rapid_pixelcount", # with all_producers = TRUE, this indicates whether we want primary forest or not, and also which dynamic in industrial lucfp we want. 
+                                   interaction_terms = c("wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "n_reachable_uml"),#, "wa_pct_own_for_imp" "wa_pct_own_nat_priv_imp"),
+                                   commo = c("cpo"), #
+                                   offset = FALSE) %>% list() # make it a list so that it's at the same level as the others below
+
+names(res_data_list_all) <- "all" 
+#res_list_all <- lapply(res_data_list_all, FUN = function(x){x[[1]]})
+res_list_all <- res_data_list_all[1][[1]][1]
+
+
+# For display of elasticities
+res_list <- c(res_list_ind, res_list_sm, res_list_all)
+rm(res_list_all, res_list_ind, res_list_sm)
+
+# For all the computations of partial effects based on these computations: 
+res_data_list <- c(res_data_list_ind, res_data_list_sm, res_data_list_all)
+
+# and to rescale the Average partial effect from pixel counts to hectares
+pixel_area_ha <- (27.8*27.6)/(1e4)
+
+
+# preview in R
+etable(res_list,
+       se = "cluster",
        #coefstat = "confint",
-       subtitles = c("All", "All industrial", "Sumatra industrial", "Kalimantan industrial", "All smallholders", "Sumatra smallholders", "Kalimantan smallholders"))
+       subtitles = c("All", "Sumatra industrial", "Kalimantan industrial", "All industrial", "Sumatra smallholders", "Kalimantan smallholders", "All smallholders"))
 
 
 ### LATEX
@@ -701,14 +755,14 @@ etable(res_list_dst,
 table_title_dyn <- paste0("LUCFP elasticities to medium-run price signals") 
 #table_title_dyn <- paste0("LUCFP semi-elasticities to medium-run y-o-y growth rates of price signals") 
 
-etable(res_list_dst, 
+etable(res_list, 
        #cluster = oneway_cluster,
        se = "cluster",
        tex = TRUE,
        # file = table_file, 
        # replace = TRUE,
        title = table_title_dyn,
-       subtitles = c(" ", "All", "Sumatra", "Kalimantan", "All", "Sumatra", "Kalimantan"), # first empty subtitle is for the overall (islands and sizes) column 
+       subtitles = c(" ", "Sumatra", "Kalimantan", "both","Sumatra", "Kalimantan", "both"), # first empty subtitle is for the overall (islands and sizes) column 
        #family = TRUE,
        #drop = c("own", "reachable"),
        #coefstat = "confint",
@@ -717,75 +771,359 @@ etable(res_list_dst,
        fitstat = c("sq.cor"),
        convergence = TRUE,
        dict = TRUE, 
-       style=list("model:"),
+       style=list(model = "title:"),
        powerBelow = -7)
 
-rm(res_list_dst)
+#rm(res_list)
 
 
-#### TABLE 2 - APE #### 
+
+
+#### MAIN - APE OF REGRESSOR OF INTEREST ####
+res_data <- res_data_list[[1]]
 
 # helper function that transforms the list of results into a data frame of average partial effects (APEs) and their standard errors (SEs)
-# make_APE <- function(res){
-#   
-#   # Write here the delta Method code. 
-#   
-#   coeff <- res$coefficients[[1]]
-#   price_change <- -(1/coeff) 
-#   col <- as.matrix(c(0.1,0.5,1)*price_change)
-#   colnames(col) <- "colname"
-#   return(col)
-# }
-# df <- bind_cols(lapply(res_list_dst, FUN = make_price_change)) %>% as.matrix()
-# 
-# # prepare df for kable
-# row.names(df) <- paste0(c(10, 50, 100),"% LUCFP reduction")
-# df <- df*100
-# df <- df %>% round(digits = 0)
-# df <- df %>% as.data.frame()
-# df <- apply(df, c(1,2), paste0,"%")
-# colnames(df) <- NULL
-# 
-# 
-# options(knitr.table.format = "latex") 
-# kable(df, booktabs = T, align = "r", 
-#       caption = "Price distortions against deforestation-based products to achieve different reductions in LUCFP ") %>% 
-#   kable_styling(latex_options = c("scale_down", "hold_position")) %>% 
-#   add_header_above(c(" " = 1, 
-#                      "FFB" = 1, "CPO" = 1,
-#                      #"FFB" = 1, #"CPO" = 1,
-#                      #"FFB" = 1, "CPO" = 1,
-#                      #"FFB" = 1, 
-#                      "CPO" = 1
-#   ), 
-#   bold = F, 
-#   align = "c") %>% 
-#   add_header_above(c(" " = 1, 
-#                      "Sumatra" = 3
-#                      #"Kalimantan" = 1,
-#                      #"Sumatra" = 2,
-#                      #"Kalimantan" = 1
-#   ), 
-#   align = "c", 
-#   strikeout = F) %>% 
-#   
-#   add_header_above(c(" " = 1, 
-#                      "Industrial plantations" = 2, 
-#                      "Smallholder plantations" = 1), 
-#                    bold = T, 
-#                    align = "c") %>% 
-#   column_spec(column = c(2:(ncol(df)+1)),
-#               width = "5em", 
-#               latex_valign = "b") 
+make_APEs <- function(res_data){
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]]
+  
+  coeff_names <- names(coef(reg_res))
+  
+  # define actual interaction terms (possibly lagged)
+
+  interaction_effects <- coeff_names[grepl(pattern = "X", names(coef(reg_res)))]
+  
+  others <- coeff_names[!(grepl(pattern = "X", coeff_names))]
+  
+  interaction_terms <- others[paste0(others,"X",coeff_names[1]) %in% interaction_effects]
+  
+  # data POINTS that deltaMethod will grab 
+  
+  # averages of the interaction terms -the controls that we interacted with the regressor of interest) 
+  int_term_avg <- list()
+  if(length(interaction_terms) >0){
+    for(i in 1:length(interaction_terms)){
+      int_term_avg[[i]] <- mean(d_clean[,interaction_terms[i]])
+    }
+  }
+  
+  # average of the regressor of interest
+  reg_bar <- mean(d_clean[,coeff_names[1]]) 
+  
+  # average fitted values
+  fv_bar <- mean(reg_res$fitted.values)
+  
+  ## FORMULA FOR APE OF REGRESSOR OF INTEREST 
+  linear_ape_fml <- paste0(coeff_names[1])
+  i_t <- 1
+  while(i_t<=length(interaction_terms)){
+    linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[i_t],"*",int_term_avg[[i_t]])
+    i_t <- i_t +1
+  }
+  ape_fml_roi <- paste0("(",linear_ape_fml,")*fv_bar*",pixel_area_ha)
+  
+  dM_ape_roi <- deltaMethod(object = coef(reg_res), 
+                            vcov. = vcov(reg_res, se = "cluster"), 
+                            g. = ape_fml_roi, 
+                            rhs = 0)
+  
+  row.names(dM_ape_roi) <- coeff_names[1]
+  dM_ape_roi <- as.matrix(dM_ape_roi)
+  dM_ape_roi <- dM_ape_roi[,c(1,2,7)]
+
+  ## FORMULA FOR APE OF INTERACTION TERMS 
+  dM_ape_list <- list()
+  dM_ape_list[[1]] <- dM_ape_roi
+  if(length(interaction_terms) >0){
+    for(i in 1:length(interaction_terms)){
+      
+      # there are several parts 
+      # 1. the coeff of the interaction effect of interest
+      iei <- paste0(interaction_terms[i], "X", coeff_names[1])
+      ape_fml1 <- paste0(iei," + ") 
+  
+      # 2. the linear expression derivative wrt. the regressor of interest 
+      ape_fml2 <- paste0("(",linear_ape_fml,")")
+      
+      # 3. the derivative of the linear expression wrt. the interaction term 
+      ape_fml3 <- paste0("*(",
+                         coeff_names[coeff_names==interaction_terms[i]]," + ",
+                         iei,"*",reg_bar,")")#
+      
+      # paste everything together
+      ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha)
+      
+      dM <- deltaMethod(object = coef(reg_res), 
+                                    vcov. = vcov(reg_res, se = "cluster"), 
+                                    g. = ape_fml_it, 
+                                    rhs = 0)
+      
+      row.names(dM) <- interaction_terms[i]
+      dM <- as.matrix(dM)
+      dM <- dM[,c(1,2,7)]
+      dM_ape_list[[i+1]] <- dM
+      
+    }
+  }
+  mat <- matrix(ncol = 1, 
+                nrow = 3+3*length(interaction_terms), 
+                data = unlist(dM_ape_list))  
+  
+  # add a row with the number of observations
+  mat <- rbind(mat, reg_res$nobs)
+  
+  #row.names(mat) <- rep(c("Estimate","SE","p-value"),1+length(interaction_terms))
+  
+  rm(coeff_names, interaction_effects, others, interaction_terms, reg_res, d_clean, int_term_avg, 
+     ape_fml_roi, dM_ape_roi, ape_fml_it, dM_ape_list)
+  return(mat)
+}
+
+rm(df)
+df <- bind_cols(lapply(res_data_list, FUN = make_APEs)) %>% as.matrix()
+# prepare df for kable
+# row.names(df) <- paste0("APE - ",names(res_data_list))
+
+
+row.names(df) <- rep(c("Estimate","SE","p-value"), nrow(df)/3)
+df <- df %>% round(digits = 3)
+colnames(df) <- NULL
+df
+
+
+#df_rapid_ownint <- df
+#df_rapid_noint <- df
+
+options(knitr.table.format = "latex")
+kable(df, booktabs = T, align = "r",
+      caption = "Average partial effects on rapid LUCFP (ha)") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both" = 1,
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both" = 1, 
+                     " " = 1),
+                  bold = F,
+                  align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 3, 
+                     "All" = 1),
+                  align = "c",
+                  strikeout = F) %>%
+  pack_rows("CPO medium-run price", 1, 3, 
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows("Interaction with \n domestic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows("Interaction with \n foreign ownership", 7, 9,
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows("Interaction with \n # of reachable mills", 10, 12,
+            italic = TRUE, bold = TRUE)  %>%
+  column_spec(column = 1,
+              width = "14em",
+              latex_valign = "b") %>% 
+  column_spec(column = c(2:(ncol(df))),
+              width = "5em",
+              latex_valign = "b")
+
+rm(df)
+
+
+#### MAIN - APEs OF INTERACTION TERMS ####
+make_APE_interactions <- function(res_data, int_term){
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]]
+  
+  # data POINTS that deltaMethod will grab 
+  
+  # averages of the interaction terms -the controls that we interacted with the regressor of interest)  
+  int_terms <- !(grepl(pattern = "X", names(coef(reg_res))))
+  int_terms[1] <- FALSE
+  
+  int_terms <- names(coef(reg_res))[int_terms]
+  int_term_avg <- list()
+  for(i in 1:length(int_terms)){
+    int_term_avg[[i]] <- mean(d_clean[,int_terms[i]])
+  }
+  
+  # average of the regressor of interest
+  reg_bar <- mean(d_clean[,names(coef(reg_res))[1]])
+  
+  # average fitted values
+  fv_bar <- mean(reg_res$fitted.values)
+  
+  # names of coefficients of interactions (all those which names include the name of the first regressor)
+  varn <- coef(reg_res) %>% names()
+  varn <- varn[grepl(varn[1], varn)]
+  
+  # Formula for APE of interaction term
+  # there are several parts 
+  # 1. the coeff of the interaction effect of interest
+#  int_term <- "n_reachable_uml_lag1"
+  iei <- varn[grepl(int_term, varn)]
+  ape_fml1 <- paste0(iei," + ") 
+  
+  # 2. the linear expression derivative wrt. regressor of interest 
+  ape_fml2 <- paste0("(",varn[1])
+  i_t <- 1
+  while(i_t<=length(int_terms)){
+    ape_fml2 <- paste0(ape_fml2," + ", varn[i_t+1],"*",int_term_avg[[i_t]])
+    i_t <- i_t +1
+  }
+  ape_fml2 <- paste0(ape_fml2,")")
+  
+  # 3. the derivative of the linear expression wrt. the interaction term 
+  ape_fml3 <- paste0("*(",
+                      names(coef(reg_res))[names(coef(reg_res))==int_term]," + ",
+                      iei,"*",reg_bar,")")#
+  
+  # paste everything together
+  ape_fml <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha)
+ 
+  dM <- deltaMethod(object = coef(reg_res), 
+                    vcov. = vcov(reg_res, se = "cluster"), 
+                    g. = ape_fml, 
+                    rhs = 0)
+  
+  row.names(dM) <- paste0("APE")
+  
+  rm(reg_res, d_clean, int_terms, int_term_avg, varn, ape_fml)
+  return(dM)
+}
+
+### INTERACTION WITH DOMESTIC PRIVATE OWNERSHIP
+
+rm(df)
+df <- bind_rows(lapply(res_data_list, FUN = make_APE_interactions, int_term = "wa_pct_own_nat_priv_imp_lag1")) %>% as.matrix()
+# prepare df for kable
+# row.names(df) <- paste0("APE - ",names(res_data_list))
+df %>% class()
+df <- t(df)
+df <- df[c(1,2,7),]
+row.names(df)[3] <- "p-value"
+df <- df %>% round(digits = 2)
+df <- df %>% as.data.frame()
+colnames(df) <- NULL
+
+
+options(knitr.table.format = "latex")
+kable(df, booktabs = T, align = "r",
+      caption = "Average partial effects of interactions between medium-run CPO price signal and ownership shift from public to domestic private, on LUCFP (ha)") %>%
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     " " = 1, 
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both" = 1,
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both"),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "All" = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  column_spec(column = c(2:(ncol(df))),
+              width = "5em",
+              latex_valign = "b")
+
+###  INTERACTION WITH FOREIGN OWNERSHIP
+rm(df)
+df <- bind_rows(lapply(res_data_list, FUN = make_APE_interactions, int_term = "wa_pct_own_for_imp_lag1")) %>% as.matrix()
+# prepare df for kable
+# row.names(df) <- paste0("APE - ",names(res_data_list))
+df %>% class()
+df <- t(df)
+df <- df[c(1,2,7),]
+row.names(df)[3] <- "p-value"
+df <- df %>% round(digits = 2)
+df <- df %>% as.data.frame()
+colnames(df) <- NULL
+
+
+options(knitr.table.format = "latex")
+kable(df, booktabs = T, align = "r",
+      caption = "Average partial effects of interactions between medium-run CPO price signal and ownership shift from public to foreign, on LUCFP (ha)") %>%
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     " " = 1, 
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both" = 1,
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both"),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "All" = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  column_spec(column = c(2:(ncol(df))),
+              width = "5em",
+              latex_valign = "b")
+
+
+###  INTERACTION WITH NUMBER OF REACHABLE UML
+rm(df)
+df <- bind_rows(lapply(res_data_list, FUN = make_APE_interactions, int_term = "n_reachable_uml_lag1")) %>% as.matrix()
+# prepare df for kable
+# row.names(df) <- paste0("APE - ",names(res_data_list))
+df %>% class()
+df <- t(df)
+df <- df[c(1,2,7),]
+row.names(df)[3] <- "p-value"
+df <- df %>% round(digits = 2)
+df <- df %>% as.data.frame()
+colnames(df) <- NULL
+
+
+options(knitr.table.format = "latex")
+kable(df, booktabs = T, align = "r",
+      caption = "Average partial effects of interactions between medium-run CPO price signal and number of reachable mills, on LUCFP (ha)") %>%
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     " " = 1, 
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both" = 1,
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both"),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "All" = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  column_spec(column = c(2:(ncol(df))),
+              width = "5em",
+              latex_valign = "b")
 
 
 
 
-#### TABLE 3 - APE for LEGAL AND ILLEGAL #### 
+
+rm(res_data, res_data_list, res_data_list_all, res_data_list_ind, res_data_list_sm, 
+   res_list, res_list_all, res_list_ind, res_list_sm)
+
+
+
+#### LEGAL vs ILLEGAL - RUN REGRESSIONS #### 
 # Reiterate steps from tables 1-2 but do not print LateX for table 1. 
 
 # infrastructure to store results
-res_list_dst_ill <- list()
+res_data_list_ill <- list()
 elm <- 1
 
 # legality definition
@@ -793,46 +1131,238 @@ ill_def <- 2
 ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def))
 
 for(ILL in ill_status){
-   res_list_dst_ill[[elm]] <- make_base_reg(island = "all", 
+   res_data_list_ill[[elm]] <- make_base_reg(island = "all", 
                                             all_producers = TRUE,
-                                            outcome_variable = "lucpfip_pixelcount_total",
+                                            outcome_variable = "lucpfip_pixelcount_rapidslow",
                                             illegal = ILL,
                                             commo = c("cpo"), #"ffb",
+                                            interaction_terms = c("wa_pct_own_nat_priv_imp"),# "wa_pct_own_for_imp", "n_reachable_uml"),
                                             offset = FALSE)
   elm <- elm + 1
 }
-ov_list <- list("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
-isl_list <- list("all", "Sumatra", "Kalimantan")
+
+ov_list <- list("lucpfip_pixelcount_rapidslow", "lucpfsmp_pixelcount_total")
+isl_list <- list("Sumatra", "Kalimantan", "all")
 for(OV in ov_list){
   for(ISL in isl_list){
     for(ILL in ill_status){
-      res_list_dst_ill[[elm]] <- make_base_reg(island = ISL, 
+      if(!(OV == "lucpfsmp_pixelcount_total" & ISL == "Kalimantan" & ILL == "ill2")){# because in this case there is not enough variation
+             res_data_list_ill[[elm]] <- make_base_reg(island = ISL, 
                                                outcome_variable = OV,
                                                illegal = ILL,
                                                commo = c("cpo"), #"ffb",
-                                               offset = FALSE)
+                                               interaction_terms = c("wa_pct_own_nat_priv_imp"),# "wa_pct_own_for_imp", "n_reachable_uml"),
+                                               offset = FALSE) 
+      }
+
       elm <- elm + 1
     }
   }
 }
 # elm should be 15 here
 
+# res_list_ill <- lapply(res_data_list_ill, FUN = function(x){x[[1]]})
+# 
+# 
+# # preview in R
+# etable(res_list_ill,
+#        se = "cluster",
+#        #coefstat = "confint",
+#        subtitles = c("All legal", "All illegal", 
+#                      "Sumatra industrial legal", "Sumatra industrial illegal", 
+#                      "Kalimantan industrial legal", "Kalimantan industrial illegal", 
+#                      "All industrial legal", "All industrial illegal", 
+#                      "Sumatra smallholders legal", "Sumatra smallholders illegal", 
+#                      "Kalimantan smallholders legal", "Kalimantan smallholders illegal", 
+#                      "All smallholders legal", "All smallholders illegal"))
 
 
 
-#### TABLE 4 - APE for RAPID AND SLOW #### 
+#### LEGAL vs ILLEGAL - APE OF REGRESSOR OF INTEREST ####
+res_data <- res_data_list_ill[[1]]
+make_APEs <- function(res_data){
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]]
+  
+  coeff_names <- names(coef(reg_res))
+  
+  # define actual interaction terms (possibly lagged)
+  
+  interaction_effects <- coeff_names[grepl(pattern = "X", names(coef(reg_res)))]
+  
+  others <- coeff_names[!(grepl(pattern = "X", coeff_names))]
+  
+  interaction_terms <- others[paste0(others,"X",coeff_names[1]) %in% interaction_effects]
+  
+  # data POINTS that deltaMethod will grab 
+  
+  # averages of the interaction terms -the controls that we interacted with the regressor of interest) 
+  int_term_avg <- list()
+  if(length(interaction_terms) >0){
+    for(i in 1:length(interaction_terms)){
+      int_term_avg[[i]] <- mean(d_clean[,interaction_terms[i]])
+    }
+  }
+  
+  # average of the regressor of interest
+  reg_bar <- mean(d_clean[,coeff_names[1]]) 
+  
+  # average fitted values
+  fv_bar <- mean(reg_res$fitted.values)
+  
+  ## FORMULA FOR APE OF REGRESSOR OF INTEREST 
+  linear_ape_fml <- paste0(coeff_names[1])
+  i_t <- 1
+  while(i_t<=length(interaction_terms)){
+    linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[i_t],"*",int_term_avg[[i_t]])
+    i_t <- i_t +1
+  }
+  ape_fml_roi <- paste0("(",linear_ape_fml,")*fv_bar*",pixel_area_ha)
+  
+  dM_ape_roi <- deltaMethod(object = coef(reg_res), 
+                            vcov. = vcov(reg_res, se = "cluster"), 
+                            g. = ape_fml_roi, 
+                            rhs = 0)
+  
+  row.names(dM_ape_roi) <- coeff_names[1]
+  dM_ape_roi <- as.matrix(dM_ape_roi)
+  dM_ape_roi <- dM_ape_roi[,c(1,2,7)]
+  
+  ## FORMULA FOR APE OF INTERACTION TERMS 
+  dM_ape_list <- list()
+  dM_ape_list[[1]] <- dM_ape_roi
+  if(length(interaction_terms) >0){
+    for(i in 1:length(interaction_terms)){
+      
+      # there are several parts 
+      # 1. the coeff of the interaction effect of interest
+      iei <- paste0(interaction_terms[i], "X", coeff_names[1])
+      ape_fml1 <- paste0(iei," + ") 
+      
+      # 2. the linear expression derivative wrt. the regressor of interest 
+      ape_fml2 <- paste0("(",linear_ape_fml,")")
+      
+      # 3. the derivative of the linear expression wrt. the interaction term 
+      ape_fml3 <- paste0("*(",
+                         coeff_names[coeff_names==interaction_terms[i]]," + ",
+                         iei,"*",reg_bar,")")#
+      
+      # paste everything together
+      ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha)
+      
+      dM <- deltaMethod(object = coef(reg_res), 
+                        vcov. = vcov(reg_res, se = "cluster"), 
+                        g. = ape_fml_it, 
+                        rhs = 0)
+      
+      row.names(dM) <- interaction_terms[i]
+      dM <- as.matrix(dM)
+      dM <- dM[,c(1,2,7)]
+      dM_ape_list[[i+1]] <- dM
+      
+    }
+  }
+  mat <- matrix(ncol = 1, 
+                nrow = 3+3*length(interaction_terms), 
+                data = unlist(dM_ape_list))  
+  
+  # add a row with the number of observations
+  mat <- rbind(mat, reg_res$nobs)
+  
+  #row.names(mat) <- rep(c("Estimate","SE","p-value"),1+length(interaction_terms))
+  
+  rm(coeff_names, interaction_effects, others, interaction_terms, reg_res, d_clean, int_term_avg, 
+     ape_fml_roi, dM_ape_roi, ape_fml_it, dM_ape_list)
+  return(mat)
+}
+
+rm(df)
+df <- bind_cols(lapply(res_data_list_ill[lengths(res_data_list_ill)>0], FUN = make_APEs)) %>% as.matrix()
+# prepare df for kable
+# row.names(df) <- paste0("APE - ",names(res_data_list))
+
+
+row.names(df) <- c(rep(c("Estimate","SE","p-value"), nrow(df)/3), "Observations")
+df <- df %>% round(digits = 3)
+df[nrow(df),] <- df[nrow(df),] %>% formatC(digits = 0, format = "f")
+colnames(df) <- NULL
+df
+
+# remove here the models that did not converge.
+# with current specification it's 12th model, Kalimantan smallholders illegal
+# df <- df[, c(1:11,13,14)]
+
+options(knitr.table.format = "latex")
+kable(df, booktabs = T, align = "r",
+      caption = "Average partial effects legal and illegal LUCFP (ha)") %>%
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "legal" = 1, 
+                     "illegal" = 1, 
+                     "legal" = 1, 
+                     "illegal" = 1, 
+                     "legal" = 1, 
+                     "illegal" = 1, 
+                     "legal" = 1, 
+                     "illegal" = 1, 
+                     "legal" = 1, 
+                     "illegal" = 1, 
+                     "legal" = 1, 
+                     #"illegal" = 1, 
+                     "legal" = 1, 
+                     "illegal" = 1),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c(" " = 1,
+                     " " = 2,
+                     "Sumatra" = 2,
+                     "Kalimantan" = 2,
+                     "both" = 2,
+                     "Sumatra" = 2,
+                     "Kalimantan" = 1,
+                     "both" = 2),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "All" = 2,
+                     "Industrial plantations" = 6,
+                     "Smallholder plantations" = 5),
+                   align = "c",
+                   strikeout = F) %>%
+  pack_rows("CPO medium-run price", 1, 3, 
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows("Interaction with \n domestic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
+            italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with \n foreign ownership", 7, 9,
+  #           italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with \n # of reachable mills", 10, 12,
+  #           italic = TRUE, bold = TRUE)  %>%
+  pack_rows(start_row =  nrow(df), end_row = nrow(df),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
+  column_spec(column = 1,
+              width = "12em",
+              latex_valign = "b") %>% 
+  column_spec(column = c(2:(ncol(df))),
+              width = "4em",
+              latex_valign = "b")
+
+rm(df)
+
+
+
+
+#### RAPID vs SLOW - RUN REGRESSIONS #### 
 # Reiterate steps from tables 1-2 but do not print LateX for table 1. 
 
 
 # infrastructure to store results
-res_list_dst_dyn <- list()
+res_data_list_dyn <- list()
 elm <- 1
 
 ov_list <- list("lucpfip_rapid_pixelcount", "lucpfip_slow_pixelcount")
-isl_list <- list("all", "Sumatra", "Kalimantan")
+isl_list <- list("Sumatra", "Kalimantan", "all")
 for(OV in ov_list){
   for(ISL in isl_list){
-    res_list_dst_dyn[[elm]] <- make_base_reg(island = ISL, 
+    res_data_list_dyn[[elm]] <- make_base_reg(island = ISL, 
                                              outcome_variable = OV,
                                              commo = c("cpo"), #"ffb",
                                              offset = FALSE)
@@ -841,6 +1371,152 @@ for(OV in ov_list){
 }
 # elm should be 7 here
 elm
+
+res_list_dyn <- lapply(res_data_list_dyn, FUN = function(x){x[[1]]})
+
+# preview in R 
+etable(res_list_dyn, 
+       se = "cluster", 
+       #coefstat = "confint",
+       subtitles = c("Sumatra rapid", "Kalimantan rapid", "All rapid", "Sumatra slow", "Kalimantan slow", "All slow"))
+
+
+
+#### RAPID vs SLOW - APE OF REGRESSOR OF INTEREST #### 
+
+make_APEs <- function(res_data){
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]]
+  
+  coeff_names <- names(coef(reg_res))
+  
+  # define actual interaction terms (possibly lagged)
+  
+  interaction_effects <- coeff_names[grepl(pattern = "X", names(coef(reg_res)))]
+  
+  others <- coeff_names[!(grepl(pattern = "X", coeff_names))]
+  
+  interaction_terms <- others[paste0(others,"X",coeff_names[1]) %in% interaction_effects]
+  
+  # data POINTS that deltaMethod will grab 
+  
+  # averages of the interaction terms -the controls that we interacted with the regressor of interest) 
+  int_term_avg <- list()
+  if(length(interaction_terms) >0){
+    for(i in 1:length(interaction_terms)){
+      int_term_avg[[i]] <- mean(d_clean[,interaction_terms[i]])
+    }
+  }
+  
+  # average of the regressor of interest
+  reg_bar <- mean(d_clean[,coeff_names[1]]) 
+  
+  # average fitted values
+  fv_bar <- mean(reg_res$fitted.values)
+  
+  ## FORMULA FOR APE OF REGRESSOR OF INTEREST 
+  linear_ape_fml <- paste0(coeff_names[1])
+  i_t <- 1
+  while(i_t<=length(interaction_terms)){
+    linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[i_t],"*",int_term_avg[[i_t]])
+    i_t <- i_t +1
+  }
+  ape_fml_roi <- paste0("(",linear_ape_fml,")*fv_bar*",pixel_area_ha)
+  
+  dM_ape_roi <- deltaMethod(object = coef(reg_res), 
+                            vcov. = vcov(reg_res, se = "cluster"), 
+                            g. = ape_fml_roi, 
+                            rhs = 0)
+  
+  row.names(dM_ape_roi) <- coeff_names[1]
+  dM_ape_roi <- as.matrix(dM_ape_roi)
+  dM_ape_roi <- dM_ape_roi[,c(1,2,7)]
+  
+  ## FORMULA FOR APE OF INTERACTION TERMS 
+  dM_ape_list <- list()
+  dM_ape_list[[1]] <- dM_ape_roi
+  if(length(interaction_terms) >0){
+    for(i in 1:length(interaction_terms)){
+      
+      # there are several parts 
+      # 1. the coeff of the interaction effect of interest
+      iei <- paste0(interaction_terms[i], "X", coeff_names[1])
+      ape_fml1 <- paste0(iei," + ") 
+      
+      # 2. the linear expression derivative wrt. the regressor of interest 
+      ape_fml2 <- paste0("(",linear_ape_fml,")")
+      
+      # 3. the derivative of the linear expression wrt. the interaction term 
+      ape_fml3 <- paste0("*(",
+                         coeff_names[coeff_names==interaction_terms[i]]," + ",
+                         iei,"*",reg_bar,")")#
+      
+      # paste everything together
+      ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha)
+      
+      dM <- deltaMethod(object = coef(reg_res), 
+                        vcov. = vcov(reg_res, se = "cluster"), 
+                        g. = ape_fml_it, 
+                        rhs = 0)
+      
+      row.names(dM) <- interaction_terms[i]
+      dM <- as.matrix(dM)
+      dM <- dM[,c(1,2,7)]
+      dM_ape_list[[i+1]] <- dM
+      
+    }
+  }
+  mat <- matrix(ncol = 1, 
+                nrow = 3+3*length(interaction_terms), 
+                data = unlist(dM_ape_list))  
+  
+  # add a row with the number of observations
+  mat <- rbind(mat, reg_res$nobs)
+  
+  #row.names(mat) <- rep(c("Estimate","SE","p-value"),1+length(interaction_terms))
+  
+  rm(coeff_names, interaction_effects, others, interaction_terms, reg_res, d_clean, int_term_avg, 
+     ape_fml_roi, dM_ape_roi, ape_fml_it, dM_ape_list)
+  return(mat)
+}
+
+df <- bind_rows(lapply(res_data_list_dyn, FUN = make_APEs)) %>% as.matrix()
+# prepare df for kable
+# row.names(df) <- paste0("APE - ",names(res_data_list))
+df %>% class()
+df <- t(df)
+df <- df[c(1,2,7),]
+row.names(df)[3] <- "p-value"
+df <- df %>% round(digits = 2)
+df <- df %>% as.data.frame()
+colnames(df) <- NULL
+
+# remove here the models that did not converge.
+
+
+options(knitr.table.format = "latex")
+kable(df, booktabs = T, align = "r",
+      caption = "Average partial effects of 1 percentage change in medium-run price signal on rapid and slow LUCFP (ha)") %>%
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both" = 1,
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both" = 1),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "Rapid transition to industrial plantations" = 3,
+                     "Slow transition (to industrial plantations" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  column_spec(column = c(2:(ncol(df))),
+              width = "5em",
+              latex_valign = "b")
+
+rm(df)
 
 
 #### TABLE 5 - COMPARISONS OF APEs ACROSS MAIN GROUPS #### 
