@@ -51,6 +51,8 @@ lapply(neededPackages, library, character.only = TRUE)
 # (lucfip, lucpfip, emissions, lucpfsmp...)
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
+parcel_size <- 3000
+travel_time <- 2
 
 merge_lhs_rhs <- function(parcel_size, travel_time){
   
@@ -83,7 +85,8 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   ### THIS NEEDS TO BE CHANGED WHEN WE HAVE LUCFP
   #  LHS <- lucpfp
   if(nrow(lucpfp) != nrow(lucpfip_dyn)){stop("LHS datasets don't all have the same number of rows")}
-  LHS <- base::merge(lucpfp, lucpfip_dyn, by = c("parcel_id", "lon", "lat", "year"))
+  LHS <- inner_join(lucpfp, lucpfip_dyn, by = c("parcel_id", "lon", "lat", "year"))
+  if(nrow(lucpfp) != nrow(LHS)){stop("LHS datasets don't all have the same set of parcels")}
   
   rm(lucpfp, lucpfip_dyn)
   #nrow(lucpfp)==nrow(lucfp)
@@ -95,6 +98,11 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   
   # LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
   # LHS$lucfsmp_ha_30th <- LHS$lucfsp_ha_30th + LHS$lucfmp_ha_30th
+  
+  ## make a variable that counts lucfp events on all types of plantations
+  LHS$lucpfap_pixelcount_total <- LHS$lucpfip_pixelcount_total + LHS$lucpfsmp_pixelcount_total
+  ## make a variable that counts rapid and slow lucfp events. 
+  LHS$lucpfip_rapidslow_pixelcount <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount
   
   
   # check that rapid + slow = total ? 

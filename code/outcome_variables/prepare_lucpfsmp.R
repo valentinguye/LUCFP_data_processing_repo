@@ -391,7 +391,7 @@ aggregate_lucpfsmp <- function(island, parcel_size){
   }
   
   
-  ### Execute the function to compute the RasterBrick object of 18 annual layers for each primary forest type
+  ### Execute the function to compute the RasterBrick object of 18 annual layers for each plantation size
   
   plant_typeS <- c("s", "m")
   for(plant_type in plant_typeS){
@@ -457,7 +457,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     # Probably more efficient as the st_is_within does not need to be executed over all Indonesian cells but only those within the largest catchment_radius.
     
     # Make the mask
-    mills <- read.dta13(file.path("temp_data/processed_mill_geolocalization/IBS_UML_panel.dta"))
+    mills <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
     # keep only a cross section of those that are geolocalized mills, on island of interest
     mills <- mills[mills$analysis_sample==1,]
     mills <- mills[!duplicated(mills$firm_id),]

@@ -1344,6 +1344,79 @@ kable(ape_disp, booktabs = T, align = "r",
               latex_valign = "b")
 
 
+#### PRICE DYNAMICS - RUN REGRESSIONS ####
+# infrastructure to store results
+ape_mat_list_prdyn <- list()
+elm <- 1
+
+size_list <- list("i", "sm")
+isl_list <- list("Sumatra", "Kalimantan", "both")
+
+## Adding estimations with FFB *and* CPO prices  
+for(SIZE in size_list){
+  for(ISL in isl_list){
+    # make the regression
+    res_data <- make_base_reg(island = ISL,
+                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount_total"), # or can be  lucpf",SIZE,"p_rapidslow_pixelcount"
+                              interaction_terms = NULL, #c("wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp"),# "n_reachable_uml"),#, "wa_pct_own_for_imp" ),
+                              dynamics = TRUE, 
+                              commo = c("cpo"), #
+                              offset = FALSE)
+    # make the APE
+    ape_mat_list_prdyn[[elm]] <- make_APEs(res_data = res_data, K = 2)
+    names(ape_mat_list_prdyn)[elm] <- paste0(ISL,"_",SIZE)
+    rm(res_data)
+    elm <- elm + 1
+  }
+}
+
+#### PRICE DYNAMICS - MAKE APEss ####
+rm(ape_mat)
+ape_mat <- bind_cols(ape_mat_list_prdyn) %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations")
+
+# prepare ape_mat for kable
+ape_disp <- ape_mat %>% round(digits = 3)
+ape_disp[nrow(ape_disp),] <- ape_disp[nrow(ape_disp),] %>% formatC(digits = 0, format = "f")
+ape_disp
+colnames(ape_disp) <- NULL
+
+
+options(knitr.table.format = "latex")
+kable(ape_disp, booktabs = T, align = "r",
+      caption = "Average partial effects on LUCFP (ha)") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both" = 1,
+                     "Sumatra" = 1,
+                     "Kalimantan" = 1,
+                     "both" = 1
+                     # " " = 1
+  ),
+  bold = F,
+  align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "Industrial plantations" = 3,#,
+                     "Smallholder plantations" = 3
+                     #"All" = 1
+  ),
+  align = "c",
+  strikeout = F) %>%
+  pack_rows("CPO short-run price", 1, 3, 
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows("CPO medium-run price", 4, 6, 
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows(start_row =  nrow(ape_disp), end_row = nrow(ape_disp),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
+  column_spec(column = 1,
+              width = "14em",
+              latex_valign = "b") %>% 
+  column_spec(column = c(2:(ncol(ape_disp))),
+              width = "5em",
+              latex_valign = "b")
+
+
 
 #### LEGAL, LUCFIP DYNAMICS, COMMODITY, PRICE DYNAMICS - COMPARE APEs ####
 

@@ -52,6 +52,8 @@ lapply(neededPackages, library, character.only = TRUE)
 # (lucfip, lucpfip, emissions, lucpfsmp...)
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
+parcel_size <- 3000
+catchment_radius <- 5e4
 
 merge_lhs_rhs <- function(parcel_size, catchment_radius){
   
@@ -102,14 +104,62 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   # nrow(lucpfip)!=nrow(lucfsmp) |
   nrow(lucpfip)!=nrow(lucpfip_dyn)){print("LHS datasets don't all have the same number of rows")} # print and not stop(), see comment just below in caps
   
+  # lucfip has 3 more parcels (45 obs.)
+  
+  LHS <- inner_join(lucpfip, lucfip, by = c("lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
+  (nrow(lucpfip) - nrow(LHS))/15
+  # so it's 19252 parcels that do not match (are lost in the inner_join)
+  
   LHS <- left_join(lucpfip, lucfip, by = c("parcel_id", "lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
+  (nrow(lucpfip) - nrow(LHS))/15
   anyNA(LHS$lucfip_pixelcount_30th)
+  sum(is.na(LHS$lucfip_pixelcount_30th))  
+  # if we do a left_join, no parcel is lost of course, but this introduces 19252*15 = 288780 NAs in the "not left" variable, lucfip
+
+  # so there is a mismatch between lucpfip and lucfip primarily
+  
+  LHS <- inner_join(lucpfip, lucpfip_dyn, by = c("parcel_id", "lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
+  (nrow(lucpfip) - nrow(LHS))/15
+  # a similar mismatch between lucpfip and lucpfip_dyn. 
+  
+  LHS <- inner_join(lucfip, lucpfip_dyn, by = c("parcel_id", "lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
+  (nrow(lucfip) - nrow(LHS))/15
+  # BUT NOT between lucfip and lucpfip_dyn (only the 3 parcels that do not match between lucfp and lucpfp workflows). 
+  
+  
+  LHS <- inner_join(lucpfip, lucfip, by = c("lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
+  (nrow(lucpfip) - nrow(LHS))/15
+  # NOW if the join is not based on parcel_id, the mismatch is gone
+  LHS <- inner_join(lucpfip, lucpfip_dyn, by = c("lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
+  (nrow(lucpfip) - nrow(LHS))/15
+  # idem for lucpfip and lucpfip_dyn
+  # SO THE PROBLEM COMES FROM DIFFERENT ALLOCATIONS OF PARCEL_IDs IN THE LUCPFIP (and lucpfsmp) WORKFLOW THAN IN THE LUCFIP AND LUCPFIP_DYN WORKFLOWS
+  
+  # the parcels are the same geographically, but they got different ids. 
+  
+  
+  
+  
+  sum(is.na(lucfip$lucfip_pixelcount_30th))
+  
   anyNA(LHS$lucpfip_pixelcount_30th)
   LHS <- inner_join(LHS, lucpfsmp, by = c("parcel_id", "lat", "lon" , "year"))
-  #LHS <- base::merge(LHS, lucfsmp, by = c("parcel_id", "lat", "lon", "year"))
-  LHS <- inner_join(LHS, lucpfip_dyn, by = c("lat", "lon" , "year"))#"parcel_id", 
-  
+  #LHS <- inner_join(LHS, lucfsmp, by = c("parcel_id", "lat", "lon", "year"))
+  LHS <- inner_join(LHS, lucpfip_dyn, by = c("parcel_id","lat", "lon" , "year"))# 
+  (nrow(lucpfip_dyn) - nrow(LHS))/15
   if(nrow(LHS) != nrow(lucpfip)){stop("LHS datasets don't all have the same sets of parcels")}
+  
+  # Le inner_join entre lucpfip et lucfip fait perdre 3 parcelles. 
+  #
+  # bon donc, le inner_join avec lucpfip_dyn *avec parcel_id* fait perdre 19252 pacelles
+  # le inner_join avec lucpfip_dyn *sans parcel_id* fait perdre seulement 3 parcelles 
+  # 
+  # The number of NAs in lucpfip is 
+  # 
+  # 
+  # 
+  # 
+  # 
   
   # make variable that counts lucfp events on both small and medium sized plantations 
   LHS$lucpfsmp_pixelcount_total <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
