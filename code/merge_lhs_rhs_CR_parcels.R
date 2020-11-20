@@ -67,8 +67,8 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   lucpfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",
                                        parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
   
-  # lucfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfsmp_panel_",
-  #                                      parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
+  lucfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfsmp_panel_",
+                                       parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
   
   lucpfip_dyn <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_dynamics_",
                                           parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
@@ -78,122 +78,136 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   lucpfip <- lucpfip[lucpfip$year<=2015,] # now runs from 2001-1998
   lucfip <- lucfip[lucfip$year<=2015,] # now runs from 2001-1998
   lucpfsmp <- lucpfsmp[lucpfsmp$year<=2015,] # now runs from 2001-1998
-  #lucfsmp <- lucfsmp[lucfsmp$year<=2015,] # now runs from 2001-1998
+  lucfsmp <- lucfsmp[lucfsmp$year<=2015,] # now runs from 2001-1998
   lucpfip_dyn <- lucpfip_dyn[lucpfip_dyn$year<=2015,]
   
-  # # remove coordinates, they are already in RHS
-  # lucpfip <- dplyr::select(lucpfip, -lat, -lon)
-  # lucfip <- dplyr::select(lucfip, -lat, -lon)
-  # lucpfsmp <- dplyr::select(lucpfsmp, -lat, -lon)
-  # #lucfsmp <- dplyr::select(lucfsmp, -lat, -lon)
-  # lucpfip_dyn <- dplyr::select(lucpfip_dyn, -lat, -lon)
+  # # remove coordinates, except in one data frame
+  lucfip <- dplyr::select(lucfip, -lat, -lon, -idncrs_lat, -idncrs_lon)
+  lucpfsmp <- dplyr::select(lucpfsmp, -lat, -lon, -idncrs_lat, -idncrs_lon)
+  lucfsmp <- dplyr::select(lucfsmp, -lat, -lon, -idncrs_lat, -idncrs_lon)
+  lucpfip_dyn <- dplyr::select(lucpfip_dyn, -lat, -lon, -idncrs_lat, -idncrs_lon)
   
   # this is necessary because in lucpfip_dyn, coordinates got extracted slightly differently, after the 10th decimal or so, and we want them all equal 
   # to merge based on them.
-  lucpfip$lon <- round(lucpfip$lon, 6)
-  lucpfip$lat <- round(lucpfip$lat, 6)
-  lucfip$lon <- round(lucfip$lon, 6)
-  lucfip$lat <- round(lucfip$lat, 6)
-  lucpfsmp$lon <- round(lucpfsmp$lon, 6)
-  lucpfsmp$lat <- round(lucpfsmp$lat, 6)
-  lucpfip_dyn$lon <- round(lucpfip_dyn$lon, 6)
-  lucpfip_dyn$lat <- round(lucpfip_dyn$lat, 6)
+  # lucpfip$lon <- round(lucpfip$lon, 6)
+  # lucpfip$lat <- round(lucpfip$lat, 6)
+  # lucfip$lon <- round(lucfip$lon, 6)
+  # lucfip$lat <- round(lucfip$lat, 6)
+  # lucpfsmp$lon <- round(lucpfsmp$lon, 6)
+  # lucpfsmp$lat <- round(lucpfsmp$lat, 6)
+  # lucpfip_dyn$lon <- round(lucpfip_dyn$lon, 6)
+  # lucpfip_dyn$lat <- round(lucpfip_dyn$lat, 6)
   
   if(nrow(lucpfip)!=nrow(lucfip) |
   # nrow(lucpfsmp)!=nrow(lucfsmp) |
   # nrow(lucpfip)!=nrow(lucfsmp) |
-  nrow(lucpfip)!=nrow(lucpfip_dyn)){print("LHS datasets don't all have the same number of rows")} # print and not stop(), see comment just below in caps
-  
+  nrow(lucpfip)!=nrow(lucpfip_dyn)){print("LHS datasets don't all have the same number of rows, which is a known fact, see notes in script")} 
   # lucfip has 3 more parcels (45 obs.)
   
-  LHS <- inner_join(lucpfip, lucfip, by = c("lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
-  (nrow(lucpfip) - nrow(LHS))/15
-  # so it's 19252 parcels that do not match (are lost in the inner_join)
-  
-  LHS <- left_join(lucpfip, lucfip, by = c("parcel_id", "lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
-  (nrow(lucpfip) - nrow(LHS))/15
-  anyNA(LHS$lucfip_pixelcount_30th)
-  sum(is.na(LHS$lucfip_pixelcount_30th))  
-  # if we do a left_join, no parcel is lost of course, but this introduces 19252*15 = 288780 NAs in the "not left" variable, lucfip
-
-  # so there is a mismatch between lucpfip and lucfip primarily
-  
-  LHS <- inner_join(lucpfip, lucpfip_dyn, by = c("parcel_id", "lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
-  (nrow(lucpfip) - nrow(LHS))/15
-  # a similar mismatch between lucpfip and lucpfip_dyn. 
-  
-  LHS <- inner_join(lucfip, lucpfip_dyn, by = c("parcel_id", "lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
-  (nrow(lucfip) - nrow(LHS))/15
-  # BUT NOT between lucfip and lucpfip_dyn (only the 3 parcels that do not match between lucfp and lucpfp workflows). 
-  
-  
-  LHS <- inner_join(lucpfip, lucfip, by = c("lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
-  (nrow(lucpfip) - nrow(LHS))/15
-  # NOW if the join is not based on parcel_id, the mismatch is gone
-  LHS <- inner_join(lucpfip, lucpfip_dyn, by = c("lat", "lon", "year"))# THE LEFT JOIN IS TEMPORARY NECESSARY BECAUSE OF THE ISSUE THE DIFFERENT NUMBERS OF PARCELS INCLUDED IN THE LUCFP AND LUCPFP WORKFLOWS -in prepare_* scripts. 
-  (nrow(lucpfip) - nrow(LHS))/15
-  # idem for lucpfip and lucpfip_dyn
-  # SO THE PROBLEM COMES FROM DIFFERENT ALLOCATIONS OF PARCEL_IDs IN THE LUCPFIP (and lucpfsmp) WORKFLOW THAN IN THE LUCFIP AND LUCPFIP_DYN WORKFLOWS
-  
-  # the parcels are the same geographically, but they got different ids. 
-  
-  
-  
-  
-  sum(is.na(lucfip$lucfip_pixelcount_30th))
-  
-  anyNA(LHS$lucpfip_pixelcount_30th)
-  LHS <- inner_join(LHS, lucpfsmp, by = c("parcel_id", "lat", "lon" , "year"))
-  #LHS <- inner_join(LHS, lucfsmp, by = c("parcel_id", "lat", "lon", "year"))
-  LHS <- inner_join(LHS, lucpfip_dyn, by = c("parcel_id","lat", "lon" , "year"))# 
-  (nrow(lucpfip_dyn) - nrow(LHS))/15
+  LHS <- inner_join(lucpfip, lucfip, by = c("lonlat", "year")) 
+  LHS <- inner_join(LHS, lucpfsmp, by = c("lonlat", "year")) 
+  LHS <- inner_join(LHS, lucfsmp, by = c("lonlat", "year"))   
+  LHS <- inner_join(LHS, lucpfip_dyn, by = c("lonlat", "year"))# 
   if(nrow(LHS) != nrow(lucpfip)){stop("LHS datasets don't all have the same sets of parcels")}
   
-  # Le inner_join entre lucpfip et lucfip fait perdre 3 parcelles. 
-  #
-  # bon donc, le inner_join avec lucpfip_dyn *avec parcel_id* fait perdre 19252 pacelles
-  # le inner_join avec lucpfip_dyn *sans parcel_id* fait perdre seulement 3 parcelles 
-  # 
-  # The number of NAs in lucpfip is 
-  # 
-  # 
-  # 
-  # 
-  # 
+  #   (nrow(lucpfip) - nrow(LHS))/15
+
+  ## make a variable that counts rapid and slow lucfp events (this is only computed for primary forest as of now)
+  # THIS IS GOING TO BE THE MAIN OUTCOME VARIABLE INSTEAD OF lucpfip_pixelcount_total
+  LHS$lucpfip_rapidslow_pixelcount <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount
   
   # make variable that counts lucfp events on both small and medium sized plantations 
   LHS$lucpfsmp_pixelcount_total <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
-  #LHS$lucpfsmp_ha_total <- LHS$lucpfsp_ha_total + LHS$lucpfmp_ha_total
+  LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
+
+  ## make a variable that counts lucfp events on all types of plantations
+  LHS$lucpfap_pixelcount_total <- LHS$lucpfip_rapidslow_pixelcount + LHS$lucpfsmp_pixelcount_total
+  LHS$lucfap_pixelcount_total <- LHS$lucfip_pixelcount_total + LHS$lucfsmp_pixelcount_total
   
-  #LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
-  #LHS$lucfsmp_ha_30th <- LHS$lucfsp_ha_30th + LHS$lucfmp_ha_30th
+
+
   
-  # check that rapid + slow = total ? 
-  # LHS$slow_rapid <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount + LHS$lucpfip_replace_pixelcount
-  # LHS$diff <- LHS$lucpfip_pixelcount_total - LHS$slow_rapid
-  # summary(LHS$diff)
-  # 
-  # LHS[LHS$diff ==0 &LHS$lucpfip_pixelcount_total!=0,c("lucpfip_rapid_pixelcount", "lucpfip_slow_pixelcount","lucpfip_pixelcount_total" )] %>% nrow()
   
-  rm(lucpfip, lucfip, lucpfsmp, 
-     #lucfsmp, 
-     lucpfip_dyn)
+#   # check that rapid + slow = total ? 
+#   LHS$lucpfip_rapidslowreplace_pixelcount <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount + LHS$lucpfip_replace_pixelcount
+# 
+#   LHS$diff_0expct <- LHS$lucpfip_pixelcount_total - LHS$lucpfip_rapidslow_pixelcount
+#   
+#   LHS$diff_negexpct <- LHS$lucpfip_pixelcount_total - LHS$lucpfip_rapidslowreplace_pixelcount
+#   
+#   # investigate within cells that have at least one thing happening
+#   lhs <- LHS[LHS$lucpfip_pixelcount_total!=0 | 
+#                               LHS$lucpfip_rapid_pixelcount!=0 |
+#                               LHS$lucpfip_slow_pixelcount!=0 |
+#                               LHS$lucpfip_replace_pixelcount!=0 ,]
+# 
+#   Hmisc::describe(lhs$diff_negexpct)
+#   summary(lhs$diff_negexpct)
+# # this is never positif. Meaning that total is never greater than all three dynamic measures. 
+#   Hmisc::describe(lhs$diff_0expct)
+#   summary(lhs$diff_0expct)
+#   
+# # But some replace seems to be counted in total. This is when total is positive. This is 10% of the cases. 
+#   sum(lhs$diff_0expct>0)/nrow(lhs)
+#   sum(lhs$diff_0expct==0)/nrow(lhs)
+#   sum(lhs$diff_0expct<0)/nrow(lhs)
+#   
+#   View(lhs[lhs$diff_0expct<0,c("lonlat","year","diff_0expct", "lucpfip_pixelcount_total", "lucpfip_rapid_pixelcount",  "lucpfip_slow_pixelcount",  "lucpfip_replace_pixelcount" )])
+#   
+#   unique(no_0expct$year) # no special pattern in time
+#   
+#   # check pattern in space
+#   no_0expct <- st_as_sf(no_0expct, coords = c("lon", "lat"), crs = 4326)
+#   plot(st_geometry(no_0expct)) # no special pattern in space neither
+
+#   length(unique(LHS$diff_0expct))
+#   # 23442 obs. have a different lucpfip_pixelcount_total than rapid + slow, 
+#   # identify them   
+#   no_0expct <- LHS[LHS$diff_0expct != 0,]
+#   
+#   Hmisc::describe(LHS$diff_negexpct)
+#   
+#   
+#   LHS[LHS$diff ==0 &LHS$lucpfip_pixelcount_total!=0,c("lucpfip_rapid_pixelcount", "lucpfip_slow_pixelcount","lucpfip_pixelcount_total" )] %>% nrow()
+# 
+#   rm(lucpfip, lucfip, lucpfsmp, 
+#      #lucfsmp, 
+#      lucpfip_dyn)
   
   
   ### EXPLICATIVE VARIABLES (runs from 1998-2015)
   RHS <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
                                     parcel_size/1000,"km_",catchment_radius/1000,"CR.rds")))
   
+  # this is temporary necessary, but in the new version of wa_at_parcels_distances, lonlat is already available in RHS and merging can be directly executed with  #  
+  library(sf)
+  indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+  RHS <- st_as_sf(RHS, coords = c("lon", "lat"), crs = indonesian_crs, remove = FALSE)
+  RHS <- st_transform(RHS, crs = 4326)
+  RHS$lon <- st_coordinates(RHS)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
+  RHS$lat <- st_coordinates(RHS)[,"Y"]%>% round(6) 
+  RHS <- mutate(RHS, lonlat = paste0(lon, lat))
+  RHS <- st_drop_geometry(RHS)
+  RHS <- dplyr::select(RHS, -lat, -lon, -parcel_id)
+  
+  # Final code if wa_at_CR_parcels.R and add_CR_parcels.R are run again
+  # RHS <- dplyr::select(RHS, -lat, -lon, -idncrs_lat, -idncrs_lon)
+  # parcels <- inner_join(LHS, RHS, by = c("lonlat", "year"))
+  
   # MERGE
   # years 1998 - 2000 from RHS will not match, we don't need to keep them because the information 
   # from these years is captured in add_parcel_variables.R within lag variables. Hence the inner_join
-  RHS$lat <- round(RHS$lat,6)
-  RHS$lon <- round(RHS$lon,6)
-  parcels <- inner_join(LHS, RHS, by = c("parcel_id","lat", "lon", "year")) #  
+  # one can check that without Papua nor 1998-2000 obs., RHS has the same number of rows 
+  # RHS <- RHS[RHS$island != "Papua",]
+  # RHS <- RHS[RHS$year > 2000,]  
+  parcels <- inner_join(LHS, RHS, by = c("lonlat", "year")) #  
   
+
   if(nrow(parcels) != nrow(LHS)){stop("LHS and RHS don't have the exact same set of parcels")}
   rm(LHS, RHS)  
 
+  
+  
   
   ### OUTCOME VARIABLE TIME DYNAMICS
   
@@ -202,71 +216,71 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   #                        "lucfip_ha_30th", "lucfip_ha_60th", "lucfip_ha_90th", 
   #                        "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th")
   
-  # retirer cette ligne a la fin, mais pour l'instant fait gagner du temps, on a pas besoin de toutes les autres
-  outcome_variables <- c("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
-  
-  for(voi in outcome_variables){
-    ## different lags
-    for(lag in c(1:4)){
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = voi, 
-                                    TimeVar = "year",
-                                    GroupVar = "parcel_id",
-                                    NewVar = paste0(voi,"_lag",lag),
-                                    slideBy = -lag, 
-                                    keepInvalid = TRUE)
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
-    }
-    
-    
-    for(py in c(2,3,4)){
-      ## Past-year average (2, 3 and 4 years) 
-      parcels$newv <- rowMeans(x = parcels[,paste0(voi,"_lag",c(1:py))], na.rm = FALSE)
-      parcels[is.nan(parcels$newv),"newv"] <- NA
-      colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_",py,"pya")
-      
-      # Lag it
-      # note that 3pya_lag1 is different from 4pya. 
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = paste0(voi,"_",py,"pya"), 
-                                    TimeVar = "year",
-                                    GroupVar = "parcel_id",
-                                    NewVar = paste0(voi,"_",py,"pya_lag1"),
-                                    slideBy = -1, 
-                                    keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
-      
-      ## YOY growth rate
-      parcels <- mutate(parcels,
-                        !!as.symbol(paste0(voi,"_yoyg")) := 100*(!!as.symbol(paste0(voi)) - 
-                                                                 !!as.symbol(paste0(voi,"_lag1"))) /
-                                                                 !!as.symbol(paste0(voi,"_lag1")))
-      # lag it
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = paste0(voi,"_yoyg"), 
-                                    TimeVar = "year",
-                                    GroupVar = "parcel_id",
-                                    NewVar = paste0(voi,"_yoyg_lag1"),
-                                    slideBy = -1, 
-                                    keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
-    }
-  }
+  # # retirer cette ligne a la fin, mais pour l'instant fait gagner du temps, on a pas besoin de toutes les autres
+  # outcome_variables <- c("lucpfip_rapidslow_pixelcount_total", "lucpfsmp_pixelcount_total")
+  # 
+  # for(voi in outcome_variables){
+  #   ## different lags
+  #   for(lag in c(1:4)){
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #     parcels <- DataCombine::slide(parcels,
+  #                                   Var = voi, 
+  #                                   TimeVar = "year",
+  #                                   GroupVar = "lonlat",
+  #                                   NewVar = paste0(voi,"_lag",lag),
+  #                                   slideBy = -lag, 
+  #                                   keepInvalid = TRUE)
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #   }
+  #   
+  #   
+  #   for(py in c(2,3,4)){
+  #     ## Past-year average (2, 3 and 4 years) 
+  #     parcels$newv <- rowMeans(x = parcels[,paste0(voi,"_lag",c(1:py))], na.rm = FALSE)
+  #     parcels[is.nan(parcels$newv),"newv"] <- NA
+  #     colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_",py,"pya")
+  #     
+  #     # Lag it
+  #     # note that 3pya_lag1 is different from 4pya. 
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #     parcels <- DataCombine::slide(parcels,
+  #                                   Var = paste0(voi,"_",py,"pya"), 
+  #                                   TimeVar = "year",
+  #                                   GroupVar = "lonlat",
+  #                                   NewVar = paste0(voi,"_",py,"pya_lag1"),
+  #                                   slideBy = -1, 
+  #                                   keepInvalid = TRUE)  
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #     
+  #     ## YOY growth rate
+  #     parcels <- mutate(parcels,
+  #                       !!as.symbol(paste0(voi,"_yoyg")) := 100*(!!as.symbol(paste0(voi)) - 
+  #                                                                !!as.symbol(paste0(voi,"_lag1"))) /
+  #                                                                !!as.symbol(paste0(voi,"_lag1")))
+  #     # lag it
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #     parcels <- DataCombine::slide(parcels,
+  #                                   Var = paste0(voi,"_yoyg"), 
+  #                                   TimeVar = "year",
+  #                                   GroupVar = "lonlat",
+  #                                   NewVar = paste0(voi,"_yoyg_lag1"),
+  #                                   slideBy = -1, 
+  #                                   keepInvalid = TRUE)  
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #   }
+  # }
   
   ### ADD BASELINE FOREST EXTENT 
   # this is a cross section, computed in prepare_2000_forest_extents.R
   bfe <- readRDS(file.path(paste0("temp_data/processed_parcels/baseline_fc_cs_",
                                   parcel_size/1000,"km_",
                                   catchment_radius/1000,"km_IBS_CR.rds")))
-  bfe <- dplyr::select(bfe, parcel_id, lat, lon, everything())
   
+  bfe <- dplyr::select(bfe, -lat, -lon, -idncrs_lat, -idncrs_lon)
+  
+  if(!all.equal(sort(unique(bfe$lonlat)), sort(unique(parcels$lonlat)))){stop("baseline forest extent and main data frames do not have the same set of grid cells")}  
   # merge it with our parcel panel
-  parcels <- base::merge(parcels, 
-                         dplyr::select(bfe, -lat, -lon, -fc2000_30th_ha, -pfc2000_total_ha), 
-                         by = "parcel_id")
+  parcels <- left_join(parcels, bfe, by = "lonlat")
   
   rm(bfe)
   # test that the parcel_id have been attributed to parcels equally in the two processes 
@@ -291,10 +305,10 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   # parcels <- dplyr::mutate(parcels,
   #                          total_lucfp_30th = lucfip_pixelcount_30th + lucfsmp_pixelcount_30th)
   
-  parcels <- dplyr::mutate(parcels, 
-                           total_lucpfp_total = lucpfip_pixelcount_total + lucpfsmp_pixelcount_total)
+  # parcels <- dplyr::mutate(parcels, 
+  #                          total_lucpfp_total = lucpfip_pixelcount_total + lucpfsmp_pixelcount_total)
   
-  # anyNA(parcels$total_lucpfp_total) returns FALSE
+  # anyNA(parcels$lucpfap_pixelcount_total) returns FALSE
   
   # then annual lucfp accumulated over past years
   
@@ -305,24 +319,24 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   # names(year_list[["2001"]]) <- "parcel_id"%>% as.data.frame() 
   year_list[["2001"]][,"accu_lucpfp_since2k"] <- 0
 
-  # then, each year's lucfp accumulated in the past is the sum of *past years'* total_lucpfp_total
+  # then, each year's lucfp accumulated in the past is the sum of *past years'* lucpfap_pixelcount_total
   years <- 2002:max(parcels$year)
   for(y in years){
     sub_ <- parcels[parcels$year < y,]
     year_list[[as.character(y)]] <- ddply(sub_, "parcel_id", summarise,
                                             #accu_lucfp_since2k = sum(total_lucfp_30th, na.rm = TRUE),
-                                            accu_lucpfp_since2k = sum(total_lucpfp_total, na.rm = TRUE))
+                                            accu_lucpfp_since2k = sum(lucpfap_pixelcount_total, na.rm = TRUE))
     year_list[[as.character(y)]][,"year"] <- y
   }
   
   # data <- parcels[parcels$year < y,]
   # t <- ddply(data, "parcel_id", summarise,
   #            #past_accu_lucfp = sum(total_lucfp_30th, na.rm = TRUE),
-  #            accu_lucpfp_since2k = sum(total_lucpfp_total, na.rm = TRUE))
+  #            accu_lucpfp_since2k = sum(lucpfap_pixelcount_total, na.rm = TRUE))
   
   accu_lucfp_df <- bind_rows(year_list)
   
-  parcels <- merge(parcels, accu_lucfp_df, by = c("parcel_id", "year"))
+  parcels <- inner_join(parcels, accu_lucfp_df, by = c("parcel_id", "year"))
   
 
   # summary(parcels$accu_lucpfp_since2k)
@@ -330,7 +344,7 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
                            #remain_f30th_pixelcount = fc2000_30th_pixelcount - accu_lucfp_since2k,
                            remain_pf_pixelcount = pfc2000_total_pixelcount - accu_lucpfp_since2k)
   
-  # parcels[parcels$parcel_id == 1267,c("parcel_id", "year", "total_lucpfp_total", "accu_lucpfp_since2k", "remain_pf_pixelcount")] 
+  # parcels[parcels$parcel_id == 1267,c("parcel_id", "year", "lucpfap_pixelcount_total", "accu_lucpfp_since2k", "remain_pf_pixelcount")] 
   
   
   

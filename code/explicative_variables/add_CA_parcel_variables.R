@@ -171,7 +171,7 @@ for(travel_time in c(2,4,6)){
     for(t in 1:length(years)){
       
       # take the annual cross section of it (parcels' coordinates are constant over time)
-      parcels_centro <- parcels[parcels$year == years[t], c("parcel_id", "year", "lat", "lon")]
+      parcels_centro <- parcels[parcels$year == years[t], c("lonlat", "year", "lat", "lon")]
       # and of the uml data set (only useful for the checks)
       # if(island == "Sumatra"){
       #   uml_cs <- uml_sumatra[uml_sumatra$est_year_imp <= years[t] | is.na(uml_sumatra$est_year_imp),]
@@ -189,13 +189,13 @@ for(travel_time in c(2,4,6)){
       # below are several checks that we are allocating the right duration to the right pair of parcel-mill. 
       # if(nrow(uml_cs) != ncol(dur_mat)){stop(paste0("duration matrix and mill cross section don't match in ",island,"_",parcel_size/1000,"km_",travel_time,"h_UML_",years[t]))}
       
-      # for more safety, merge the dur_mat with the parcels_centro centro based on coordinates identifiers
+      # for more safety, merge the dur_mat with the parcels_centro based on coordinates identifiers
       dur_mat <- as.data.frame(dur_mat)
       dur_mat$lonlat <- row.names(dur_mat)
       parcels_centro <- mutate(parcels_centro, lonlat = paste0(lon, lat))
       
-      # sort = FALSE is MEGA IMPORTANT because otherwise dur_mat get sorted in a different way than
-      dur_mat <- merge(dur_mat, parcels_centro[,c("lonlat", "parcel_id")], by = "lonlat", all = FALSE, sort = FALSE)
+      # sort = FALSE is MEGA IMPORTANT because otherwise dur_mat get sorted in a different way than parcels_centro
+      dur_mat <- merge(dur_mat, parcels_centro[,c("lonlat", "lon", "lat")], by = "lonlat", all = FALSE, sort = FALSE)
       row.names(dur_mat) <- dur_mat$lonlat
       # so there should be the same amount of parcels_centro which coordinates matched, as the total amount of parcels.
       if(nrow(dur_mat) != nrow(parcels_centro)){stop(paste0("duration matrix and parcel cross section did not merge in ",island,"_",parcel_size/1000,"km_",travel_time,"h_UML_",years[t]))}
@@ -203,16 +203,15 @@ for(travel_time in c(2,4,6)){
       # # additional check:
       row.names(parcels_centro) <- parcels_centro$lonlat
       
-      parcels_centro <- dplyr::arrange(parcels_centro, parcel_id)
-      dur_mat <- dplyr::arrange(dur_mat, parcel_id)
+      parcels_centro <- dplyr::arrange(parcels_centro, lonlat)
+      dur_mat <- dplyr::arrange(dur_mat, lonlat)
       
       if(!(all.equal(row.names(parcels_centro), row.names(dur_mat)))){stop()}
-      
-      # nest the sets of reachable mills within each parcel row.
-      dur_mat <- dplyr::select(dur_mat, -lonlat, -parcel_id)
+
+      # convert durations (in minutes) into logical whether each parcel-mill pair's travel time is inferior to a threshold travel_time
+      dur_mat <- dplyr::select(dur_mat, -lonlat, -lon, -lat)
       dur_mat <- as.matrix(dur_mat)
       
-      # convert durations (in minutes) into logical whether each parcel-mill pair's travel time is inferior to a threshold travel_time
       dur_mat_log <- dur_mat/(60) < travel_time
       
       # replace the few NAs with FALSE
@@ -223,13 +222,13 @@ for(travel_time in c(2,4,6)){
       # count reachable mills from each parcel  
       parcels_centro$n_reachable_uml <- sapply(1:nrow(parcels_centro), FUN = function(i){sum(dur_mat_log[i,])})
       
-      # rearrange the panel, so that within cross sections, it's ordred by parcel_id. 
-      #parcels <- dplyr::arrange(parcels, year, parcel_id)
+      # rearrange the panel, so that within cross sections, it's ordred by lonlat. 
+      #parcels <- dplyr::arrange(parcels, year, lonlat)
       
-      # this makes sure that the n_reachable_uml cross section is integrated into the panel in face of the right parcel_id. 
-      parcels[parcels$year==years[t], c("parcel_id", "year", "n_reachable_uml")] <- inner_join(parcels[, c("parcel_id", "year")], 
-                                                                                               parcels_centro[,c("parcel_id", "year", "n_reachable_uml")], 
-                                                                                               by = c("parcel_id", "year"))
+      # this makes sure that the n_reachable_uml cross section is integrated into the panel in face of the right lonlat. 
+      parcels[parcels$year==years[t], c("lonlat", "year", "n_reachable_uml")] <- inner_join(parcels[, c("lonlat", "year")], 
+                                                                                               parcels_centro[,c("lonlat", "year", "n_reachable_uml")], 
+                                                                                               by = c("lonlat", "year"))
       rm(parcels_centro, uml_cs, dur_mat, dur_mat_log)
     }# closes loop over years
     
@@ -260,7 +259,7 @@ for(travel_time in c(2,4,6)){
   ### PROVINCE variable
   
   # Work with a cross section for province and district attribution
-  parcels_cs <- parcels[!duplicated(parcels$parcel_id),]
+  parcels_cs <- parcels[!duplicated(parcels$lonlat),]
   
   # the nearest feature function enables to also grab those parcels which centroids are in the sea.
   nearest_prov_idx <- st_nearest_feature(parcels_cs, province_sf_prj)
@@ -276,8 +275,8 @@ for(travel_time in c(2,4,6)){
   parcels_cs$district <- district_sf_prj$name_[nearest_dstr_idx]
   
   parcels <- merge(st_drop_geometry(parcels),
-                   st_drop_geometry(parcels_cs[,c("parcel_id", "province", "district")]),
-                   by = "parcel_id")
+                   st_drop_geometry(parcels_cs[,c("lonlat", "province", "district")]),
+                   by = "lonlat")
   
   
   # SPATIAL TRENDS VARIABLES
@@ -289,7 +288,7 @@ for(travel_time in c(2,4,6)){
   
   ### NEIGHBORS VARIABLE
   # create a grouping variable at the cross section (9 is to recall the the group id includes the 8 neighbors + the central grid cell.)
-  parcels_cs <- parcels[!duplicated(parcels$parcel_id),c("parcel_id", "year", "idncrs_lat", "idncrs_lon")]
+  parcels_cs <- parcels[!duplicated(parcels$lonlat),c("lonlat", "year", "idncrs_lat", "idncrs_lon")]
   
   # spatial
   parcels_cs <- st_as_sf(parcels_cs, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
@@ -297,15 +296,15 @@ for(travel_time in c(2,4,6)){
   # identify neighbors
   # this definition of neighbors includes the 8 closest, surrounding, grid cells.
   parcels_buf <- st_buffer(parcels_cs, dist = parcel_size - 10)
-  row.names(parcels_buf) <- parcels_buf$parcel_id
+  row.names(parcels_buf) <- parcels_buf$lonlat
   sgbp <- st_intersects(parcels_buf)
   
   neighbors <- list()
   length(neighbors) <- nrow(parcels_cs)
   parcels_cs$neighbors <- neighbors
-  parcels_cs$neighbors <- lapply(1:nrow(parcels_cs), FUN = function(i){parcels_cs$parcel_id[sgbp[[i]]]}) 
+  parcels_cs$neighbors <- lapply(1:nrow(parcels_cs), FUN = function(i){parcels_cs$lonlat[sgbp[[i]]]}) 
   
-  parcels <- merge(parcels, parcels_cs[,c("parcel_id", "neighbors")], by = "parcel_id", all = TRUE)
+  parcels <- merge(parcels, parcels_cs[,c("lonlat", "neighbors")], by = "lonlat", all = TRUE)
   
   
   
@@ -341,15 +340,15 @@ for(travel_time in c(4,6)){ #2,4,
   
   for(voi in variables){
     ## lags
-    parcels <- dplyr::arrange(parcels, parcel_id, year)
+    parcels <- dplyr::arrange(parcels, lonlat, year)
     parcels <- DataCombine::slide(parcels,
                                   Var = voi, 
                                   TimeVar = "year",
-                                  GroupVar = "parcel_id",
+                                  GroupVar = "lonlat",
                                   NewVar = paste0(voi,"_lag1"),
                                   slideBy = -1, 
                                   keepInvalid = TRUE)
-    parcels <- dplyr::arrange(parcels, parcel_id, year)
+    parcels <- dplyr::arrange(parcels, lonlat, year)
   }
   
   #parcels1 <- parcels
@@ -363,28 +362,28 @@ for(travel_time in c(4,6)){ #2,4,
     
     ## short to long lags
     for(lag in c(1:5)){
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = voi, 
                                     TimeVar = "year",
-                                    GroupVar = "parcel_id",
+                                    GroupVar = "lonlat",
                                     NewVar = paste0(voi,"_lag",lag),
                                     slideBy = -lag, 
                                     keepInvalid = TRUE)
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       
     }
     # ## leads                               
     # for(lag in c(1:5)){
-    #   parcels <- dplyr::arrange(parcels, parcel_id, year)
+    #   parcels <- dplyr::arrange(parcels, lonlat, year)
     #   parcels <- DataCombine::slide(parcels,
     #                                 Var = voi, 
     #                                 TimeVar = "year",
-    #                                 GroupVar = "parcel_id",
+    #                                 GroupVar = "lonlat",
     #                                 NewVar = paste0(voi,"_lead",lag),
     #                                 slideBy = lag, 
     #                                 keepInvalid = TRUE) 
-    #   parcels <- dplyr::arrange(parcels, parcel_id, year)
+    #   parcels <- dplyr::arrange(parcels, lonlat, year)
     # } 
     
     for(py in c(2,3,4)){
@@ -395,15 +394,15 @@ for(travel_time in c(4,6)){ #2,4,
       
       # lag the past year average (useful if we use those per se. as measures of LR price signal)
       # note that 3pya_lag1 is different from 4pya. 
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = paste0(voi,"_",py,"pya"), 
                                     TimeVar = "year",
-                                    GroupVar = "parcel_id",
+                                    GroupVar = "lonlat",
                                     NewVar = paste0(voi,"_",py,"pya_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       
       
       # ## and absolute deviation - SHORT RUN MEASURE -
@@ -417,15 +416,15 @@ for(travel_time in c(4,6)){ #2,4,
       # #  
       # 
       # # Lag these deviations by one year
-      # parcels <- dplyr::arrange(parcels, parcel_id, year)
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
       # parcels <- DataCombine::slide(parcels,
       #                               Var = paste0(voi,"_dev_",py,"pya"), 
       #                               TimeVar = "year",
-      #                               GroupVar = "parcel_id",
+      #                               GroupVar = "lonlat",
       #                               NewVar = paste0(voi,"_dev_",py,"pya_lag1"),
       #                               slideBy = -1, 
       #                               keepInvalid = TRUE)  
-      # parcels <- dplyr::arrange(parcels, parcel_id, year)
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
       
       ## and mean of contemporaneous and pya - OVERALL MEASURE - 
       
@@ -440,15 +439,15 @@ for(travel_time in c(4,6)){ #2,4,
       colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_",py+1,"ya")    
       
       # and lag it
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = paste0(voi,"_",py+1,"ya"), 
                                     TimeVar = "year",
-                                    GroupVar = "parcel_id",
+                                    GroupVar = "lonlat",
                                     NewVar = paste0(voi,"_",py+1,"ya_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       
       
     }
@@ -458,25 +457,25 @@ for(travel_time in c(4,6)){ #2,4,
     
     ### Contemporaneous and past-year averaged YEAR-ON-YEAR GROWTH
     
-    ## contemporaneous yoyg - SHORT RUN MEASURE - (invalid for at least the first record of each parcel_id)
+    ## contemporaneous yoyg - SHORT RUN MEASURE - (invalid for at least the first record of each lonlat)
     parcels <- mutate(parcels,
                       !!as.symbol(paste0(voi,"_yoyg")) := 100*(!!as.symbol(paste0(voi)) - 
                                                                  !!as.symbol(paste0(voi,"_lag1"))) /
                         !!as.symbol(paste0(voi,"_lag1")))
     
     ## Lagged yoyg 
-    # (the first lag is invalid for at least two first records of each parcel_id;    
+    # (the first lag is invalid for at least two first records of each lonlat;    
     # the fourth lag is invalid for at least 5 first records)
     for(lag in c(1:4)){
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = paste0(voi,"_yoyg"), 
                                     TimeVar = "year",
-                                    GroupVar = "parcel_id",
+                                    GroupVar = "lonlat",
                                     NewVar = paste0(voi,"_yoyg_lag",lag),
                                     slideBy = -lag, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
     }
     
     
@@ -489,15 +488,15 @@ for(travel_time in c(4,6)){ #2,4,
       
       
       # Lag by one year
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = paste0(voi,"_yoyg_",py,"pya"), 
                                     TimeVar = "year",
-                                    GroupVar = "parcel_id",
+                                    GroupVar = "lonlat",
                                     NewVar = paste0(voi,"_yoyg_",py,"pya_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       
       
       ## contemporaneous AND pya yoyg mean - OVERALLMEASURE -   
@@ -514,15 +513,15 @@ for(travel_time in c(4,6)){ #2,4,
       
       
       # Lag by one year
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = paste0(voi,"_yoyg_",py+1,"ya"), 
                                     TimeVar = "year",
-                                    GroupVar = "parcel_id",
+                                    GroupVar = "lonlat",
                                     NewVar = paste0(voi,"_yoyg_",py+1,"ya_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       
     }
   }# closes the loop on variables  
@@ -637,7 +636,7 @@ for(travel_time in c(2, 4)){ #6 is too heavy for now
   
   for(y in min(rspo$year):max(parcels$year)){
     # select parcels from the given year
-    parcels_cs <- parcels[parcels$year == y, c("parcel_id", "year", "rspo_cert")]
+    parcels_cs <- parcels[parcels$year == y, c("lonlat", "year", "rspo_cert")]
     # select supply bases already certified this year
     rspo_cs <- rspo[rspo$year <= y,] %>% st_geometry()
     
@@ -653,7 +652,7 @@ for(travel_time in c(2, 4)){ #6 is too heavy for now
   
   # We do not observe whether a grid cell is within a concession annually. 
   # Therefore we only proceed with a cross section
-  parcels_cs <- parcels[!duplicated(parcels$parcel_id),]
+  parcels_cs <- parcels[!duplicated(parcels$lonlat),]
   sgbp <- st_within(parcels_cs, cns)
   parcels_cs$concession <- rep(FALSE, nrow(parcels_cs))
   parcels_cs$concession[lengths(sgbp) > 0] <- TRUE
@@ -661,7 +660,7 @@ for(travel_time in c(2, 4)){ #6 is too heavy for now
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- left_join(parcels, parcels_cs[,c("parcel_id", "concession")], by = "parcel_id")
+  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "concession")], by = "lonlat")
   rm(cns, parcels_cs)
   # note that some parcels fall within more than one concession record. There may be several reasons for concession overlaps 
   # like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
@@ -671,7 +670,7 @@ for(travel_time in c(2, 4)){ #6 is too heavy for now
   ### LEGAL LAND USE 
   parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
   # this is quite long (~5min)
-  parcels_cs <- parcels[!duplicated(parcels$parcel_id),]
+  parcels_cs <- parcels[!duplicated(parcels$lonlat),]
   parcels_cs <- st_join(x = parcels_cs, 
                         y = st_make_valid(llu[,"llu"]), # st_make_valid bc thrown error otherwise 
                         join = st_within, 
@@ -679,13 +678,13 @@ for(travel_time in c(2, 4)){ #6 is too heavy for now
   
   # some grid cells seem to fall within overlapping llu shapes though. 
   # It's really marginal (12 instances). Just remove the duplicates it produces.
-  parcels_cs <- parcels_cs[!duplicated(parcels_cs$parcel_id),]
+  parcels_cs <- parcels_cs[!duplicated(parcels_cs$lonlat),]
   
   # merge back with panel 
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- left_join(parcels, parcels_cs[,c("parcel_id", "llu")], by = "parcel_id")
+  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "llu")], by = "lonlat")
   rm(parcels_cs)
   
   #unique(parcels$llu)
@@ -703,7 +702,7 @@ for(travel_time in c(2, 4)){ #6 is too heavy for now
                                                         llu == "HL")))
   rm(llu)
   # yields many missing in illegal because many grid cells are within a mising land use legal classification
-  # parcels[!duplicated(parcels$parcel_id) & !is.na(parcels$llu), c("parcel_id", "concession", "llu", "illegal1", "illegal2")]
+  # parcels[!duplicated(parcels$lonlat) & !is.na(parcels$llu), c("lonlat", "concession", "llu", "illegal1", "illegal2")]
   
   
   
@@ -721,20 +720,20 @@ for(travel_time in c(2, 4)){ #6 is too heavy for now
   # ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
   # 
   # for(IV in ivS){
-  #   parcels <- dplyr::arrange(parcels, parcel_id, year)
+  #   parcels <- dplyr::arrange(parcels, lonlat, year)
   #   parcels <- DataCombine::slide(parcels,
   #                                 Var = IV, 
   #                                 TimeVar = "year",
-  #                                 GroupVar = "parcel_id",
+  #                                 GroupVar = "lonlat",
   #                                 NewVar = paste0(IV,"_lag1"),
   #                                 slideBy = -1, 
   #                                 keepInvalid = TRUE)  
-  #   parcels <- dplyr::arrange(parcels, parcel_id, year)
+  #   parcels <- dplyr::arrange(parcels, lonlat, year)
   # }
   # rm(IV, ivS)
   # # View(parcels[!is.na(parcels$wa_prex_cpo_imp1_lag1) &
   # #                parcels$year>2007 &
-  # #                parcels$wa_prex_cpo_imp1_lag1!=0 ,c("parcel_id" ,"year", paste0("wa_prex_cpo_imp",c(1,2),"_lag1"),
+  # #                parcels$wa_prex_cpo_imp1_lag1!=0 ,c("lonlat" ,"year", paste0("wa_prex_cpo_imp",c(1,2),"_lag1"),
   # #                                                      paste0("spread",c(1:4)),
   # #                                                      paste0("iv",c(1:4),"_imp1"),
   # #                                                      paste0("iv",c(1:4),"_imp2"), 

@@ -872,7 +872,8 @@ for(sample in sampleS){
       
       df_slow <- dplyr::select(df_slow, -lon, -lat, -idncrs_lon, -idncrs_lat)
       df_list[[match(Island, IslandS)]] <- inner_join(df, df_slow, by = c("lonlat", "year"))
-      
+
+      # here, it's normal that df_replace do not have the same size as the two others. 
       if(nrow(df_list[[match(Island, IslandS)]]) != nrow(df_slow)){stop("data frames do not all have the same set of grid cells")}
       rm(df, df_replace, df_rapid, df_slow)
     }

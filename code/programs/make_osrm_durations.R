@@ -338,7 +338,7 @@ for(island in c("Sumatra", "Kalimantan")){ # , "Papua"
     # Import a parcel panel outputed from make_osrm_CA.R for a given island and a given maximum travel time. 
     parcels_centro <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_CA_total.rds")))
     # keep only one cross-section, no matter which. 
-    parcels_centro <- parcels_centro[!duplicated(parcels_centro$parcel_id),]
+    parcels_centro <- parcels_centro[!duplicated(parcels_centro$lonlat),]
     # turn it into a sf object
     parcels_centro <- st_as_sf(parcels_centro, coords = c("lon", "lat"), remove = FALSE, crs = 4326)
 
@@ -411,7 +411,7 @@ for(island in c("Sumatra", "Kalimantan")){
     parcels_centro <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_CA_total.rds")))
     
     # keep only one cross-section, no matter which. 
-    parcels_centro <- parcels_centro[!duplicated(parcels_centro$parcel_id),]
+    parcels_centro <- parcels_centro[!duplicated(parcels_centro$lonlat),]
     # turn it into a sf object
     parcels_centro <- st_as_sf(parcels_centro, coords = c("lon", "lat"), remove = FALSE, crs = 4326)
     

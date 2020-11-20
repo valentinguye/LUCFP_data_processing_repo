@@ -534,45 +534,52 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     # Turn the masked raster to a sf dataframe
     parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_IBS_masked.tif")))
     
-    m.df_wide <- raster::as.data.frame(parcels_brick, na.rm = TRUE, xy = TRUE, centroids = TRUE)
+    ibs_msk_df <- raster::as.data.frame(parcels_brick, na.rm = TRUE, xy = TRUE, centroids = TRUE)
     
-    m.df_wide <- m.df_wide %>% dplyr::rename(lon = x, lat = y)
-    m.df_wide <- st_as_sf(m.df_wide, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+    # the whole point of the below is to merge more safely the parcel data frames all together. 
+    ibs_msk_df <- ibs_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
+    ibs_msk_df <- st_as_sf(ibs_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
+    ibs_msk_df <- st_transform(ibs_msk_df, crs = 4326)
+    ibs_msk_df$lon <- st_coordinates(ibs_msk_df)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
+    ibs_msk_df$lat <- st_coordinates(ibs_msk_df)[,"Y"]%>% round(6) 
+    ibs_msk_df <- mutate(ibs_msk_df, lonlat = paste0(lon, lat))
+    ibs_msk_df <- st_drop_geometry(ibs_msk_df)
+    ibs_msk_df <- st_as_sf(ibs_msk_df, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
     
     # Remove here parcels that are not within the catchment area of a given size (defined by catchment radius)
     # coordinates of all mills (crs is indonesian crs, unit is meter)
-    within <- st_is_within_distance(m.df_wide, mills_prj, dist = catchment_radius)
-    m.df_wide <- m.df_wide %>% dplyr::filter(lengths(within) >0)
-    m.df_wide <- m.df_wide %>% st_drop_geometry()
+    within <- st_is_within_distance(ibs_msk_df, mills_prj, dist = catchment_radius)
+    ibs_msk_df <- ibs_msk_df %>% dplyr::filter(lengths(within) >0)
+    ibs_msk_df <- ibs_msk_df %>% st_drop_geometry()
     
     rm(within, parcels_brick)
     
     
     ## 3. Reshaping to long format
-    # make parcel id
-    island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
-    m.df_wide$parcel_id <- paste0(island_id, c(1:nrow(m.df_wide))) %>% as.numeric()
+    # # make parcel id
+    # island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
+    # ibs_msk_df$parcel_id <- paste0(island_id, c(1:nrow(ibs_msk_df))) %>% as.numeric()
     
     # vector of the names in the wide format of our time varying variables
     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
     varying_vars <- paste0(parcels_brick_name, "_IBS_masked.", seq(from = 1, to = 18))
     
     # reshape to long
-    m.df <- stats::reshape(m.df_wide,
+    m.df <- stats::reshape(ibs_msk_df,
                            varying = varying_vars,
                            v.names = paste0("lucfip_pixelcount_",th,"th"),
                            sep = ".",
                            timevar = "year",
-                           idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
-                           ids = "parcel_id",
+                           idvar = c("lonlat"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
+                           ids = "lonlat",
                            direction = "long",
-                           new.row.names = seq(from = 1, to = nrow(m.df_wide)*length(years), by = 1))
+                           new.row.names = seq(from = 1, to = nrow(ibs_msk_df)*length(years), by = 1))
     
-    rm(varying_vars, m.df_wide)
+    rm(varying_vars, ibs_msk_df)
     # replace the indices from the raster::as.data.frame with actual years.
     m.df <- mutate(m.df, year = years[year])
     
-    m.df <- setorder(m.df, parcel_id, year)
+    m.df <- setorder(m.df, lonlat, year)
     saveRDS(m.df,
             file = file.path(paste0("temp_data/processed_parcels/lucfip_panel_",
                                     island,"_",
@@ -630,45 +637,52 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     # Turn the masked raster to a sf dataframe
     parcels_brick <- brick(file.path("temp_data/processed_lu", paste0(parcels_brick_name, "_UML_masked.tif")))
     
-    m.df_wide <- raster::as.data.frame(parcels_brick, na.rm = TRUE, xy = TRUE, centroids = TRUE)
+    uml_msk_df <- raster::as.data.frame(parcels_brick, na.rm = TRUE, xy = TRUE, centroids = TRUE)
     
-    m.df_wide <- m.df_wide %>% dplyr::rename(lon = x, lat = y)
-    m.df_wide <- st_as_sf(m.df_wide, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+    # the whole point of the below is to merge more safely the parcel data frames all together. 
+    uml_msk_df <- uml_msk_df %>% dplyr::rename(idncrs_lon = x, idncrs_lat = y)
+    uml_msk_df <- st_as_sf(uml_msk_df, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
+    uml_msk_df <- st_transform(uml_msk_df, crs = 4326)
+    uml_msk_df$lon <- st_coordinates(uml_msk_df)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
+    uml_msk_df$lat <- st_coordinates(uml_msk_df)[,"Y"]%>% round(6) 
+    uml_msk_df <- mutate(uml_msk_df, lonlat = paste0(lon, lat))
+    uml_msk_df <- st_drop_geometry(uml_msk_df)
+    uml_msk_df <- st_as_sf(uml_msk_df, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
     
     # Remove here parcels that are not within the catchment area of a given size (defined by catchment radius)
     # coordinates of all mills (crs is indonesian crs, unit is meter)
-    within <- st_is_within_distance(m.df_wide, mills_prj, dist = catchment_radius)
-    m.df_wide <- m.df_wide %>% dplyr::filter(lengths(within) >0)
-    m.df_wide <- m.df_wide %>% st_drop_geometry()
+    within <- st_is_within_distance(uml_msk_df, mills_prj, dist = catchment_radius)
+    uml_msk_df <- uml_msk_df %>% dplyr::filter(lengths(within) >0)
+    uml_msk_df <- uml_msk_df %>% st_drop_geometry()
     
     rm(within, parcels_brick)
     
     
     ## 3. Reshaping to long format
-    # make parcel id
-    island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
-    m.df_wide$parcel_id <- paste0(island_id, c(1:nrow(m.df_wide))) %>% as.numeric()
+    # # make parcel id
+    # island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
+    # uml_msk_df$parcel_id <- paste0(island_id, c(1:nrow(uml_msk_df))) %>% as.numeric()
     
     # vector of the names in the wide format of our time varying variables
     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
     varying_vars <- paste0(parcels_brick_name, "_UML_masked.", seq(from = 1, to = 18))
     
     # reshape to long
-    m.df <- stats::reshape(m.df_wide,
+    m.df <- stats::reshape(uml_msk_df,
                            varying = varying_vars,
                            v.names = paste0("lucfip_pixelcount_",th,"th"),
                            sep = ".",
                            timevar = "year",
-                           idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
-                           ids = "parcel_id",
+                           idvar = c("lonlat"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
+                           ids = "lonlat",
                            direction = "long",
-                           new.row.names = seq(from = 1, to = nrow(m.df_wide)*length(years), by = 1))
+                           new.row.names = seq(from = 1, to = nrow(uml_msk_df)*length(years), by = 1))
     
-    rm(varying_vars, m.df_wide)
+    rm(varying_vars, uml_msk_df)
     # replace the indices from the raster::as.data.frame with actual years.
     m.df <- mutate(m.df, year = years[year])
     
-    m.df <- setorder(m.df, parcel_id, year)
+    m.df <- setorder(m.df, lonlat, year)
     saveRDS(m.df,
             file = file.path(paste0("temp_data/processed_parcels/lucfip_panel_",
                                     island,"_",
@@ -759,11 +773,15 @@ for(sample in sampleS){
       df60 <- readRDS(paste0("temp_data/processed_parcels/lucfip_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_60th.rds"))
       df90 <- readRDS(paste0("temp_data/processed_parcels/lucfip_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_90th.rds"))
       
-      df60 <- dplyr::select(df60, -lon, -lat)
-      df <- inner_join(df30, df60, by = c("parcel_id", "year"))
-      df90 <- dplyr::select(df90, -lon, -lat)
+      df60 <- dplyr::select(df60, -lon, -lat, -idncrs_lon, -idncrs_lat)
+      df <- inner_join(df30, df60, by = c("lonlat", "year"))
+
+      df90 <- dplyr::select(df90, -lon, -lat, -idncrs_lon, -idncrs_lat)
+      df_list[[match(Island, IslandS)]] <- inner_join(df, df90, by = c("lonlat", "year"))
       
-      df_list[[match(Island, IslandS)]] <- inner_join(df, df90, by = c("parcel_id", "year"))
+      if(nrow(df_list[[match(Island, IslandS)]]) != nrow(df30)){stop("data frames do not all have the same set of grid cells")}
+      rm(df, df30, df60, df90)
+      
     }
     
     # stack the three Islands together
@@ -778,7 +796,7 @@ for(sample in sampleS){
     # # 90th
     # indo_df <- mutate(indo_df, lucfip_ha_90th = lucfip_pixelcount_90th*pixel_area) 
     # 
-    # indo_df <- dplyr::select(indo_df, parcel_id, year, 
+    # indo_df <- dplyr::select(indo_df, lonlat, year, 
     #                          lucfip_ha_30th,
     #                          lucfip_ha_60th, 
     #                          lucfip_ha_90th,
@@ -790,9 +808,9 @@ for(sample in sampleS){
     
     # ### Add categoric variable to distinguish parcels that experienced at least one lucpfip pixel event 
     # indo_df <- merge(indo_df,
-    #                  ddply(indo_df, "parcel_id", summarize, 
+    #                  ddply(indo_df, "lonlat", summarize, 
     #                        any_lucfip = sum(lucfip_ha_total, na.rm = TRUE) >0 ), 
-    #                  by = "parcel_id")
+    #                  by = "lonlat")
     
     
     saveRDS(indo_df, paste0("temp_data/processed_parcels/lucfip_panel_",PS/1000,"km_",CR/1000,"km_",sample,"_CR.rds"))

@@ -653,7 +653,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     # set CRS and project
     mills_prj <- st_transform(mills, crs = indonesian_crs)
     #define big catchment areas to have a large AOI.
-    mills_ca <- st_buffer(mills_prj, dist = 80000)
+    mills_ca <- st_buffer(mills_prj, dist = 60000)
     # work with squares rather than with circles
     for(i in 1:length(mills_ca)){
       mills_ca[i] <- st_as_sfc(st_bbox(mills_ca[i]))
@@ -911,7 +911,7 @@ for(sample in sampleS){
     
     # For each Island, join columns of lucfip variable for different forest definitions 
     df_list <- list()
-    IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
+    IslandS <- c("Sumatra", "Kalimantan", "Papua")#
     for(Island in IslandS){
   
       df_intact   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_intact.rds")))

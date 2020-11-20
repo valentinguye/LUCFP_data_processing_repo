@@ -715,7 +715,7 @@ for(sample in sampleS){
     
     # For each Island, join columns of plantation type variable 
     df_list <- list()
-    IslandS <- c("Sumatra", "Kalimantan", "Papua")
+    IslandS <- c("Sumatra", "Kalimantan")# , "Papua"
     for(Island in IslandS){
       
       df_small   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfsp_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_30th.rds")))

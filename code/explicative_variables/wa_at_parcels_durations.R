@@ -103,9 +103,9 @@ years <- seq(from = 1998, to = 2015, by = 1)
 # t <- 1
 
 # note on addressing geometries: the two first of the following calls are equivalent; however, the third is different 
-# parcels$geometry[parcels$parcel_id == i] 
-# parcels[["geometry"]][parcels$parcel_id == i]
-# parcels[parcels$parcel_id == i, "geometry"]
+# parcels$geometry[parcels$lonlat == i] 
+# parcels[["geometry"]][parcels$lonlat == i]
+# parcels[parcels$lonlat == i, "geometry"]
 # 
 # island <- "Kalimantan"
 # parcel_size <- 3000
@@ -150,9 +150,9 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
   # Import the parcel panel (for IBS)
   parcels_centro <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_CA_total.rds")))
   # keep only one cross-section, no matter which as this is a balanced panel
-  parcels_centro <- parcels_centro[!duplicated(parcels_centro$parcel_id),]
-  parcels_centro <- mutate(parcels_centro, lonlat = paste0(lon, lat))
-  parcels_centro <- dplyr::select(parcels_centro, -lucpfip_pixelcount_total, -lucpfip_ha_total)
+  parcels_centro <- parcels_centro[!duplicated(parcels_centro$lonlat),]
+  # parcels_centro <- mutate(parcels_centro, lonlat = paste0(lon, lat)) # lonlat is already in there
+  parcels_centro <- dplyr::select(parcels_centro, lonlat, lon, lat)
   
   #### Compute panel of weighted averages ####
   
@@ -187,8 +187,8 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
       # for more safety, merge the dur_mat with the parcels centro based on coordinates identifiers
       dur_mat <- as.data.frame(dur_mat)
       dur_mat$lonlat <- row.names(dur_mat)
-      # sort = FALSE is MEGA IMPORTANT because otherwise dur_mat get sorted in a different way than
-      dur_mat <- merge(dur_mat, parcels_centro[,c("lonlat", "parcel_id")], by = "lonlat", all = FALSE, sort = FALSE)
+      # sort = FALSE is MEGA IMPORTANT because otherwise dur_mat get sorted in a different way than parcels_centro
+      dur_mat <- merge(dur_mat, parcels_centro[,c("lonlat", "lon", "lat")], by = "lonlat", all = FALSE, sort = FALSE)
       row.names(dur_mat) <- dur_mat$lonlat
       # so there should be the same amount of parcels which coordinates matched, as the total amount of parcels.
       if(nrow(dur_mat) != nrow(parcels_centro)){stop(paste0("duration matrix and parcel cross section did not merge in ",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_",years[t]))}
@@ -197,8 +197,8 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
       parcels <- parcels_centro
       row.names(parcels) <- parcels$lonlat
       
-      parcels <- dplyr::arrange(parcels,parcel_id)
-      dur_mat <- dplyr::arrange(dur_mat,parcel_id)
+      parcels <- dplyr::arrange(parcels,lonlat)
+      dur_mat <- dplyr::arrange(dur_mat,lonlat)
   
       if(!(all.equal(row.names(parcels), row.names(dur_mat)))){stop()}
 
@@ -206,7 +206,7 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
       # dur_mat <- dur_mat[1:2500,]
       
       # nest the sets of reachable mills within each parcel row.
-      dur_mat <- dplyr::select(dur_mat, -lonlat, -parcel_id)
+      dur_mat <- dplyr::select(dur_mat, -lonlat, -lon, -lat)
       dur_mat <- as.matrix(dur_mat)
       
       # convert durations (in minutes) into logical whether each parcel-mill pair's travel time is inferior to a threshold travel_time
@@ -262,27 +262,27 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
       
       # make the variable specific sum of the inverse of durations over all the reachable mills that have no missing on this variable.
       for(voi in variables){
-        parcels$reachable[s] <- lapply(parcels$parcel_id[s], 
+        parcels$reachable[s] <- lapply(parcels$lonlat[s], 
                                        FUN =function(i){
-                                         voi_missing <- parcels$reachable[parcels$parcel_id == i][[1]][,voi] %>% is.na() %>% as.vector() 
+                                         voi_missing <- parcels$reachable[parcels$lonlat == i][[1]][,voi] %>% is.na() %>% as.vector() 
                                          
-                                         mutate(parcels$reachable[parcels$parcel_id == i][[1]],
+                                         mutate(parcels$reachable[parcels$lonlat == i][[1]],
                                                 !!as.symbol(paste0("sum_w_",voi)) := ifelse(voi_missing, 
                                                                                             yes = NA, 
                                                                                             no = sum(w[!voi_missing])))
                                        })
         
-        # for(i in parcels$parcel_id[s]){
-        #   voi_missing <- parcels$reachable[parcels$parcel_id == i][[1]][,voi] %>% st_drop_geometry() %>% is.na() %>% as.vector() 
-        #   parcels$reachable[parcels$parcel_id == i][[1]][voi_missing, paste0("sum_w_",voi)] <- NA
+        # for(i in parcels$lonlat[s]){
+        #   voi_missing <- parcels$reachable[parcels$lonlat == i][[1]][,voi] %>% st_drop_geometry() %>% is.na() %>% as.vector() 
+        #   parcels$reachable[parcels$lonlat == i][[1]][voi_missing, paste0("sum_w_",voi)] <- NA
         # } # this solution takes 4.85s. rather than 7.3 with "full looping"
         # # the whole time is taken by the for loop, but I cannot think of a way to do this 
         # # replace with NA within the lapply  
         
         
-        parcels$reachable[s] <- lapply(parcels$parcel_id[s], 
+        parcels$reachable[s] <- lapply(parcels$lonlat[s], 
                                        FUN =function(i){
-                                         mutate(parcels$reachable[parcels$parcel_id == i][[1]],
+                                         mutate(parcels$reachable[parcels$lonlat == i][[1]],
                                                 # make the standardized weights. They are variable specific too.
                                                 # this ratio indeed is NA if sum_w_voi is NA
                                                 !!as.symbol(paste0("std_w_", voi)) := w/!!as.symbol(paste0("sum_w_", voi)),
@@ -309,8 +309,8 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
       parcels <- mutate(parcels, 
                         reachable = NULL)
       
-      # remove the lonlat ids
-      parcels <- dplyr::select(parcels, -lonlat)
+      # remove the lonlat ids -NOPE!
+      # parcels <- dplyr::select(parcels, -lonlat)
       row.names(parcels) <- NULL      
       
       # give the right year to this cross sections' year variable, otherwise it's always 2001, the first yeqr of the template parcels_centro
@@ -355,39 +355,39 @@ parcel_set_w_average <- function(island, parcel_size, travel_time){
   #   wide_parcels[,colnames(wide_parcels)==paste0("year.",year)] <- year
   # }
   
-  # manage repetitions of parcel_id variables over years
-  wide_parcels$parcel_id <- wide_parcels$parcel_id.1998
-  wide_parcels <- dplyr::select(wide_parcels, parcel_id, everything())
-  wide_parcels <- dplyr::select(wide_parcels, -starts_with("parcel_id."))  
+  # manage repetitions of lonlat variables over years
+  wide_parcels$lonlat <- wide_parcels$lonlat.1998
+  wide_parcels <- dplyr::select(wide_parcels, lonlat, everything())
+  wide_parcels <- dplyr::select(wide_parcels, -starts_with("lonlat."))  
   # manage repetitions of lat and lon variables over years
   wide_parcels$lat <- wide_parcels$lat.1998
   wide_parcels <- dplyr::select(wide_parcels, -starts_with("lat."))
   wide_parcels$lon <- wide_parcels$lon.1998
   wide_parcels <- dplyr::select(wide_parcels, -starts_with("lon."))
-  # manage repetitions of idncrs_lat and idncrs_lon variables over years
-  wide_parcels$idncrs_lat <- wide_parcels$idncrs_lat.1998
-  wide_parcels <- dplyr::select(wide_parcels, -starts_with("idncrs_lat."))
-  wide_parcels$idncrs_lon <- wide_parcels$idncrs_lon.1998
-  wide_parcels <- dplyr::select(wide_parcels, -starts_with("idncrs_lon."))
+  # # manage repetitions of idncrs_lat and idncrs_lon variables over years -PAS BESOIN SI ON NE LES INCLUT PAS dans parcels_centro ligne 155 ci-dessus.  
+  # wide_parcels$idncrs_lat <- wide_parcels$idncrs_lat.1998
+  # wide_parcels <- dplyr::select(wide_parcels, -starts_with("idncrs_lat."))
+  # wide_parcels$idncrs_lon <- wide_parcels$idncrs_lon.1998
+  # wide_parcels <- dplyr::select(wide_parcels, -starts_with("idncrs_lon."))
   
   # saveRDS(wide_parcels, file = here(paste0("build/output/wa_wide_panel_parcels_",parcel_size/1000,"km_",catchment_radius/1000,"CR.rds")))
   
   # reshape to long 
-  varying_vars <- wide_parcels %>% dplyr::select(-parcel_id, -lat, -lon, - idncrs_lat, -idncrs_lon) %>% colnames()
+  varying_vars <- wide_parcels %>% dplyr::select(-lonlat, -lat, -lon) %>% colnames() # , - idncrs_lat, -idncrs_lon
   
   long_parcels <- reshape(wide_parcels, 
                           varying = varying_vars, 
                           #v.names =  
                           timevar = "year",
-                          idvar = "parcel_id",
-                          ids = "parcel_id",
+                          idvar = "lonlat",
+                          ids = "lonlat",
                           direction = "long",
                           sep = ".")
   
   
   rm(varying_vars)
   
-  long_parcels <- dplyr::arrange(long_parcels, parcel_id, year)
+  long_parcels <- dplyr::arrange(long_parcels, lonlat, year)
   
   saveRDS(long_parcels, file = file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
                                                 island,"_",parcel_size/1000,"km_",travel_time,"h_CA.rds")))
@@ -430,7 +430,7 @@ for(travel_time in c(2,4,6)){
   # stack the islands together
   indo_df <- bind_rows(pf_df_list)
 
-  indo_df <- dplyr::select(indo_df, parcel_id, year,
+  indo_df <- dplyr::select(indo_df, lonlat, year,
                             everything())
 
   saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",

@@ -154,9 +154,9 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
 
   
   # make a spatial cross section of it (parcels' coordinates are constant over time)
-  parcels_centro <- parcels[parcels$year == 1998, c("parcel_id", "lat", "lon")]
+  parcels_centro <- parcels[parcels$year == 1998, c("lonlat", "idncrs_lat", "idncrs_lon")]
   # (lon lat are already expressed in indonesian crs)
-  parcels_centro <- st_as_sf(parcels_centro, coords = c("lon", "lat"), remove = T, crs = indonesian_crs)
+  parcels_centro <- st_as_sf(parcels_centro, coords = c("idncrs_lon", "idncrs_lat"), remove = T, crs = indonesian_crs)
   
   parcels$newv_uml <- rep(0, nrow(parcels))
   parcels$newv_ibsuml <- rep(0, nrow(parcels))
@@ -247,7 +247,7 @@ for(catchment_radius in catchment_radiuseS){
                                       parcel_size/1000,"km_",
                                       catchment_radius/1000,"CR.rds")))
   
-  parcels <- st_as_sf(parcels, coords = c("lon", "lat"), crs = indonesian_crs, remove = FALSE)
+  parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
   
   
   ### ISLAND variable
@@ -278,7 +278,7 @@ for(catchment_radius in catchment_radiuseS){
   ### PROVINCE variable
   
   # Work with a cross section for province and district attribution
-  parcels_cs <- parcels[!duplicated(parcels$parcel_id),]
+  parcels_cs <- parcels[!duplicated(parcels$lonlat),]
 
   # the nearest feature function enables to also grab those parcels which centroids are in the sea.
   nearest_prov_idx <- st_nearest_feature(parcels_cs, province_sf_prj)
@@ -294,21 +294,21 @@ for(catchment_radius in catchment_radiuseS){
   parcels_cs$district <- district_sf_prj$name_[nearest_dstr_idx]
   
   parcels <- merge(st_drop_geometry(parcels),
-                   st_drop_geometry(parcels_cs[,c("parcel_id", "province", "district")]),
-                   by = "parcel_id")
+                   st_drop_geometry(parcels_cs[,c("lonlat", "province", "district")]),
+                   by = "lonlat")
  
   
   ### NEIGHBOR VARIABLE
   # create a grouping variable at the cross section (9 is to recall the the group id includes the 8 neighbors + the central grid cell.)
-  parcels_cs <- parcels[!duplicated(parcels$parcel_id),c("parcel_id", "year", "lat", "lon")]
+  parcels_cs <- parcels[!duplicated(parcels$lonlat),c("lonlat", "year", "idncrs_lat", "idncrs_lon")]
   
   # spatial
-  parcels_cs <- st_as_sf(parcels_cs, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+  parcels_cs <- st_as_sf(parcels_cs, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
   
   # identify neighbors
   # this definition of neighbors includes the 8 closest, surounding, grid cells. 
   parcels_buf <- st_buffer(parcels_cs, dist = parcel_size - 10)
-  row.names(parcels_buf) <- parcels_buf$parcel_id
+  row.names(parcels_buf) <- parcels_buf$lonlat
   sgbp <- st_intersects(parcels_buf)
   
   
@@ -356,29 +356,29 @@ for(catchment_radius in catchment_radiuseS){
   for(voi in variables){
     ## lags
     for(lag in c(1:5)){
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = voi, 
                                     TimeVar = "year",
-                                    GroupVar = "parcel_id",
+                                    GroupVar = "lonlat",
                                     NewVar = paste0(voi,"_lag",lag),
                                     slideBy = -lag, 
                                     keepInvalid = TRUE)
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       
     }
       
     # ## leads                               
     # for(lag in c(1:5)){
-    #   parcels <- dplyr::arrange(parcels, parcel_id, year)
+    #   parcels <- dplyr::arrange(parcels, lonlat, year)
     #   parcels <- DataCombine::slide(parcels,
     #                                 Var = voi, 
     #                                 TimeVar = "year",
-    #                                 GroupVar = "parcel_id",
+    #                                 GroupVar = "lonlat",
     #                                 NewVar = paste0(voi,"_lead",lag),
     #                                 slideBy = lag, 
     #                                 keepInvalid = TRUE) 
-    #   parcels <- dplyr::arrange(parcels, parcel_id, year)
+    #   parcels <- dplyr::arrange(parcels, lonlat, year)
     # } 
   }
   
@@ -400,15 +400,15 @@ for(catchment_radius in catchment_radiuseS){
       
       # lag the past year average (useful if we use those per se. as measures of LR price signal)
       # note that 3pya_lag1 is different from 4pya. 
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = paste0(voi,"_",py,"pya"), 
                                     TimeVar = "year",
-                                    GroupVar = "parcel_id",
+                                    GroupVar = "lonlat",
                                     NewVar = paste0(voi,"_",py,"pya_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       
       
       ## and absolute deviation - SHORT RUN MEASURE -
@@ -422,15 +422,15 @@ for(catchment_radius in catchment_radiuseS){
       #  
       
       # Lag these deviations by one year
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                   Var = paste0(voi,"_dev_",py,"pya"), 
                                   TimeVar = "year",
-                                  GroupVar = "parcel_id",
+                                  GroupVar = "lonlat",
                                   NewVar = paste0(voi,"_dev_",py,"pya_lag1"),
                                   slideBy = -1, 
                                   keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       
       ## and mean of contemporaneous and pya - OVERALL MEASURE - 
       
@@ -445,15 +445,15 @@ for(catchment_radius in catchment_radiuseS){
       colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_",py+1,"ya")    
       
       # and lag it
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = paste0(voi,"_",py+1,"ya"), 
                                     TimeVar = "year",
-                                    GroupVar = "parcel_id",
+                                    GroupVar = "lonlat",
                                     NewVar = paste0(voi,"_",py+1,"ya_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       
       
     }
@@ -463,25 +463,25 @@ for(catchment_radius in catchment_radiuseS){
     
     ### Contemporaneous and past-year averaged YEAR-ON-YEAR GROWTH
     
-    ## contemporaneous yoyg - SHORT RUN MEASURE - (invalid for at least the first record of each parcel_id)
+    ## contemporaneous yoyg - SHORT RUN MEASURE - (invalid for at least the first record of each lonlat)
     parcels <- mutate(parcels,
                       !!as.symbol(paste0(voi,"_yoyg")) := 100*(!!as.symbol(paste0(voi)) - 
                                                                !!as.symbol(paste0(voi,"_lag1"))) /
                                                                !!as.symbol(paste0(voi,"_lag1")))
                         
     ## Lagged yoyg 
-    # (the first lag is invalid for at least two first records of each parcel_id;    
+    # (the first lag is invalid for at least two first records of each lonlat;    
     # the fourth lag is invalid for at least 5 first records)
     for(lag in c(1:4)){
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = paste0(voi,"_yoyg"), 
                                     TimeVar = "year",
-                                    GroupVar = "parcel_id",
+                                    GroupVar = "lonlat",
                                     NewVar = paste0(voi,"_yoyg_lag",lag),
                                     slideBy = -lag, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, parcel_id, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
     }
     
     
@@ -494,15 +494,15 @@ for(catchment_radius in catchment_radiuseS){
     
     
     # Lag by one year
-    parcels <- dplyr::arrange(parcels, parcel_id, year)
+    parcels <- dplyr::arrange(parcels, lonlat, year)
     parcels <- DataCombine::slide(parcels,
                                   Var = paste0(voi,"_yoyg_",py,"pya"), 
                                   TimeVar = "year",
-                                  GroupVar = "parcel_id",
+                                  GroupVar = "lonlat",
                                   NewVar = paste0(voi,"_yoyg_",py,"pya_lag1"),
                                   slideBy = -1, 
                                   keepInvalid = TRUE)  
-    parcels <- dplyr::arrange(parcels, parcel_id, year)
+    parcels <- dplyr::arrange(parcels, lonlat, year)
     
     
     ## contemporaneous AND pya yoyg mean - OVERALLMEASURE -   
@@ -519,15 +519,15 @@ for(catchment_radius in catchment_radiuseS){
 
     
     # Lag by one year
-    parcels <- dplyr::arrange(parcels, parcel_id, year)
+    parcels <- dplyr::arrange(parcels, lonlat, year)
     parcels <- DataCombine::slide(parcels,
                                   Var = paste0(voi,"_yoyg_",py+1,"ya"), 
                                   TimeVar = "year",
-                                  GroupVar = "parcel_id",
+                                  GroupVar = "lonlat",
                                   NewVar = paste0(voi,"_yoyg_",py+1,"ya_lag1"),
                                   slideBy = -1, 
                                   keepInvalid = TRUE)  
-    parcels <- dplyr::arrange(parcels, parcel_id, year)
+    parcels <- dplyr::arrange(parcels, lonlat, year)
     
     }
   }  
@@ -634,14 +634,14 @@ for(catchment_radius in catchment_radiuseS){
                                       parcel_size/1000,"km_",
                                       catchment_radius/1000,"CR.rds")))
 
-  parcels <- st_as_sf(parcels, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+  parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
 
   ### RSPO
   parcels$rspo_cert <- rep(FALSE, nrow(parcels))
   
   for(y in min(rspo$year):max(parcels$year)){
     # select parcels from the given year
-    parcels_cs <- parcels[parcels$year == y, c("parcel_id", "year", "rspo_cert")]
+    parcels_cs <- parcels[parcels$year == y, c("lonlat", "year", "rspo_cert")]
     # select supply bases already certified this year
     rspo_cs <- rspo[rspo$year <= y,] %>% st_geometry()
     
@@ -655,7 +655,7 @@ for(catchment_radius in catchment_radiuseS){
   
   # We do not observe whether a grid cell is within a concession annually. 
   # Therefore we only proceed with a cross section
-  parcels_cs <- parcels[!duplicated(parcels$parcel_id),]
+  parcels_cs <- parcels[!duplicated(parcels$lonlat),]
   sgbp <- st_within(parcels_cs, cns)
   parcels_cs$concession <- rep(FALSE, nrow(parcels_cs))
   parcels_cs$concession[lengths(sgbp) > 0] <- TRUE
@@ -663,7 +663,7 @@ for(catchment_radius in catchment_radiuseS){
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- merge(parcels, parcels_cs[,c("parcel_id", "concession")], by = "parcel_id")
+  parcels <- merge(parcels, parcels_cs[,c("lonlat", "concession")], by = "lonlat")
   
   # note that some parcels fall within more than one concession record. There may be several reasons for concession overlaps 
   # like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
@@ -671,9 +671,9 @@ for(catchment_radius in catchment_radiuseS){
   
   
   ### LEGAL LAND USE 
-  parcels <- st_as_sf(parcels, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
+  parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
   # this is quite long (~5min)
-  parcels_cs <- parcels[!duplicated(parcels$parcel_id),]
+  parcels_cs <- parcels[!duplicated(parcels$lonlat),]
   parcels_cs <- st_join(x = parcels_cs, 
                         y = st_make_valid(llu[,"llu"]), # st_make_valid bc thrown error otherwise 
                         join = st_within, 
@@ -681,13 +681,13 @@ for(catchment_radius in catchment_radiuseS){
   
   # some grid cells seem to fall within overlapping llu shapes though. 
   # It's really marginal (12 instances). Just remove the duplicates it produces.
-  parcels_cs <- parcels_cs[!duplicated(parcels_cs$parcel_id),]
+  parcels_cs <- parcels_cs[!duplicated(parcels_cs$lonlat),]
 
   # merge back with panel 
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- merge(parcels, parcels_cs[,c("parcel_id", "llu")], by = "parcel_id")
+  parcels <- merge(parcels, parcels_cs[,c("lonlat", "llu")], by = "lonlat")
   
   unique(parcels$llu)
   ### ILLEGAL LUCFP 
@@ -704,7 +704,7 @@ for(catchment_radius in catchment_radiuseS){
                                                         llu == "HL")))
 
   # yields many missing in illegal because many grid cells are within a mising land use legal classification
-  # parcels[!duplicated(parcels$parcel_id) & !is.na(parcels$llu), c("parcel_id", "concession", "llu", "illegal1", "illegal2")]
+  # parcels[!duplicated(parcels$lonlat) & !is.na(parcels$llu), c("lonlat", "concession", "llu", "illegal1", "illegal2")]
   
   
   
@@ -722,20 +722,20 @@ for(catchment_radius in catchment_radiuseS){
   ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
   
   for(IV in ivS){
-    parcels <- dplyr::arrange(parcels, parcel_id, year)
+    parcels <- dplyr::arrange(parcels, lonlat, year)
     parcels <- DataCombine::slide(parcels,
                                   Var = IV, 
                                   TimeVar = "year",
-                                  GroupVar = "parcel_id",
+                                  GroupVar = "lonlat",
                                   NewVar = paste0(IV,"_lag1"),
                                   slideBy = -1, 
                                   keepInvalid = TRUE)  
-    parcels <- dplyr::arrange(parcels, parcel_id, year)
+    parcels <- dplyr::arrange(parcels, lonlat, year)
   }
   
   # View(parcels[!is.na(parcels$wa_prex_cpo_imp1_lag1) &
   #                parcels$year>2007 &
-  #                parcels$wa_prex_cpo_imp1_lag1!=0 ,c("parcel_id" ,"year", paste0("wa_prex_cpo_imp",c(1,2),"_lag1"),
+  #                parcels$wa_prex_cpo_imp1_lag1!=0 ,c("lonlat" ,"year", paste0("wa_prex_cpo_imp",c(1,2),"_lag1"),
   #                                                      paste0("spread",c(1:4)),
   #                                                      paste0("iv",c(1:4),"_imp1"),
   #                                                      paste0("iv",c(1:4),"_imp2"), 
@@ -788,9 +788,9 @@ while(catchment_radius < 60000){
                                       catchment_radius/1000,"km_UML_CR.rds")))
   
   # make a spatial cross section of it (parcels' coordinates are constant over time)
-  parcels_centro <- parcels[parcels$year == 2001, c("parcel_id", "lat", "lon")]
+  parcels_centro <- parcels[parcels$year == 2001, c("lonlat", "idncrs_lat", "idncrs_lon")]
   # (lon lat are already expressed in indonesian crs)
-  parcels_centro <- st_as_sf(parcels_centro, coords = c("lon", "lat"), remove = T, crs = indonesian_crs)
+  parcels_centro <- st_as_sf(parcels_centro, coords = c("idncrs_lon", "idncrs_lat"), remove = T, crs = indonesian_crs)
   
   parcels$newv_uml <- rep(0, nrow(parcels))
   
@@ -807,7 +807,7 @@ while(catchment_radius < 60000){
   colnames(parcels)[colnames(parcels) == "newv_uml"] <- paste0("n_reachable_uml")
   
   ### ADD GEOGRAPHIC VARIABLES
-  parcels <- st_as_sf(parcels, coords = c("lon", "lat"), crs = indonesian_crs, remove = FALSE)
+  parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
   
   # ISLAND variable
   parcels$island <- rep("", nrow(parcels))
@@ -841,7 +841,7 @@ while(catchment_radius < 60000){
   # PROVINCE variable
   
   # Work with a cross section for province and district attribution
-  parcels_cs <- parcels[!duplicated(parcels$parcel_id),]
+  parcels_cs <- parcels[!duplicated(parcels$lonlat),]
   
   
   # the nearest feature function enables to also grab those parcels which centroids are in the sea.
@@ -857,8 +857,8 @@ while(catchment_radius < 60000){
   parcels_cs$district <- district_sf_prj$name_[nearest_dstr_idx]
   
   parcels <- merge(st_drop_geometry(parcels),
-                   st_drop_geometry(parcels_cs[,c("parcel_id", "province", "district")]),
-                   by = "parcel_id")
+                   st_drop_geometry(parcels_cs[,c("lonlat", "province", "district")]),
+                   by = "lonlat")
   
   # REGIONAL TRENDS VARIABLES
   parcels$island_year <- paste0(parcels$island,"_",parcels$year)
@@ -876,7 +876,7 @@ while(catchment_radius < 60000){
   
   
 voi <- "wa_ffb_price_imp1"
-View(parcels[parcels$parcel_id==16500,c("parcel_id", "year",
+View(parcels[500,c("lonlat", "year",
                                         voi,#
                                         paste0(voi,"_lag",c(1:4)),#
                                         paste0(voi,"_3ya"),

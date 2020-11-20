@@ -72,7 +72,9 @@ names(island_sf)[names(island_sf)=="island"] <- "shape_des"
 
 island_sf_prj <- st_transform(island_sf, crs = indonesian_crs)
 
-forestS <- c("total")# "30th", "60th", "90th","intact", "degraded", 
+# this indicates the type of forest for which we want to construct data frames of lucfp.
+# note that for dynamics outcome, only total primary forest is available as of now. 
+forestS <- c("total")#,"30th" "30th", "60th", "90th","intact", "degraded", 
 
 
 to_panel_within_IBS_CA <- function(island, parcel_size){
@@ -145,9 +147,9 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
       ibs_msk_df <- mutate(ibs_msk_df, lonlat = paste0(lon, lat))
       ibs_msk_df <- st_drop_geometry(ibs_msk_df)
       
-      # Besides, make IDs 
-      island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
-      ibs_msk_df$parcel_id <- paste0(island_id, c(1:nrow(ibs_msk_df))) %>% as.numeric()
+      # # Besides, make IDs 
+      # island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
+      # ibs_msk_df$parcel_id <- paste0(island_id, c(1:nrow(ibs_msk_df))) %>% as.numeric()
 
       # Durations are in minutes, and we impose a restriction of no more than 2, 4 or 6 hours of travel between plantation and mill.
       for(travel_time in c(2,4,6)){
@@ -161,13 +163,14 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
         dur_mat_log$lonlat <- row.names(dur_mat_log)
         
         # THIS IS THE LINES THAT SELECT PARCELS ON THEIR BEING WITHIN THE CATCHMENT AREA
-        ibs_msk_TT_df <- merge(ibs_msk_df, dur_mat_log, by = "lonlat", all = FALSE)
+        ibs_msk_TT_df <- inner_join(ibs_msk_df, dur_mat_log, by = "lonlat")
+        if(nrow(ibs_msk_TT_df) != nrow(dur_mat_log)){stop("the duration matrix and the data frame do not share the same set of parcels")}
+        
         ibs_msk_TT_df <- ibs_msk_TT_df[base::rowSums(ibs_msk_TT_df[,grepl("firm_id",colnames(ibs_msk_TT_df))], na.rm = TRUE)>0,]
         # na.rm = TRUE is in case of mills for which no duration could be computed. 
         # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
         
         ibs_msk_TT_df <- ibs_msk_TT_df[,!grepl("firm_id",colnames(ibs_msk_TT_df))]
-        ibs_msk_TT_df <- dplyr::select(ibs_msk_TT_df, -lonlat)
 
         # dur_mat[is.na(dur_mat[1:3,])]
         # ibs[ibs$firm_id %in% c(4096, 4097,51432,54268),"uml_matched_sample"]
@@ -188,15 +191,15 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
                                              v.names = paste0(lucf,size,"p_pixelcount_",forest),
                                              sep = ".",
                                              timevar = "year",
-                                             idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
-                                             ids = "parcel_id",
+                                             idvar = c("lonlat"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
+                                             ids = "lonlat",
                                              direction = "long",
                                              new.row.names = seq(from = 1, to = nrow(ibs_msk_TT_df)*length(years), by = 1)) # this last line is just to make the function work, but not for used row names (they get renamed after)
                       
         # replace the indices from the raster::as.data.frame with actual years.
         ibs_msk_TT_long_df <- mutate(ibs_msk_TT_long_df, year = years[year])
         
-        ibs_msk_TT_long_df <- dplyr::arrange(ibs_msk_TT_long_df, parcel_id, year)
+        ibs_msk_TT_long_df <- dplyr::arrange(ibs_msk_TT_long_df, lonlat, year)
         
         # Add columns of converted pixel counts to hectares.
         # ibs_msk_TT_long_df$inha <- ibs_msk_TT_long_df[,grepl("pixelcount",colnames(ibs_msk_TT_long_df))]*(27.8*27.6)/(1e4)
@@ -218,7 +221,7 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
     }
   }
   
-  ### Selecting parcels within travel times, and reshaping, for dynamics outcomes (lucpfip_replace, lucpfip_rapid, lucpfip_slow)
+  ### Selecting parcels within travel times, and reshaping, for DYNAMICS outcomes (lucpfip_replace, lucpfip_rapid, lucpfip_slow)
   for(dyna in c("rapid", "slow", "replace")){ # it's important that replace be not in first position in the loop, for the reason explained below at the if(dyna=="replace") level
       # Now mask rasters for all outcomes
       parcels_brick_name <- paste0("parcel_lucpfip_",dyna,"_",island,"_",parcel_size/1000,"km_total")
@@ -260,9 +263,9 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
       }
       
       
-      # Besides, make IDs 
-      island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
-      ibs_msk_df$parcel_id <- paste0(island_id, c(1:nrow(ibs_msk_df))) %>% as.numeric()
+      # # Besides, make IDs 
+      # island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
+      # ibs_msk_df$parcel_id <- paste0(island_id, c(1:nrow(ibs_msk_df))) %>% as.numeric()
       
       # Durations are in minutes, and we impose a restriction of no more than 2, 4 or 6 hours of travel between plantation and mill.
       for(travel_time in c(2,4,6)){
@@ -275,14 +278,15 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
         colnames(dur_mat_log) <- paste0("firm_id_",colnames(dur_mat_log))
         dur_mat_log$lonlat <- row.names(dur_mat_log)
         
-        ibs_msk_TT_df <- merge(ibs_msk_df, dur_mat_log, by = "lonlat", all = FALSE)
+        ibs_msk_TT_df <- inner_join(ibs_msk_df, dur_mat_log, by = "lonlat")
+        if(nrow(ibs_msk_TT_df) != nrow(dur_mat_log)){stop("the duration matrix and the data frame do not share the same set of parcels")}
+        
         ibs_msk_TT_df <- ibs_msk_TT_df[base::rowSums(ibs_msk_TT_df[,grepl("firm_id",colnames(ibs_msk_TT_df))], na.rm = TRUE)>0,]
         # na.rm = TRUE is in case of mills for which no duration could be computed. 
         # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
         
         ibs_msk_TT_df <- ibs_msk_TT_df[,!grepl("firm_id",colnames(ibs_msk_TT_df))]
-        ibs_msk_TT_df <- dplyr::select(ibs_msk_TT_df, -lonlat)
-        
+
         # dur_mat[is.na(dur_mat[1:3,])]
         # ibs[ibs$firm_id %in% c(4096, 4097,51432,54268),"uml_matched_sample"]
         # ibs[ibs$firm_id==51432,]
@@ -302,15 +306,15 @@ to_panel_within_IBS_CA <- function(island, parcel_size){
                                              v.names = paste0("lucpfip_",dyna,"_pixelcount"), # not precising that it is total primary forest in var name, as we do not compute intact and degraded but only total. 
                                              sep = ".",
                                              timevar = "year",
-                                             idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
-                                             ids = "parcel_id",
+                                             idvar = c("lonlat"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
+                                             ids = "lonlat",
                                              direction = "long",
                                              new.row.names = seq(from = 1, to = nrow(ibs_msk_TT_df)*length(years), by = 1)) # this last line is just to make the function work, but not for used row names (they get renamed after)
         
         # replace the indices from the raster::as.data.frame with actual years.
         ibs_msk_TT_long_df <- mutate(ibs_msk_TT_long_df, year = years[year])
         
-        ibs_msk_TT_long_df <- dplyr::arrange(ibs_msk_TT_long_df, parcel_id, year)
+        ibs_msk_TT_long_df <- dplyr::arrange(ibs_msk_TT_long_df, lonlat, year)
         
         # Add columns of converted pixel counts to hectares.
         # ibs_msk_TT_long_df$inha <- ibs_msk_TT_long_df[,grepl("pixelcount",colnames(ibs_msk_TT_long_df))]*(27.8*27.6)/(1e4)
@@ -422,9 +426,9 @@ to_panel_within_UML_CA <- function(island, parcel_size){
       uml_msk_df <- mutate(uml_msk_df, lonlat = paste0(lon, lat))
       uml_msk_df <- st_drop_geometry(uml_msk_df)
       
-      # Besides, make IDs 
-      island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
-      uml_msk_df$parcel_id <- paste0(island_id, c(1:nrow(uml_msk_df))) %>% as.numeric()
+      # # Besides, make IDs 
+      # island_id <- if(island == "Sumatra"){1} else if(island == "Kalimantan"){2} else if (island == "Papua"){3}
+      # uml_msk_df$parcel_id <- paste0(island_id, c(1:nrow(uml_msk_df))) %>% as.numeric()
       
       # Durations are in minutes, and we impose a restriction of no more than 2, 4 or 6 hours of travel between plantation and mill.
       for(travel_time in c(2,4,6)){
@@ -443,8 +447,7 @@ to_panel_within_UML_CA <- function(island, parcel_size){
         # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
         
         uml_msk_TT_df <- uml_msk_TT_df[,!grepl("firm_id",colnames(uml_msk_TT_df))]
-        uml_msk_TT_df <- dplyr::select(uml_msk_TT_df, -lonlat)
-        
+
         # vector of the names in the wide format of our time varying variables
         # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
         # the layer index (1-18) indeed corresponds to the year (2001-2018) because, in aggregate_lucpfip, at the end, 
@@ -458,15 +461,15 @@ to_panel_within_UML_CA <- function(island, parcel_size){
                                              v.names = paste0(lucf,size,"p_pixelcount_",forest),
                                              sep = ".",
                                              timevar = "year",
-                                             idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
-                                             ids = "parcel_id",
+                                             idvar = c("lonlat"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
+                                             ids = "lonlat",
                                              direction = "long",
                                              new.row.names = seq(from = 1, to = nrow(uml_msk_TT_df)*length(years), by = 1)) # this last line is just to make the function work, but not for used row names (they get renamed after)
         
         # replace the indices from the raster::as.data.frame with actual years.
         uml_msk_TT_long_df <- mutate(uml_msk_TT_long_df, year = years[year])
         
-        uml_msk_TT_long_df <- dplyr::arrange(uml_msk_TT_long_df, parcel_id, year)
+        uml_msk_TT_long_df <- dplyr::arrange(uml_msk_TT_long_df, lonlat, year)
         
         # Add columns of converted pixel counts to hectares.
         # uml_msk_TT_long_df$inha <- uml_msk_TT_long_df[,grepl("pixelcount",colnames(uml_msk_TT_long_df))]*(27.8*27.6)/(1e4)
@@ -539,7 +542,6 @@ to_panel_within_UML_CA <- function(island, parcel_size){
   #     # which is the case for 4 mills in Sumatra, 3 of which are not UML matched but desa centroid located.
   #     
   #     uml_msk_TT_df <- uml_msk_TT_df[,!grepl("firm_id",colnames(uml_msk_TT_df))]
-  #     uml_msk_TT_df <- dplyr::select(uml_msk_TT_df, -lonlat)
   #     
   #     # dur_mat[is.na(dur_mat[1:3,])]
   #     # uml[uml$firm_id %in% c(4096, 4097,51432,54268),"uml_matched_sample"]
@@ -560,15 +562,15 @@ to_panel_within_UML_CA <- function(island, parcel_size){
   #                                          v.names = paste0("lucpfip_",dyna,"_pixelcount"), # not precising that it is total primary forest in var name, as we do not compute intact and degraded but only total. 
   #                                          sep = ".",
   #                                          timevar = "year",
-  #                                          idvar = c("parcel_id"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
-  #                                          ids = "parcel_id",
+  #                                          idvar = c("lonlat"), # don't put "lon" and "lat" in there, otherwise memory issue (see https://r.789695.n4.nabble.com/reshape-makes-R-run-out-of-memory-PR-14121-td955889.html)
+  #                                          ids = "lonlat",
   #                                          direction = "long",
   #                                          new.row.names = seq(from = 1, to = nrow(uml_msk_TT_df)*length(years), by = 1)) # this last line is just to make the function work, but not for used row names (they get renamed after)
   #     
   #     # replace the indices from the raster::as.data.frame with actual years.
   #     uml_msk_TT_long_df <- mutate(uml_msk_TT_long_df, year = years[year])
   #     
-  #     uml_msk_TT_long_df <- dplyr::arrange(uml_msk_TT_long_df, parcel_id, year)
+  #     uml_msk_TT_long_df <- dplyr::arrange(uml_msk_TT_long_df, lonlat, year)
   #     
   #     # Add columns of converted pixel counts to hectares.
   #     uml_msk_TT_long_df$inha <- uml_msk_TT_long_df[,grepl("pixelcount",colnames(uml_msk_TT_long_df))]*(27.8*27.6)/(1e4)
@@ -625,7 +627,7 @@ rm(to_panel_within_UML_CA)
 
 #### Gather the lucfip variables for each parcel_size and catchment area combinations. ####
 PS <- 3000
-sampleS <- c("IBS","UML")# 
+sampleS <- c("IBS")# ,"UML"
 travel_timeS <- c(2,4,6)
   for(sample in sampleS){
     for(TT in travel_timeS){
@@ -642,50 +644,58 @@ travel_timeS <- c(2,4,6)
         df_indus    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
 
         df_small <- dplyr::select(df_small, -idncrs_lon, -idncrs_lat, -lon, -lat)
-        df <- inner_join(df_indus, df_small, by = c("parcel_id", "year"))
+        df <- inner_join(df_indus, df_small, by = c("lonlat", "year"))
 
         df_medium <- dplyr::select(df_medium, -idncrs_lon, -idncrs_lat, -lon, -lat)
-        pf_df_list[[match(Island, IslandS)]] <- inner_join(df, df_medium, by = c("parcel_id", "year"))
-
+        pf_df_list[[match(Island, IslandS)]] <- inner_join(df, df_medium, by = c("lonlat", "year"))
+        
+        
+        if(nrow(pf_df_list[[match(Island, IslandS)]]) != nrow(df_indus)){stop("data frames do not all have the same set of grid cells")}
+        rm(df, df_small, df_medium, df_indus)
       }
 
       # stack the three Islands together
       indo_df <- bind_rows(pf_df_list)
 
-      indo_df <- dplyr::select(indo_df, parcel_id, year,
+      indo_df <- dplyr::select(indo_df, lonlat, year,
                                everything())
 
       saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucpfp_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
 
-      rm(indo_df, pf_df_list, df_small, df_medium, df_indus, df)
+      rm(indo_df, pf_df_list)
 
 
 
-      # ## "NORMAL" forest
-      # df_list <- list()
-      # IslandS <- c("Sumatra", "Kalimantan", "Papua")
+      # ### 30% tree cover forest outside 2000 industrial plantations
+      # f_df_list <- list()
+      # IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
       # for(Island in IslandS){
-      #
-      #   df_90th <- readRDS(file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_90th.rds")))
-      #   df_60th <- readRDS(file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_60th.rds")))
-      #   df_30th <- readRDS(file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
-      #
-      #   df_60th <- dplyr::select(df_60th, -lon, -lat)
-      #   df <- inner_join(df_90th, df_60th, by = c("parcel_id", "year"))
-      #
-      #   df_30th <- dplyr::select(df_30th, -lon, -lat)
-      #   df_list[[match(Island, IslandS)]] <- inner_join(df, df_30th, by = c("parcel_id", "year"))
+      # 
+      # 
+      #   df_small    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfsp_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
+      #   df_medium    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfmp_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
+      #   df_indus    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfip_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
+      # 
+      #   df_small <- dplyr::select(df_small, -idncrs_lon, -idncrs_lat, -lon, -lat)
+      #   df <- inner_join(df_indus, df_small, by = c("lonlat", "year"))
+      # 
+      #   df_medium <- dplyr::select(df_medium, -idncrs_lon, -idncrs_lat, -lon, -lat)
+      #   f_df_list[[match(Island, IslandS)]] <- inner_join(df, df_medium, by = c("lonlat", "year"))
+      # 
+      # 
+      #   if(nrow(f_df_list[[match(Island, IslandS)]]) != nrow(df_indus)){stop("data frames do not all have the same set of grid cells")}
+      #   rm(df, df_small, df_medium, df_indus)
       # }
-      #
+      # 
       # # stack the three Islands together
-      # indo_df <- bind_rows(df_list)
-      #
-      # indo_df <- dplyr::select(indo_df, parcel_id, year,
+      # indo_df <- bind_rows(f_df_list)
+      # 
+      # indo_df <- dplyr::select(indo_df, lonlat, year,
       #                          everything())
-      #
-      # saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucf",size,"p_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
-      #
-      # rm(indo_df, df_list)
+      # 
+      # saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucfp_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
+      # 
+      # rm(indo_df, f_df_list)
     
   }
 }
@@ -693,7 +703,7 @@ travel_timeS <- c(2,4,6)
 
 #### Gather the lucfip_dynamics variables for each parcel_size and catchment area combinations. ####
 PS <- 3000
-Island <- "Kalimantan"
+# Island <- "Kalimantan"
 sampleS <- c("IBS")#, "UML"
 travel_timeS <- c(2,4,6)
   for(sample in sampleS){
@@ -709,25 +719,27 @@ travel_timeS <- c(2,4,6)
         df_replace    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_replace_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
         df_rapid    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_rapid_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
         df_slow    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_slow_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_total.rds")))
-        
-        df_replace <- dplyr::select(df_replace, -parcel_id, -idncrs_lon, -idncrs_lat)#, -lon, -lat
-        df <- inner_join(df_slow, df_replace, by = c("lon", "lat", "year"))#
 
-        df_rapid <- dplyr::select(df_rapid, -parcel_id, -idncrs_lon, -idncrs_lat)#, -lon, -lat
-        pf_df_list[[match(Island, IslandS)]] <- inner_join(df, df_rapid, by = c("lon", "lat", "year"))
+        df_replace <- dplyr::select(df_replace, -lon, -lat, -idncrs_lon, -idncrs_lat)#
+        df <- inner_join(df_slow, df_replace, by = c("lonlat", "year"))#
+
+        df_rapid <- dplyr::select(df_rapid, -lon, -lat, -idncrs_lon, -idncrs_lat)#
+        pf_df_list[[match(Island, IslandS)]] <- inner_join(df, df_rapid, by = c("lonlat", "year"))
         
-        
+        # here, it's normal that df_replace do not have the same size as the two others. 
+        if(nrow(pf_df_list[[match(Island, IslandS)]]) != nrow(df_rapid)){stop("data frames do not all have the same set of grid cells")}
+        rm(df, df_replace, df_rapid, df_slow)
       }
       
       # stack the three Islands together
       indo_df <- bind_rows(pf_df_list)
       
-      indo_df <- dplyr::select(indo_df, parcel_id, year,
+      indo_df <- dplyr::select(indo_df, lonlat, year,
                                everything())
       
       saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucpfip_panel_dynamics_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
       
-      rm(indo_df, pf_df_list, df_replace, df_rapid, df_slow, df)
+      rm(indo_df, pf_df_list)
       
   }
 }

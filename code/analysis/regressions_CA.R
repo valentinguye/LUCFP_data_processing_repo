@@ -515,6 +515,11 @@ make_base_reg <- function(island,
     d <- d[d$remain_f30th_pixelcount > 0,]
   }
   
+  # - are in years when the outcome can actually be observed
+  if(grepl("_slow_",outcome_variable)){
+    d <- d[d$year<2011,]
+  }
+  
   # should be applied to d_clean rather no ? or at least d_nona...
   # to speed up computation, and also because we do not want to control for values in neighboring cells that are not entering the regressions
   # these values are not bringing any bias by definition as they are excluded
