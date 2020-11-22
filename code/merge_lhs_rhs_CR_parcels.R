@@ -52,8 +52,8 @@ lapply(neededPackages, library, character.only = TRUE)
 # (lucfip, lucpfip, emissions, lucpfsmp...)
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
-parcel_size <- 3000
-catchment_radius <- 5e4
+# parcel_size <- 3000
+# catchment_radius <- 5e4
 
 merge_lhs_rhs <- function(parcel_size, catchment_radius){
   
@@ -98,11 +98,11 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   # lucpfip_dyn$lon <- round(lucpfip_dyn$lon, 6)
   # lucpfip_dyn$lat <- round(lucpfip_dyn$lat, 6)
   
-  if(nrow(lucpfip)!=nrow(lucfip) |
-  # nrow(lucpfsmp)!=nrow(lucfsmp) |
-  # nrow(lucpfip)!=nrow(lucfsmp) |
-  nrow(lucpfip)!=nrow(lucpfip_dyn)){print("LHS datasets don't all have the same number of rows, which is a known fact, see notes in script")} 
-  # lucfip has 3 more parcels (45 obs.)
+  # if(nrow(lucpfip)!=nrow(lucfip) |
+  # # nrow(lucpfsmp)!=nrow(lucfsmp) |
+  # # nrow(lucpfip)!=nrow(lucfsmp) |
+  # nrow(lucpfip)!=nrow(lucpfip_dyn)){print("LHS datasets don't all have the same number of rows, which is a known fact, see notes in script")} 
+  # # lucfip has 3 more parcels (45 obs.)
   
   LHS <- inner_join(lucpfip, lucfip, by = c("lonlat", "year")) 
   LHS <- inner_join(LHS, lucpfsmp, by = c("lonlat", "year")) 
@@ -114,16 +114,17 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
 
   ## make a variable that counts rapid and slow lucfp events (this is only computed for primary forest as of now)
   # THIS IS GOING TO BE THE MAIN OUTCOME VARIABLE INSTEAD OF lucpfip_pixelcount_total
-  LHS$lucpfip_rapidslow_pixelcount <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount
+  d$lucpfip_pixelcount <- d$lucpfip_rapid_pixelcount + d$lucpfip_slow_pixelcount
+  d$lucfip_pixelcount <- d$lucfip_pixelcount_30th# pour l'instant on met lucfip_pixelcount_total dans "all producers" et pas rapid + slow, car on n'a 
+  # pas calculé rapid et slow pour ce type de forêt encore
   
   # make variable that counts lucfp events on both small and medium sized plantations 
-  LHS$lucpfsmp_pixelcount_total <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
-  LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
-
-  ## make a variable that counts lucfp events on all types of plantations
-  LHS$lucpfap_pixelcount_total <- LHS$lucpfip_rapidslow_pixelcount + LHS$lucpfsmp_pixelcount_total
-  LHS$lucfap_pixelcount_total <- LHS$lucfip_pixelcount_total + LHS$lucfsmp_pixelcount_total
+  d$lucpfsmp_pixelcount <- d$lucpfsp_pixelcount_total + d$lucpfmp_pixelcount_total
+  d$lucfsmp_pixelcount <- d$lucfsp_pixelcount_30th + d$lucfmp_pixelcount_30th
   
+  ## make a variable that counts lucfp events on all types of plantations
+  d$lucpfap_pixelcount <- d$lucpfip_pixelcount + d$lucpfsmp_pixelcount
+  d$lucfap_pixelcount <- d$lucfip_pixelcount + d$lucfsmp_pixelcount 
 
 
   
@@ -283,16 +284,16 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   parcels <- left_join(parcels, bfe, by = "lonlat")
   
   rm(bfe)
-  # test that the parcel_id have been attributed to parcels equally in the two processes 
+  # test that the lonlat have been attributed to parcels equally in the two processes 
   # (prepare_lucpfip.R and prepare_2000_forest_extents.R)
   # 
-  # parcels2 <- base::merge(parcels, bfe, by = c("parcel_id", "lat","lon"))
-  # setorder(parcels1, parcel_id, year)
-  # setorder(parcels2, parcel_id, year)
+  # parcels2 <- base::merge(parcels, bfe, by = c("lonlat", "lat","lon"))
+  # setorder(parcels1, lonlat, year)
+  # setorder(parcels2, lonlat, year)
   # row.names(parcels1) <- NULL
   # row.names(parcels2) <- NULL
-  # all.equal(st_drop_geometry(parcels1[,c("parcel_id", "lon","lat")]), 
-  #           st_drop_geometry(parcels2[,c("parcel_id", "lon","lat")]))
+  # all.equal(st_drop_geometry(parcels1[,c("lonlat", "lon","lat")]), 
+  #           st_drop_geometry(parcels2[,c("lonlat", "lon","lat")]))
   # 
   # all(names(parcels1)==names(parcels2))
   # all.equal(st_drop_geometry(parcels1), st_drop_geometry(parcels2))
@@ -308,49 +309,56 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   # parcels <- dplyr::mutate(parcels, 
   #                          total_lucpfp_total = lucpfip_pixelcount_total + lucpfsmp_pixelcount_total)
   
-  # anyNA(parcels$lucpfap_pixelcount_total) returns FALSE
+  # anyNA(parcels$lucpfap_pixelcount) returns FALSE
   
   # then annual lucfp accumulated over past years
   
   year_list <- list()
   
   # in the first year (2001), the past year accumulated lucfp is null. 
-  year_list[["2001"]] <- parcels[parcels$year == 2001, c("parcel_id", "year")] 
-  # names(year_list[["2001"]]) <- "parcel_id"%>% as.data.frame() 
+  year_list[["2001"]] <- parcels[parcels$year == 2001, c("lonlat", "year")] 
+  # names(year_list[["2001"]]) <- "lonlat"%>% as.data.frame() 
+  year_list[["2001"]][,"accu_lucfp_since2k"] <- 0
   year_list[["2001"]][,"accu_lucpfp_since2k"] <- 0
-
-  # then, each year's lucfp accumulated in the past is the sum of *past years'* lucpfap_pixelcount_total
+  
+  # then, each year's lucfp accumulated in the past is the sum of *past years'* lucpfap_pixelcount
   years <- 2002:max(parcels$year)
   for(y in years){
     sub_ <- parcels[parcels$year < y,]
-    year_list[[as.character(y)]] <- ddply(sub_, "parcel_id", summarise,
-                                            #accu_lucfp_since2k = sum(total_lucfp_30th, na.rm = TRUE),
-                                            accu_lucpfp_since2k = sum(lucpfap_pixelcount_total, na.rm = TRUE))
+    year_list[[as.character(y)]] <- ddply(sub_, "lonlat", summarise,
+                                            accu_lucfp_since2k = sum(lucfap_pixelcount, na.rm = TRUE),
+                                            accu_lucpfp_since2k = sum(lucpfap_pixelcount, na.rm = TRUE))
     year_list[[as.character(y)]][,"year"] <- y
   }
   
   # data <- parcels[parcels$year < y,]
-  # t <- ddply(data, "parcel_id", summarise,
+  # t <- ddply(data, "lonlat", summarise,
   #            #past_accu_lucfp = sum(total_lucfp_30th, na.rm = TRUE),
-  #            accu_lucpfp_since2k = sum(lucpfap_pixelcount_total, na.rm = TRUE))
+  #            accu_lucpfp_since2k = sum(lucpfap_pixelcount, na.rm = TRUE))
   
   accu_lucfp_df <- bind_rows(year_list)
   
-  parcels <- inner_join(parcels, accu_lucfp_df, by = c("parcel_id", "year"))
+  parcels <- inner_join(parcels, accu_lucfp_df, by = c("lonlat", "year"))
   
 
   # summary(parcels$accu_lucpfp_since2k)
   parcels <- dplyr::mutate(parcels, 
-                           #remain_f30th_pixelcount = fc2000_30th_pixelcount - accu_lucfp_since2k,
+                           remain_f30th_pixelcount = fc2000_30th_pixelcount - accu_lucfp_since2k,
                            remain_pf_pixelcount = pfc2000_total_pixelcount - accu_lucpfp_since2k)
   
-  # parcels[parcels$parcel_id == 1267,c("parcel_id", "year", "lucpfap_pixelcount_total", "accu_lucpfp_since2k", "remain_pf_pixelcount")] 
+  # parcels[parcels$lonlat == 1267,c("lonlat", "year", "lucpfap_pixelcount", "accu_lucpfp_since2k", "remain_pf_pixelcount")] 
   
   
   
+  
+  ### MAKE THE PARCEL_ID 
+  uni_lonlat <- unique(parcels$lonlat)
+  parcels <- mutate(parcels, 
+                    parcel_id = match(lonlat, uni_lonlat)) 
+  rm(uni_lonlat)
   
   ## some arrangements
-  parcels <- dplyr::arrange(parcels, parcel_id, year)
+  parcels <- dplyr::arrange(parcels, parcel_id, lonlat, year)
   row.names(parcels) <- seq(1,nrow(parcels))
   
   
@@ -396,21 +404,21 @@ rm(merge_lhs_rhs)
 # names(LHS)  
 # names(RHS)  
 # 
-# length(unique(LHS$parcel_id))
-# length(unique(RHS_2001$parcel_id))
+# length(unique(LHS$lonlat))
+# length(unique(RHS_2001$lonlat))
 # 
 # # LHS was not ordered as expected, hence 
 # RHS_2001 <- RHS[RHS$year >= 2001,]
-# all.equal(RHS_2001$parcel_id, LHS$parcel_id) # returns FALSE
+# all.equal(RHS_2001$lonlat, LHS$lonlat) # returns FALSE
 # 
-# LHS_ordered <- dplyr::arrange(LHS, parcel_id, year)
+# LHS_ordered <- dplyr::arrange(LHS, lonlat, year)
 # all.equal(LHS_ordered, LHS)
 # # RHS was ordered as expected
-# RHS_ordered <- dplyr::arrange(RHS, parcel_id, year)
+# RHS_ordered <- dplyr::arrange(RHS, lonlat, year)
 # all.equal(RHS_ordered, RHS)
 # 
 # # once reordered, we indeed have the same set of parcels in both data frames. 
-# all.equal(RHS_2001$parcel_id, LHS_ordered$parcel_id)
+# all.equal(RHS_2001$lonlat, LHS_ordered$lonlat)
 # all.equal(RHS_2001[,c("lat", "lon")], LHS_ordered[,c("lat", "lon")]) 
 # coordinates match too (only the row names are different). 
 

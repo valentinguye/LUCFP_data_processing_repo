@@ -74,7 +74,7 @@ island_sf_prj <- st_transform(island_sf, crs = indonesian_crs)
 
 # this indicates the type of forest for which we want to construct data frames of lucfp.
 # note that for dynamics outcome, only total primary forest is available as of now. 
-forestS <- c("total")#,"30th" "30th", "60th", "90th","intact", "degraded", 
+forestS <- c("total","30th")# "30th", "60th", "90th","intact", "degraded", 
 
 
 to_panel_within_IBS_CA <- function(island, parcel_size){
@@ -666,36 +666,36 @@ travel_timeS <- c(2,4,6)
 
 
 
-      # ### 30% tree cover forest outside 2000 industrial plantations
-      # f_df_list <- list()
-      # IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
-      # for(Island in IslandS){
-      # 
-      # 
-      #   df_small    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfsp_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
-      #   df_medium    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfmp_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
-      #   df_indus    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfip_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
-      # 
-      #   df_small <- dplyr::select(df_small, -idncrs_lon, -idncrs_lat, -lon, -lat)
-      #   df <- inner_join(df_indus, df_small, by = c("lonlat", "year"))
-      # 
-      #   df_medium <- dplyr::select(df_medium, -idncrs_lon, -idncrs_lat, -lon, -lat)
-      #   f_df_list[[match(Island, IslandS)]] <- inner_join(df, df_medium, by = c("lonlat", "year"))
-      # 
-      # 
-      #   if(nrow(f_df_list[[match(Island, IslandS)]]) != nrow(df_indus)){stop("data frames do not all have the same set of grid cells")}
-      #   rm(df, df_small, df_medium, df_indus)
-      # }
-      # 
-      # # stack the three Islands together
-      # indo_df <- bind_rows(f_df_list)
-      # 
-      # indo_df <- dplyr::select(indo_df, lonlat, year,
-      #                          everything())
-      # 
-      # saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucfp_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
-      # 
-      # rm(indo_df, f_df_list)
+      ### 30% tree cover forest outside 2000 industrial plantations
+      f_df_list <- list()
+      IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
+      for(Island in IslandS){
+
+
+        df_small    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfsp_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
+        df_medium    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfmp_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
+        df_indus    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfip_panel_",Island,"_",PS/1000,"km_",TT,"h_",sample,"_CA_30th.rds")))
+
+        df_small <- dplyr::select(df_small, -idncrs_lon, -idncrs_lat, -lon, -lat)
+        df <- inner_join(df_indus, df_small, by = c("lonlat", "year"))
+
+        df_medium <- dplyr::select(df_medium, -idncrs_lon, -idncrs_lat, -lon, -lat)
+        f_df_list[[match(Island, IslandS)]] <- inner_join(df, df_medium, by = c("lonlat", "year"))
+
+
+        if(nrow(f_df_list[[match(Island, IslandS)]]) != nrow(df_indus)){stop("data frames do not all have the same set of grid cells")}
+        rm(df, df_small, df_medium, df_indus)
+      }
+
+      # stack the three Islands together
+      indo_df <- bind_rows(f_df_list)
+
+      indo_df <- dplyr::select(indo_df, lonlat, year,
+                               everything())
+
+      saveRDS(indo_df, file = file.path(paste0("temp_data/processed_parcels/lucfp_panel_",PS/1000,"km_",TT,"h_",sample,"_CA.rds")))
+
+      rm(indo_df, f_df_list)
     
   }
 }

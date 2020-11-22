@@ -273,9 +273,24 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
 		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
 
-	*** prepare parcel maps of annual LUC from primary forest to small and medium size plantations (LUCPFSP) 
-		rsource using "code/outcome_variables/prepare_lucpfsp"
-		* input: 
+	*** prepare parcel maps of annual LUC from primary forest to small and medium size plantations (LUCPFSMP) 
+		rsource using "code/outcome_variables/prepare_lucpfsmp"
+		* input: 	temp_data/processed_indonesia_spatial/island_sf
+		*			input_data/tree_plantations
+		*			temp_data/processed_lu/gfc_loss_ISLAND_30th_prj.tif for ISLAND = ("Sumatra, Kalimantan, Papua)
+		*			temp_data/processed_lu/margono_primary_forest_ISLAND_aligned.tif
+		*			temp_data/IBS_UML_panel_final.dta
+
+		* output:	temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
+		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
+
+	*** prepare parcel maps of annual LUC from primary forest to small and medium size plantations (LUCPFSMP) 
+		rsource using "code/outcome_variables/prepare_lucfsmp"
+		* input: 	temp_data/processed_indonesia_spatial/island_sf
+		*			input_data/tree_plantations
+		*			temp_data/processed_lu/gfc_loss_ISLAND_30th_prj.tif for ISLAND = ("Sumatra, Kalimantan, Papua)
+		*			temp_data/processed_lu/austin_ioppm_2000_",island,"_aligned.tif
+		*			temp_data/IBS_UML_panel_final.dta
 
 		* output:	temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
 		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  

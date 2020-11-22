@@ -99,18 +99,20 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   
   ## make a variable that counts rapid and slow lucfp events (this is only computed for primary forest as of now)
   # THIS IS GOING TO BE THE MAIN OUTCOME VARIABLE INSTEAD OF lucpfip_pixelcount_total
-  LHS$lucpfip_rapidslow_pixelcount <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount
+  d$lucpfip_pixelcount <- d$lucpfip_rapid_pixelcount + d$lucpfip_slow_pixelcount
+  d$lucfip_pixelcount <- d$lucfip_pixelcount_30th# pour l'instant on met lucfip_pixelcount_total dans "all producers" et pas rapid + slow, car on n'a 
+  # pas calculé rapid et slow pour ce type de forêt encore
   
   # make variable that counts lucfp events on both small and medium sized plantations 
-  LHS$lucpfsmp_pixelcount_total <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
-  LHS$lucfsmp_pixelcount_30th <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
+  d$lucpfsmp_pixelcount <- d$lucpfsp_pixelcount_total + d$lucpfmp_pixelcount_total
+  d$lucfsmp_pixelcount <- d$lucfsp_pixelcount_30th + d$lucfmp_pixelcount_30th
   
   ## make a variable that counts lucfp events on all types of plantations
-  LHS$lucpfap_pixelcount_total <- LHS$lucpfip_rapidslow_pixelcount + LHS$lucpfsmp_pixelcount_total
-  LHS$lucfap_pixelcount_total <- LHS$lucfip_pixelcount_total + LHS$lucfsmp_pixelcount_total
+  d$lucpfap_pixelcount <- d$lucpfip_pixelcount + d$lucpfsmp_pixelcount
+  d$lucfap_pixelcount <- d$lucfip_pixelcount + d$lucfsmp_pixelcount 
   
-  # check that rapid + slow = total ? 
   
+
   
   ### EXPLICATIVE VARIABLES (runs from 1998-2015) 
   RHS <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
@@ -139,66 +141,66 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   
   
   
-  ### OUTCOME VARIABLE TIME DYNAMICS
-  
-  # outcome_variables <- c("lucpfip_ha_intact", "lucpfip_ha_degraded", "lucpfip_ha_total",
-  #                        "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount_total",
-  #                        "lucfip_ha_30th", "lucfip_ha_60th", "lucfip_ha_90th", 
-  #                        "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th")
-  
-  # retirer cette ligne a la fin, mais pour l'instant fait gagner du temps, on a pas besoin de toutes les autres
-  outcome_variables <- c("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
-  
-  for(voi in outcome_variables){
-    ## different lags
-    for(lag in c(1:4)){
-      parcels <- dplyr::arrange(parcels, lonlat, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = voi, 
-                                    TimeVar = "year",
-                                    GroupVar = "lonlat",
-                                    NewVar = paste0(voi,"_lag",lag),
-                                    slideBy = -lag, 
-                                    keepInvalid = TRUE)
-      parcels <- dplyr::arrange(parcels, lonlat, year)
-    }
-    
-    
-    for(py in c(2,3,4)){
-      ## Past-year average (2, 3 and 4 years) 
-      parcels$newv <- rowMeans(x = parcels[,paste0(voi,"_lag",c(1:py))], na.rm = FALSE)
-      parcels[is.nan(parcels$newv),"newv"] <- NA
-      colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_",py,"pya")
-      
-      # Lag it
-      # note that 3pya_lag1 is different from 4pya. 
-      parcels <- dplyr::arrange(parcels, lonlat, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = paste0(voi,"_",py,"pya"), 
-                                    TimeVar = "year",
-                                    GroupVar = "lonlat",
-                                    NewVar = paste0(voi,"_",py,"pya_lag1"),
-                                    slideBy = -1, 
-                                    keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, lonlat, year)
-      
-      ## YOY growth rate
-      parcels <- mutate(parcels,
-                        !!as.symbol(paste0(voi,"_yoyg")) := 100*(!!as.symbol(paste0(voi)) - 
-                                                                   !!as.symbol(paste0(voi,"_lag1"))) /
-                          !!as.symbol(paste0(voi,"_lag1")))
-      # lag it
-      parcels <- dplyr::arrange(parcels, lonlat, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = paste0(voi,"_yoyg"), 
-                                    TimeVar = "year",
-                                    GroupVar = "lonlat",
-                                    NewVar = paste0(voi,"_yoyg_lag1"),
-                                    slideBy = -1, 
-                                    keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, lonlat, year)
-    }
-  }
+  # ### OUTCOME VARIABLE TIME DYNAMICS
+  # 
+  # # outcome_variables <- c("lucpfip_ha_intact", "lucpfip_ha_degraded", "lucpfip_ha_total",
+  # #                        "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount_total",
+  # #                        "lucfip_ha_30th", "lucfip_ha_60th", "lucfip_ha_90th", 
+  # #                        "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th")
+  # 
+  # # retirer cette ligne a la fin, mais pour l'instant fait gagner du temps, on a pas besoin de toutes les autres
+  # outcome_variables <- c("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")
+  # 
+  # for(voi in outcome_variables){
+  #   ## different lags
+  #   for(lag in c(1:4)){
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #     parcels <- DataCombine::slide(parcels,
+  #                                   Var = voi, 
+  #                                   TimeVar = "year",
+  #                                   GroupVar = "lonlat",
+  #                                   NewVar = paste0(voi,"_lag",lag),
+  #                                   slideBy = -lag, 
+  #                                   keepInvalid = TRUE)
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #   }
+  #   
+  #   
+  #   for(py in c(2,3,4)){
+  #     ## Past-year average (2, 3 and 4 years) 
+  #     parcels$newv <- rowMeans(x = parcels[,paste0(voi,"_lag",c(1:py))], na.rm = FALSE)
+  #     parcels[is.nan(parcels$newv),"newv"] <- NA
+  #     colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_",py,"pya")
+  #     
+  #     # Lag it
+  #     # note that 3pya_lag1 is different from 4pya. 
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #     parcels <- DataCombine::slide(parcels,
+  #                                   Var = paste0(voi,"_",py,"pya"), 
+  #                                   TimeVar = "year",
+  #                                   GroupVar = "lonlat",
+  #                                   NewVar = paste0(voi,"_",py,"pya_lag1"),
+  #                                   slideBy = -1, 
+  #                                   keepInvalid = TRUE)  
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #     
+  #     ## YOY growth rate
+  #     parcels <- mutate(parcels,
+  #                       !!as.symbol(paste0(voi,"_yoyg")) := 100*(!!as.symbol(paste0(voi)) - 
+  #                                                                  !!as.symbol(paste0(voi,"_lag1"))) /
+  #                         !!as.symbol(paste0(voi,"_lag1")))
+  #     # lag it
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #     parcels <- DataCombine::slide(parcels,
+  #                                   Var = paste0(voi,"_yoyg"), 
+  #                                   TimeVar = "year",
+  #                                   GroupVar = "lonlat",
+  #                                   NewVar = paste0(voi,"_yoyg_lag1"),
+  #                                   slideBy = -1, 
+  #                                   keepInvalid = TRUE)  
+  #     parcels <- dplyr::arrange(parcels, lonlat, year)
+  #   }
+  # }
   
   ### ADD BASELINE FOREST EXTENT 
   # this is a cross section, computed in prepare_2000_forest_extents.R
@@ -230,56 +232,52 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   
   ### COMPUTE ESTIMATED ANNUAL FOREST REMAINING
   
-  # Do if for lucfp if we are sure that this is an important methodology
-  # parcels <- dplyr::mutate(parcels,
-  #                          total_lucfp_30th = lucfip_pixelcount_30th + lucfsmp_pixelcount_30th)
+  # annual lucfp accumulated over past years
   
-  # parcels <- dplyr::mutate(parcels, 
-  #                          total_lucpfp_total = lucpfip_pixelcount_total + lucpfsmp_pixelcount_total)
-  
-  # anyNA(parcels$lucpfap_pixelcount_total) returns FALSE
-  
-  # then annual lucfp accumulated over past years
-  
+  ## FOR PRIMARY FOREST
   year_list <- list()
   
   # in the first year (2001), the past year accumulated lucfp is null. 
   year_list[["2001"]] <- parcels[parcels$year == 2001, c("lonlat", "year")] 
   # names(year_list[["2001"]]) <- "lonlat"%>% as.data.frame() 
+  year_list[["2001"]][,"accu_lucfp_since2k"] <- 0
   year_list[["2001"]][,"accu_lucpfp_since2k"] <- 0
   
-  # then, each year's lucfp accumulated in the past is the sum of *past years'* lucpfap_pixelcount_total
+  # then, each year's lucfp accumulated in the past is the sum of *past years'* lucpfap_pixelcount
   years <- 2002:max(parcels$year)
   for(y in years){
     sub_ <- parcels[parcels$year < y,]
     year_list[[as.character(y)]] <- ddply(sub_, "lonlat", summarise,
-                                          #accu_lucfp_since2k = sum(total_lucfp_30th, na.rm = TRUE),
-                                          accu_lucpfp_since2k = sum(lucpfap_pixelcount_total, na.rm = TRUE))
+                                          accu_lucfp_since2k = sum(lucfap_pixelcount, na.rm = TRUE),
+                                          accu_lucpfp_since2k = sum(lucpfap_pixelcount, na.rm = TRUE))
     year_list[[as.character(y)]][,"year"] <- y
   }
   
   # data <- parcels[parcels$year < y,]
   # t <- ddply(data, "lonlat", summarise,
   #            #past_accu_lucfp = sum(total_lucfp_30th, na.rm = TRUE),
-  #            accu_lucpfp_since2k = sum(lucpfap_pixelcount_total, na.rm = TRUE))
+  #            accu_lucpfp_since2k = sum(lucpfap_pixelcount, na.rm = TRUE))
   
   accu_lucfp_df <- bind_rows(year_list)
   
-  parcels <- merge(parcels, accu_lucfp_df, by = c("lonlat", "year"))
+  parcels <- inner_join(parcels, accu_lucfp_df, by = c("lonlat", "year"))
   
   
   # summary(parcels$accu_lucpfp_since2k)
   parcels <- dplyr::mutate(parcels, 
-                           #remain_f30th_pixelcount = fc2000_30th_pixelcount - accu_lucfp_since2k,
+                           remain_f30th_pixelcount = fc2000_30th_pixelcount - accu_lucfp_since2k,
                            remain_pf_pixelcount = pfc2000_total_pixelcount - accu_lucpfp_since2k)
   
-  # parcels[parcels$lonlat == 1267,c("lonlat", "year", "lucpfap_pixelcount_total", "accu_lucpfp_since2k", "remain_pf_pixelcount")] 
   
   
-  
+  ### MAKE THE PARCEL_ID 
+  uni_lonlat <- unique(parcels$lonlat)
+  parcels <- mutate(parcels, 
+              parcel_id = match(lonlat, uni_lonlat)) 
+  rm(uni_lonlat)
   
   ## some arrangements
-  parcels <- dplyr::arrange(parcels, lonlat, year)
+  parcels <- dplyr::arrange(parcels, parcel_id, lonlat, year)
   row.names(parcels) <- seq(1,nrow(parcels))
   
   
@@ -328,21 +326,21 @@ rm(merge_lhs_rhs)
 # names(LHS)  
 # names(RHS)  
 # 
-# length(unique(LHS$parcel_id))
-# length(unique(RHS_2001$parcel_id))
+# length(unique(LHS$lonlat))
+# length(unique(RHS_2001$lonlat))
 # 
 # # LHS was not ordered as expected, hence 
 # RHS_2001 <- RHS[RHS$year >= 2001,]
-# all.equal(RHS_2001$parcel_id, LHS$parcel_id) # returns FALSE
+# all.equal(RHS_2001$lonlat, LHS$lonlat) # returns FALSE
 # 
-# LHS_ordered <- dplyr::arrange(LHS, parcel_id, year)
+# LHS_ordered <- dplyr::arrange(LHS, lonlat, year)
 # all.equal(LHS_ordered, LHS)
 # # RHS was ordered as expected
-# RHS_ordered <- dplyr::arrange(RHS, parcel_id, year)
+# RHS_ordered <- dplyr::arrange(RHS, lonlat, year)
 # all.equal(RHS_ordered, RHS)
 # 
 # # once reordered, we indeed have the same set of parcels in both data frames. 
-# all.equal(RHS_2001$parcel_id, LHS_ordered$parcel_id)
+# all.equal(RHS_2001$lonlat, LHS_ordered$lonlat)
 # all.equal(RHS_2001[,c("lat", "lon")], LHS_ordered[,c("lat", "lon")]) 
 # coordinates match too (only the row names are different). 
 
