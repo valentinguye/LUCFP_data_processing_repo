@@ -52,7 +52,7 @@ lapply(neededPackages, library, character.only = TRUE)
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
 parcel_size <- 3000
-travel_time <- 2
+travel_time <- 4
 
 merge_lhs_rhs <- function(parcel_size, travel_time){
   
@@ -76,40 +76,38 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   lucpfip_dyn <- lucpfip_dyn[lucpfip_dyn$year<=2015,]
   
   
-  # remove coordinates, they are already in RHS
+  # remove coordinates
   lucfp <- dplyr::select(lucfp, -lat, -lon, -idncrs_lat, -idncrs_lon)
-  lucpfip_dyn <- dplyr::select(lucpfip_dyn, -idncrs_lat, -idncrs_lon)
+  lucpfip_dyn <- dplyr::select(lucpfip_dyn, -lat, -lon, -idncrs_lat, -idncrs_lon)
   
   
-  ### THIS NEEDS TO BE CHANGED WHEN WE HAVE LUCFP
   #  LHS <- lucpfp
-  if(nrow(lucpfp) != nrow(lucpfip_dyn)){stop("LHS datasets don't all have the same number of rows")}
+  if(nrow(lucpfp) != nrow(lucpfip_dyn)){print("LHS datasets don't all have the same number of rows")}
 
-  if(nrow(lucpfp) != nrow(lucfp)){stop("LHS datasets don't all have the same number of rows")}
+  if(nrow(lucpfp) != nrow(lucfp)){print("LHS datasets don't all have the same number of rows")}
 
   LHS <- inner_join(lucpfp, lucfp, by = c("lonlat", "year"))
   LHS <- inner_join(LHS, lucpfip_dyn, by = c("lonlat", "year"))
-  #LHS <- inner_join(lucpfp, lucpfip_dyn, by = c("lonlat", "year"))
-  
+
   if(nrow(lucpfp) != nrow(LHS)){stop("LHS datasets don't all have the same set of parcels")}
   
-  rm(lucpfp, lucpfip_dyn)
+  rm(lucpfp, lucfp, lucpfip_dyn)
   #nrow(lucpfp)==nrow(lucfp)
   #LHS <- base::merge(lucpfp, lucfp, by = c("lonlat", "year"))
   
   ## make a variable that counts rapid and slow lucfp events (this is only computed for primary forest as of now)
   # THIS IS GOING TO BE THE MAIN OUTCOME VARIABLE INSTEAD OF lucpfip_pixelcount_total
-  d$lucpfip_pixelcount <- d$lucpfip_rapid_pixelcount + d$lucpfip_slow_pixelcount
-  d$lucfip_pixelcount <- d$lucfip_pixelcount_30th# pour l'instant on met lucfip_pixelcount_total dans "all producers" et pas rapid + slow, car on n'a 
+  LHS$lucpfip_pixelcount <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount
+  LHS$lucfip_pixelcount <- LHS$lucfip_pixelcount_30th# pour l'instant on met lucfip_pixelcount_total dans "all producers" et pas rapid + slow, car on n'a 
   # pas calculé rapid et slow pour ce type de forêt encore
   
   # make variable that counts lucfp events on both small and medium sized plantations 
-  d$lucpfsmp_pixelcount <- d$lucpfsp_pixelcount_total + d$lucpfmp_pixelcount_total
-  d$lucfsmp_pixelcount <- d$lucfsp_pixelcount_30th + d$lucfmp_pixelcount_30th
+  LHS$lucpfsmp_pixelcount <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
+  LHS$lucfsmp_pixelcount <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
   
   ## make a variable that counts lucfp events on all types of plantations
-  d$lucpfap_pixelcount <- d$lucpfip_pixelcount + d$lucpfsmp_pixelcount
-  d$lucfap_pixelcount <- d$lucfip_pixelcount + d$lucfsmp_pixelcount 
+  LHS$lucpfap_pixelcount <- LHS$lucpfip_pixelcount + LHS$lucpfsmp_pixelcount
+  LHS$lucfap_pixelcount <- LHS$lucfip_pixelcount + LHS$lucfsmp_pixelcount 
   
   
 
@@ -125,8 +123,7 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   # Final code if wa_at_CR_parcels.R and add_CR_parcels.R are run again
   # RHS <- dplyr::select(RHS, -lat, -lon, -idncrs_lat, -idncrs_lon)
   # parcels <- inner_join(LHS, RHS, by = c("lonlat", "year"))
-  
-  
+
   # MERGE
   # years 1998 - 2000 from RHS will not match, we don't need to keep them because the information 
   # from these years is captured in add_parcel_variables.R within lag variables. Hence the inner_join
@@ -242,7 +239,7 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   # names(year_list[["2001"]]) <- "lonlat"%>% as.data.frame() 
   year_list[["2001"]][,"accu_lucfp_since2k"] <- 0
   year_list[["2001"]][,"accu_lucpfp_since2k"] <- 0
-  
+
   # then, each year's lucfp accumulated in the past is the sum of *past years'* lucpfap_pixelcount
   years <- 2002:max(parcels$year)
   for(y in years){

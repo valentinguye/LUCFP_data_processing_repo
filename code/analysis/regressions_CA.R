@@ -264,14 +264,13 @@ rm(d_CA4)
 
 # Prefered specifications are passed as default arguments. 
 # Currently, the returned object is a fixest object, of *ONE* regression.  
-island = "both"
-outcome_variable = paste0("lucpf",SIZE,"p_pixelcount")
-all_producers = TRUE
+island = "Sumatra"
+outcome_variable = paste0("lucpfip_pixelcount")
 alt_ca = FALSE
 commo = c("cpo")#"ffb", 
 x_pya = 3
 dynamics = FALSE
-log_prices = TRUE
+log_prices = FALSE
 yoyg = FALSE
 short_run = "full"
 imp = 1
@@ -281,7 +280,7 @@ lag_or_not = "_lag1"
 controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")#"wa_pct_own_loc_gov_imp",
 remaining_forest = FALSE
 offset = FALSE
-interaction_terms = NULL
+interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")
 interacted = "regressors"
 spatial_control = FALSE
 pya_ov = FALSE
@@ -290,7 +289,7 @@ weights = FALSE
 
 
 make_base_reg <- function(island,
-                          outcome_variable = "lucpfap_rapidslow_pixelcount", # LHS. One of "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount"
+                          outcome_variable = "lucpfap_pixelcount", # LHS. One of "lucfip_pixelcount_30th", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount"
                           #all_producers = FALSE, # whether industrial and smallholders plantations should be added. 
                           alt_ca = FALSE, # logical, if TRUE, Sumatra's catchment area is based on 4 hour driving times, and Kalimantan on 2 hours.  
                           commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo"), commodities the price signals of which should be included in the RHS
@@ -306,7 +305,7 @@ make_base_reg <- function(island,
                           controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # character vectors of names of control variables (don't specify lags in their names)
                           remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
                           offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
-                          interaction_terms = controls, # may be one or several of the controls specified above. 
+                          interaction_terms = NULL, # may be one or several of the controls specified above. 
                           interacted = "regressors",
                           spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
                           pya_ov = FALSE, # logical, whether the pya (defined by x_pya) of the outcome_variable should be added in controls
@@ -688,7 +687,8 @@ make_base_reg <- function(island,
 # helper function that transforms the list of results into a data frame of average partial effects (APEs) and their standard errors (SEs), 
 # for the K first regressors in the models fitted by make_base_reg 
 # If there are interactions in the models, the APEs (and SEs) of the interaction effects are computed (may not work if K > 1 then)
-make_APEs <- function(res_data, K=1){
+#res_data <- res_data_list_commo[[1]]
+make_APEs <- function(res_data, K=1, rel_price_change = -0.01, abs_price_change = -1){
   
   # store APEs and their deltaMethod statistics in this list 
   dM_ape_list <- list()
@@ -716,17 +716,23 @@ make_APEs <- function(res_data, K=1){
   
   # average fitted values
   fv_bar <- mean(reg_res$fitted.values) 
-
+  
   # repeat the following for the K regressors of interest 
   for(k in 1:K){
     ## FORMULA FOR APE OF REGRESSOR OF INTEREST 
+    
     linear_ape_fml <- paste0(coeff_names[k])
     i_t <- 1
     while(i_t<=length(interaction_terms)){
-      linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[i_t],"*",int_term_avg[[i_t]])
+      linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[grepl(coeff_names[k],interaction_effects)][i_t],"*",int_term_avg[[i_t]])
       i_t <- i_t +1
     }
-    ape_fml_roi <- paste0("(",linear_ape_fml,")*fv_bar*",pixel_area_ha)
+    # the final formula is different depending on the regressor of interest being in the log scale or not. 
+    if(grepl("ln_",coeff_names[k])){
+      ape_fml_roi <- paste0("((",1+rel_price_change,")^(",linear_ape_fml,") - 1)*fv_bar*",pixel_area_ha)
+    } else{
+      ape_fml_roi <- paste0("(exp(",linear_ape_fml,"*",abs_price_change,") - 1)*fv_bar*",pixel_area_ha)
+    } 
     
     dM_ape_roi <- deltaMethod(object = coef(reg_res), 
                               vcov. = vcov(reg_res, se = "cluster"), 
@@ -760,8 +766,13 @@ make_APEs <- function(res_data, K=1){
                            coeff_names[coeff_names==interaction_terms[i]]," + ",
                            iei,"*",reg_bar,")")#
         
-        # paste everything together
-        ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha)
+        # paste everything together; divide by 100 to approximate the log transformation of regressor of interest if it's in the log scale
+        if(grepl("ln_", coeff_names[k])){
+          ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha/100)
+          
+        } else{
+          ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha)
+        }
         
         dM <- deltaMethod(object = coef(reg_res), 
                           vcov. = vcov(reg_res, se = "cluster"), 
@@ -783,7 +794,12 @@ make_APEs <- function(res_data, K=1){
   
   # add a row with the number of observations
   mat <- rbind(mat, reg_res$nobs)
-  
+  # add a row with the size of the variation 
+  if(grepl("ln_", coeff_names[k])){
+    mat <- rbind(mat, rel_price_change)
+  } else{
+    mat <- rbind(mat, abs_price_change)
+  }  
   #row.names(mat) <- rep(c("Estimate","SE","p-value"),1+length(interaction_terms))
   
   rm(coeff_names, interaction_effects, others, interaction_terms, reg_res, d_clean, int_term_avg, 
@@ -804,6 +820,8 @@ for(SIZE in size_list){
   for(ISL in isl_list){
     res_data_list_main[[elm]] <- make_base_reg(island = ISL,
                                                outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                               #interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"),
+                                               log_prices = FALSE,
                                                offset = FALSE)
     names(res_data_list_main)[elm] <- paste0(ISL,"_",SIZE)
     elm <- elm + 1
@@ -816,7 +834,33 @@ res_list_main <- lapply(res_data_list_main, FUN = function(x){x[[1]]})
 etable(res_list_main,
        se = "cluster",
        #coefstat = "confint",
-       subtitles = names(res_data_list_main))
+       subtitles = names(res_list_main))
+
+
+# afv <- res_list_main[["Sumatra_i"]]$fitted.values %>% mean() * pixel_area_ha
+# 
+# 
+# true_adv <- res_data_list_main[["Sumatra_i"]][[2]]$lucpfip_pixelcount %>% mean() * pixel_area_ha
+# true_adv * nrow(res_data_list_main[["Sumatra_i"]][[2]])
+# 
+# alevel <- mean(d_clean$wa_cpo_price_imp1_4ya_lag1)
+# (res_list_main[["Sumatra_i"]]$coefficients[1]/alevel)*afv
+
+
+
+# # sans transformer en log, le coeff CPO est 0.003705097, et la moyenne de la variable est 698.3924.
+# # Donc une augmentation du prix de 7 unités (~1%) devrait être associée à une hausse de 7* 0.003705097 = 0.025935 (ou plus exactement une multiplication par exp(0.003705)^7 = 1.026274)
+# (exp(0.003705097*7) - 1)*100 = 2.627494 # an increase in mean price of 7 units is associated with an increase in mean LUCFP by 2.63%
+# (1.01^(2.195165) - 1)*100 = 2.208291 # an increase in mean price of 1 % is associated with an increase in mean LUCFP by 2.21%
+# 
+# # APEs for a change of - 1 unit or - 1 %
+# (exp(0.003705097*(-7)) - 1)*afv*pixel_area_ha # an increase in prices of 7 units yields an increase in mean LUCFP by 0.80 hectare
+# (0.99^(2.195165) - 1)*afv*pixel_area_ha # an increase in prices of 7 units yields an increase in mean LUCFP by 0.81 hectare
+# 
+# # not exactly the same, but comparable to:
+# (2.195165/100)*afv*pixel_area_ha
+
+
 
 ### LATEX
 
@@ -910,8 +954,8 @@ rm(ape_mat)
 res_data_list_alt <- list()
 elm <- 1
 
-isl_list <- list("Sumatra", "Kalimantan", "both")
 size_list <- list("i","sm")
+isl_list <- list("Sumatra", "Kalimantan", "both")
 
 for(SIZE in size_list){
   for(ISL in isl_list){
@@ -932,7 +976,7 @@ res_list_alt <- lapply(res_data_list_alt, FUN = function(x){x[[1]]})
 # # preview in R
 etable(res_list_alt,
        se = "cluster",
-       subtitles = names(res_data_list_alt))
+       subtitles = names(res_list_alt))
 
 
 
@@ -1022,7 +1066,7 @@ res_list_ill <- lapply(res_data_list_ill, FUN = function(x){x[[1]]})
 # preview in R
 etable(res_list_ill,
        se = "cluster",
-       subtitles = names(res_data_list_ill))
+       subtitles = names(res_list_ill))
 
 
 
@@ -1113,6 +1157,8 @@ for(DYN in dyn_list){
   for(ISL in isl_list){
     res_data_list_dyn[[elm]] <- make_base_reg(island = ISL, 
                                               outcome_variable = paste0("lucpfip_",DYN,"_pixelcount"),
+                                              commo = c("ffb", "cpo"),
+                                              dynamics = TRUE,
                                               offset = FALSE)
     names(res_data_list_dyn)[elm] <- paste0(ISL,"_",DYN)
     elm <- elm + 1
@@ -1126,7 +1172,7 @@ res_list_dyn <- lapply(res_data_list_dyn, FUN = function(x){x[[1]]})
 # preview in R
 etable(res_list_dyn,
        se = "cluster",
-       subtitles = names(res_data_list_dyn))
+       subtitles = names(res_list_dyn))
 
 
 #### LUCFIP DYNAMICS - MAKE APEs #### 
@@ -1210,7 +1256,7 @@ res_list_commo <- lapply(res_data_list_commo, FUN = function(x){x[[1]]})
 # preview in R
 etable(res_list_commo,
        se = "cluster",
-       subtitles = names(res_data_list_commo))
+       subtitles = names(res_list_commo))
 
 #### COMMODITY - MAKE APEs ####
 rm(ape_mat)
@@ -1286,7 +1332,7 @@ res_list_prdyn <- lapply(res_data_list_prdyn, FUN = function(x){x[[1]]})
 # preview in R
 etable(res_list_prdyn,
        se = "cluster",
-       subtitles = names(res_data_list_prdyn))
+       subtitles = names(res_list_prdyn))
 
 
 #### PRICE DYNAMICS - MAKE APEss ####
@@ -1354,7 +1400,7 @@ row.names(comp_ape_mat) <- c("Sumatra = Kalimantan",
 
 
 ### COMPARE APEs ACROSS GROUPS
-make_APEs_1regr <- function(res_data){
+make_APEs_1regr <- function(res_data, rel_price_change = -0.01, abs_price_change = -1){
   reg_res <- res_data[[1]]
   d_clean <- res_data[[2]]
   
@@ -1501,7 +1547,7 @@ for(SIZE in size_list){
 }
 # these loops yield 9 estimates, elm should be 10
 elm 
-elm <- 10
+#elm <- 10
 ## Adding estimations with distinction between primary and 30% tree cover forest definitions
 for(SIZE in size_list){
   for(ISL in isl_list){
@@ -1673,8 +1719,8 @@ comp_ape_disp <- comp_ape_mat
 
 comp_ape_disp <- comp_ape_mat %>% formatC(digits = 4, format = "f")
 comp_ape_disp[comp_ape_disp=="   NA"] <- "" 
-colnames(comp_ape_disp) <- NULL
 comp_ape_disp
+colnames(comp_ape_disp) <- NULL
 
 options(knitr.table.format = "latex")
 kable(comp_ape_disp, booktabs = T, align = "r",

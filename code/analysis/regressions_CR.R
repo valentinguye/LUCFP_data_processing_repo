@@ -77,14 +77,19 @@ getFixest_nthreads()
 
 ### Set dictionary for names of variables to display in regression tables 
 setFixest_dict(c(parcel_id = "grid cell",
-                 lucpfip_ha_total = "LUCPFIP (ha)", 
                  lucpfip_pixelcount_total = "Land use change from primary forest to industrial oil palm plantations", 
-                 lucpfsmp_ha_total = "LUCPFSMP (ha)", 
-                 lucpfsmp_pixelcount_total = "Land use change from primary forest to small or medium-sized oil palm plantations", 
+                 lucpfip_pixelcount = "Land use change from primary forest to industrial oil palm plantations", 
+                 lucpfip_rapid_pixelcount = "Rapid land use change from primary forest to industrial oil palm plantations",
+                 lucpfip_slow_pixelcount = "Slow land use change from primary forest to industrial oil palm plantations",
+                 lucpfsmp_pixelcount = "Land use change from primary forest to small or medium-sized oil palm plantations", 
+                 lucfip_pixelcount = "Land use change from 30% tree cover forest to industrial oil palm plantations", 
+                 lucfsmp_pixelcount = "Land use change from 30% tree cover forest to small or medium-sized oil palm plantations", 
+                 lucpfap_pixelcount = "Land use change from primary forest to any types of oil palm plantations", 
+                 lucfap_pixelcount = "Land use change from 30% tree cover forest to any types of oil palm plantations", 
+                 
                  lucfip_ha_30th = "LUCFIP (30 pct. canopy density, ha)",
                  lucfip_ha_60th = "LUCFIP (60 pct. canopy density, ha)",
                  lucfip_ha_90th = "LUCFIP (90 pct. canopy density, ha)",
-                 lucfip_pixelcount = "LUCFIP (30 pct. canopy density, pixels)",
                  lucfip_pixelcount_60th = "LUCFIP (60 pct. canopy density, pixels)",
                  lucfip_pixelcount_90th = "LUCFIP (90 pct. canopy density, pixels)",
                  # No time dynamics FFB variables 
@@ -190,14 +195,16 @@ setFixest_dict(c(parcel_id = "grid cell",
                  ln_wa_cpo_price_imp1_4pya = "CPO price signal, 4 past year average",
                  ln_wa_cpo_price_imp1_4pya_lag1 = "CPO price signal, 4 past year average",#(lagged)
                  ## interactions 
-                 n_reachable_uml_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "reachable mills X FFB price signal",
-                 n_reachable_uml_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "reachable mills X CPO price signal",
-                 wa_pct_own_loc_gov_imp_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "local gvt mill ownership X FFB price signal",
-                 wa_pct_own_loc_gov_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "local gvt mill ownership X CPO price signal",
-                 wa_pct_own_nat_priv_imp_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "private mill ownership X FFB price signal",
-                 wa_pct_own_nat_priv_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "private mill ownership X CPO price signal",
-                 wa_pct_own_for_imp_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "foreign mill ownership X FFB price signal",
-                 wa_pct_own_for_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "foreign mill ownership X CPO price signal",
+                 n_reachable_uml_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "# reachable mills X FFB price",
+                 n_reachable_uml_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "# reachable mills X CPO price",
+                 wa_pct_own_loc_gov_imp_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "local gvt mill ownership X FFB price",
+                 wa_pct_own_loc_gov_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "local gvt mill ownership X CPO price",
+                 wa_pct_own_nat_priv_imp_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "private mill ownership X FFB price",
+                 wa_pct_own_nat_priv_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "private mill ownership X CPO price",
+                 wa_pct_own_for_imp_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "foreign mill ownership X FFB price",
+                 wa_pct_own_for_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "foreign mill ownership X CPO price",
+                 wa_prex_cpo_imp1_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "pct. CPO exported X FFB price",
+                 wa_prex_cpo_imp1_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "pct. CPO exported X CPO price",
                  ## controls
                  lucpfip_pixelcount_total_lag1 = "LUCPFIP (pixels, lagged)",
                  lucpfip_pixelcount_total_2pya = "LUCPFIP (pixels, 2 past year average)",
@@ -299,9 +306,9 @@ make_base_reg <- function(island,
                             fe = "parcel_id + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
                             offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                             lag_or_not = "_lag1", # either "_lag1", or  "", should the 
-                            controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # character vectors of names of control variables (don't specify lags in their names)
+                            controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # character vectors of names of control variables (don't specify lags in their names)
                             remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
-                            interaction_terms = NULL, # may be one or several of the controls specified above. 
+                            interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
                             interacted = "regressors",
                             spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
                             pya_ov = FALSE, # logical, whether the pya (defined by x_pya) of the outcome_variable should be added in controls
@@ -626,7 +633,7 @@ make_base_reg <- function(island,
                                  data = d_clean, 
                                  family = distribution,
                                  offset = offset_fml,
-                                 glm.iter = 100,
+                                 glm.iter = 200,
                                  notes = TRUE, 
                                  weights = var_weights)
         
@@ -635,7 +642,7 @@ make_base_reg <- function(island,
                                  data = d_clean, 
                                  family = distribution,
                                  offset = offset_fml,
-                                 glm.iter = 100,
+                                 glm.iter = 200,
                                  notes = TRUE)
       }
     }else{ # no weights allowed in negative binomial
@@ -653,7 +660,8 @@ make_base_reg <- function(island,
         reg_res <- fixest::feglm(fe_model,
                                  data = d_clean, 
                                  family = distribution, 
-                                 glm.iter = 50,
+                                 glm.iter = 200,
+                                 #fixef.iter = 100000,
                                  notes = TRUE, 
                                  weights = var_weights)
         
@@ -661,7 +669,8 @@ make_base_reg <- function(island,
         reg_res <- fixest::feglm(fe_model,
                                  data = d_clean, 
                                  family = distribution, 
-                                 glm.iter = 50,
+                                 glm.iter = 2000,
+                                 #fixef.iter = 100000,
                                  notes = TRUE)
       }
     }else{ # no weights allowed in negative binomial
@@ -683,7 +692,8 @@ make_base_reg <- function(island,
 # helper function that transforms the list of results into a data frame of average partial effects (APEs) and their standard errors (SEs), 
 # for the K first regressors in the models fitted by make_base_reg 
 # If there are interactions in the models, the APEs (and SEs) of the interaction effects are computed (may not work if K > 1 then)
-make_APEs <- function(res_data, K=1){
+#res_data <- res_data_list_commo[[1]]
+make_APEs <- function(res_data, K=1, rel_price_change = -0.01, abs_price_change = -1){
   
   # store APEs and their deltaMethod statistics in this list 
   dM_ape_list <- list()
@@ -715,13 +725,19 @@ make_APEs <- function(res_data, K=1){
   # repeat the following for the K regressors of interest 
   for(k in 1:K){
     ## FORMULA FOR APE OF REGRESSOR OF INTEREST 
+    
     linear_ape_fml <- paste0(coeff_names[k])
     i_t <- 1
     while(i_t<=length(interaction_terms)){
-      linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[i_t],"*",int_term_avg[[i_t]])
+      linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[grepl(coeff_names[k],interaction_effects)][i_t],"*",int_term_avg[[i_t]])
       i_t <- i_t +1
     }
-    ape_fml_roi <- paste0("(",linear_ape_fml,")*fv_bar*",pixel_area_ha)
+    # the final formula is different depending on the regressor of interest being in the log scale or not. 
+    if(grepl("ln_",coeff_names[k])){
+      ape_fml_roi <- paste0("((",1+rel_price_change,")^(",linear_ape_fml,") - 1)*fv_bar*",pixel_area_ha)
+    } else{
+      ape_fml_roi <- paste0("(exp(",linear_ape_fml,"*",abs_price_change,") - 1)*fv_bar*",pixel_area_ha)
+    } 
     
     dM_ape_roi <- deltaMethod(object = coef(reg_res), 
                               vcov. = vcov(reg_res, se = "cluster"), 
@@ -755,8 +771,13 @@ make_APEs <- function(res_data, K=1){
                            coeff_names[coeff_names==interaction_terms[i]]," + ",
                            iei,"*",reg_bar,")")#
         
-        # paste everything together
-        ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha)
+        # paste everything together; divide by 100 to approximate the log transformation of regressor of interest if it's in the log scale
+        if(grepl("ln_", coeff_names[k])){
+          ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha/100)
+          
+        } else{
+          ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha)
+        }
         
         dM <- deltaMethod(object = coef(reg_res), 
                           vcov. = vcov(reg_res, se = "cluster"), 
@@ -778,7 +799,12 @@ make_APEs <- function(res_data, K=1){
   
   # add a row with the number of observations
   mat <- rbind(mat, reg_res$nobs)
-  
+  # add a row with the size of the variation 
+  if(grepl("ln_", coeff_names[k])){
+    mat <- rbind(mat, rel_price_change)
+  } else{
+    mat <- rbind(mat, abs_price_change)
+  }  
   #row.names(mat) <- rep(c("Estimate","SE","p-value"),1+length(interaction_terms))
   
   rm(coeff_names, interaction_effects, others, interaction_terms, reg_res, d_clean, int_term_avg, 
@@ -804,6 +830,12 @@ for(SIZE in size_list){
     elm <- elm + 1
   }
 }
+# And overall
+res_data_list_main[[elm]] <- make_base_reg(island = "both",
+                                           outcome_variable = paste0("lucpfap_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                           offset = FALSE)
+names(res_data_list_main)[elm] <- paste0("both_a")
+elm <- elm + 1
 
 res_list_main <- lapply(res_data_list_main, FUN = function(x){x[[1]]})
 
@@ -816,7 +848,7 @@ etable(res_list_main,
 ### LATEX
 
 #table_title_dyn <- paste0("LUCFP semi-elasticities to medium-run price signals") 
-table_title_dyn <- paste0("LUCFP elasticities to medium-run price signals") 
+table_title_dyn <- paste0("LUCFP elasticities to medium-run price signals and all possible controls") 
 #table_title_dyn <- paste0("LUCFP semi-elasticities to medium-run y-o-y growth rates of price signals") 
 
 etable(res_list_main, 
@@ -850,12 +882,13 @@ rm(ape_mat)
 ape_mat <- bind_cols(lapply(res_data_list_main, FUN = make_APEs)) %>% as.matrix()
 rm(res_data_list_main)
 # prepare ape_mat for kable
-row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations")
-ape_mat <- ape_mat %>% round(digits = 3)
-ape_mat[nrow(ape_mat),] <- ape_mat[nrow(ape_mat),] %>% formatC(digits = 0, format = "f")
+row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations (9ha each)", "Treatment") # treatment is just for me to recall where the figures come from
+ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat["Observations (9ha each)",] <- ape_mat["Observations (9ha each)",] %>% formatC(digits = 0, format = "f")
 ape_mat
 colnames(ape_mat) <- NULL
-
+ape_mat <- ape_mat[row.names(ape_mat) != "Treatment",]
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
@@ -868,30 +901,32 @@ kable(ape_mat, booktabs = T, align = "r",
                      "Sumatra" = 1,
                      "Kalimantan" = 1,
                      "both" = 1,
-                     # " " = 1
-  ),
-  bold = F,
-  align = "c") %>%
+                      " " = 1
+                  ),
+                  bold = F,
+                  align = "c") %>%
   add_header_above(c(" " = 1,
                      "Industrial plantations" = 3,
                      "Smallholder plantations" = 3, 
-                     #"All" = 1
-  ),
-  align = "c",
-  strikeout = F) %>%
+                     "Overall" = 1
+                  ),
+                  align = "c",
+                  strikeout = F) %>%
   pack_rows("CPO medium-run price", 1, 3, 
             italic = TRUE, bold = TRUE)  %>%
-  # pack_rows("Interaction with \n domestic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
-  #           italic = TRUE, bold = TRUE)  %>%
-  # pack_rows("Interaction with \n foreign ownership", 7, 9,
-  #           italic = TRUE, bold = TRUE)  %>%
-  # pack_rows("Interaction with \n # of reachable mills", 10, 12,
-  #           italic = TRUE, bold = TRUE)  %>%
-  pack_rows(start_row =  nrow(df), end_row = nrow(df),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
+  pack_rows("Interaction with \n domestic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows("Interaction with \n foreign ownership", 7, 9,
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows("Interaction with \n # of reachable mills", 10, 12,
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows("Interaction with \n pct. CPO exported", 13, 15,
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
               width = "14em",
               latex_valign = "b") %>% 
-  column_spec(column = c(2:(ncol(df))),
+  column_spec(column = c(2:(ncol(ape_mat))),
               width = "5em",
               latex_valign = "b")
 
@@ -918,8 +953,14 @@ for(SIZE in size_list){
     elm <- elm + 1
   }
 }
-
 # elm should be 7 here
+elm <- 7
+# And overall
+res_data_list_alt[[elm]] <- make_base_reg(island = "both",
+                                           outcome_variable = paste0("lucfap_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                           offset = FALSE)
+names(res_data_list_alt)[elm] <- paste0("both_a")
+elm <- elm + 1
 
 res_list_alt <- lapply(res_data_list_alt, FUN = function(x){x[[1]]})
 # 
@@ -935,18 +976,21 @@ etable(res_list_alt,
 #### ALT FOREST - MAKE APEs ####
 
 rm(ape_mat)
-ape_mat <- bind_cols(lapply(res_data_list_for, FUN = make_APEs)) %>% as.matrix()
+ape_mat <- bind_cols(lapply(res_data_list_alt, FUN = make_APEs)) %>% as.matrix()
 rm(res_data_list_for)
 # prepare ape_mat for kable
-row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations")
-ape_mat <- ape_mat %>% round(digits = 3)
-ape_mat[nrow(ape_mat),] <- ape_mat[nrow(ape_mat),] %>% formatC(digits = 0, format = "f")
-colnames(ape_mat) <- NULL
+row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations (9ha each)", "Treatment") # treatment is just for me to recall where the figures come from
+ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat["Observations (9ha each)",] <- ape_mat["Observations (9ha each)",] %>% formatC(digits = 0, format = "f")
 ape_mat
+colnames(ape_mat) <- NULL
+ape_mat <- ape_mat[row.names(ape_mat) != "Treatment",] # this was just for me
+ape_mat <- ape_mat[c(1,2,3,nrow(ape_mat)),]
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
-      caption = "Average partial effects on LUCFP (ha) with alternative forest definition") %>%
+      caption = "Average partial effects on LUCFP (ha) in 30\% tree cover forest") %>%
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c(" " = 1,
                      "Sumatra" = 1,
@@ -954,28 +998,34 @@ kable(ape_mat, booktabs = T, align = "r",
                      "both" = 1,
                      "Sumatra" = 1,
                      "Kalimantan" = 1,
-                     "both" = 1),
-                   align = "c",
-                   strikeout = F) %>%
+                     "both" = 1,
+                     " " = 1
+                  ),
+                  bold = F,
+                  align = "c") %>%
   add_header_above(c(" " = 1,
                      "Industrial plantations" = 3,
-                     "Smallholder plantations" = 3),
-                   align = "c",
-                   strikeout = F) %>%
+                     "Smallholder plantations" = 3, 
+                     "Overall" = 1
+  ),
+  align = "c",
+  strikeout = F) %>%
   pack_rows("CPO medium-run price", 1, 3, 
             italic = TRUE, bold = TRUE)  %>%
-  # pack_rows("Interaction with \n # of reachable mills", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
+  # pack_rows("Interaction with \n domestic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
   #           italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n foreign ownership", 7, 9,
   #           italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n # of reachable mills", 10, 12,
   #           italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with \n pct. CPO exported", 13, 15,
+  #           italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
-              width = "12em",
+              width = "14em",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
-              width = "4em",
+              width = "5em",
               latex_valign = "b")
 
 rm(ape_mat)
@@ -1010,6 +1060,12 @@ for(SIZE in size_list){
     }
   }
 }
+# # And overall
+# res_data_list_ill[[elm]] <- make_base_reg(island = "both",
+#                                           outcome_variable = paste0("lucfap_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+#                                           offset = FALSE)
+# names(res_data_list_ill)[elm] <- paste0("both_a")
+# elm <- elm + 1
 
 res_list_ill <- lapply(res_data_list_ill, FUN = function(x){x[[1]]})
 # 
@@ -1017,6 +1073,7 @@ res_list_ill <- lapply(res_data_list_ill, FUN = function(x){x[[1]]})
 # preview in R
 etable(res_list_ill,
        se = "cluster",
+       convergence = TRUE,
        subtitles = names(res_data_list_ill))
 
 
@@ -1028,11 +1085,14 @@ rm(ape_mat)
 ape_mat <- bind_cols(lapply(res_data_list_ill, FUN = make_APEs)) %>% as.matrix() # [lengths(res_data_list_ill)>0] not necessary now that elm + 1 is in the condition above; 
 rm(res_data_list_ill)
 # prepare ape_mat for kable
-row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations")
-ape_mat <- ape_mat %>% round(digits = 3)
-ape_mat[nrow(ape_mat),] <- ape_mat[nrow(ape_mat),] %>% formatC(digits = 0, format = "f")
-colnames(ape_mat) <- NULL
+row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations (9ha each)", "Treatment") # treatment is just for me to recall where the figures come from
+ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat["Observations (9ha each)",] <- ape_mat["Observations (9ha each)",] %>% formatC(digits = 0, format = "f")
 ape_mat
+colnames(ape_mat) <- NULL
+ape_mat <- ape_mat[row.names(ape_mat) != "Treatment",] # this was just for me
+ape_mat <- ape_mat[c(1,2,3,nrow(ape_mat)),]
 
 # remove here the models that did not converge.
 # with current specification it's 12th model, Kalimantan smallholders illegal
@@ -1040,11 +1100,9 @@ ape_mat
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
-      caption = "Average partial effects legal and illegal LUCFP (ha)") %>%
+      caption = "Average partial effects on legal and illegal LUCFP (ha)") %>%
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c(" " = 1,
-                     "legal" = 1, 
-                     "illegal" = 1, 
                      "legal" = 1, 
                      "illegal" = 1, 
                      "legal" = 1, 
@@ -1060,7 +1118,6 @@ kable(ape_mat, booktabs = T, align = "r",
                    bold = F,
                    align = "c") %>%
   add_header_above(c(" " = 1,
-                     " " = 2,
                      "Sumatra" = 2,
                      "Kalimantan" = 2,
                      "both" = 2,
@@ -1070,15 +1127,14 @@ kable(ape_mat, booktabs = T, align = "r",
                    align = "c",
                    strikeout = F) %>%
   add_header_above(c(" " = 1,
-                     "All" = 2,
                      "Industrial plantations" = 6,
                      "Smallholder plantations" = 5),
                    align = "c",
                    strikeout = F) %>%
-  pack_rows("CPO medium-run price", 1, 3, 
+  pack_rows("-1 pct. change in CPO \n medium-run price", 1, 3, 
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Interaction with \n # of reachable mills", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
-            italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with \n # of reachable mills", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
+  #           italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n foreign ownership", 7, 9,
   #           italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n # of reachable mills", 10, 12,
@@ -1127,15 +1183,18 @@ etable(res_list_dyn,
 #### LUCFIP DYNAMICS - MAKE APEs #### 
 
 rm(ape_mat)
-ape_mat <- bind_rows(lapply(res_data_list_dyn, FUN = make_APEs)) %>% as.matrix()
 rm(res_data_list_dyn)
-# prepare ape_mat for kable
-row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations")
-ape_mat <- ape_mat %>% round(digits = 3)
-ape_mat[nrow(ape_mat),] <- ape_mat[nrow(ape_mat),] %>% formatC(digits = 0, format = "f")
-colnames(ape_mat) <- NULL
-ape_mat
 
+ape_mat <- bind_rows(lapply(res_data_list_dyn, FUN = make_APEs)) %>% as.matrix()
+# prepare ape_mat for kable
+row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations (9ha each)", "Treatment") # treatment is just for me to recall where the figures come from
+ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat["Observations (9ha each)",] <- ape_mat["Observations (9ha each)",] %>% formatC(digits = 0, format = "f")
+ape_mat
+colnames(ape_mat) <- NULL
+ape_mat <- ape_mat[row.names(ape_mat) != "Treatment",] # this was just for me
+ape_mat <- ape_mat[c(1,2,3,nrow(ape_mat)),]
 
 # remove here the models that did not converge.
 options(knitr.table.format = "latex")
@@ -1156,9 +1215,9 @@ kable(ape_mat, booktabs = T, align = "r",
                      "Slow transition to industrial plantations" = 3),
                    align = "c",
                    strikeout = F) %>%
-  pack_rows("CPO medium-run price", 1, 3, 
+  pack_rows("-1 pct. change in CPO \n medium-run price", 1, 3, 
             italic = TRUE, bold = TRUE)  %>%
-  # pack_rows("Interaction with \n domestic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
+  # pack_rows("Interaction with \n # of reachable mills", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
   #           italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n foreign ownership", 7, 9,
   #           italic = TRUE, bold = TRUE)  %>%
@@ -1198,26 +1257,37 @@ for(SIZE in size_list){
   }
 }
 
-elm
+# # And overall
+# does not estimate all coefficients, I do not know why... 
+res_data_list_commo[[elm]] <- make_base_reg(island = "both",
+                                           outcome_variable = paste0("lucpfap_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                           commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
+                                           offset = FALSE)
+names(res_data_list_commo)[elm] <- paste0("both_a")
+# elm <- elm + 1
 
 res_list_commo <- lapply(res_data_list_commo, FUN = function(x){x[[1]]})
 
 # preview in R
 etable(res_list_commo,
        se = "cluster",
+       convergence = TRUE,
        subtitles = names(res_data_list_commo))
 
 #### COMMODITY - MAKE APEs ####
 rm(ape_mat)
-ape_mat <- bind_cols(lapply(res_data_list_commo, FUN = make_APEs, K = 2)) %>% as.matrix() 
 rm(res_data_list_commo)
+
+ape_mat <- bind_cols(lapply(res_data_list_commo, FUN = make_APEs, K = 2)) %>% as.matrix() 
 # prepare ape_mat for kable
-row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations")
-ape_mat <- ape_mat %>% round(digits = 3)
-ape_mat[nrow(ape_mat),] <- ape_mat[nrow(ape_mat),] %>% formatC(digits = 0, format = "f")
+row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations (9ha each)", "Treatment") # treatment is just for me to recall where the figures come from
+ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat["Observations (9ha each)",] <- ape_mat["Observations (9ha each)",] %>% formatC(digits = 0, format = "f")
 ape_mat
 colnames(ape_mat) <- NULL
-
+ape_mat <- ape_mat[row.names(ape_mat) != "Treatment",] # this was just for me
+ape_mat <- ape_mat[c(1,2,3,4,5,6,nrow(ape_mat)),]
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
@@ -1229,20 +1299,21 @@ kable(ape_mat, booktabs = T, align = "r",
                      "both" = 1,
                      "Sumatra" = 1,
                      "Kalimantan" = 1,
-                     "both" = 1
+                     "both" = 1,
+                     " " = 1
                     ),
                     bold = F,
                     align = "c") %>%
   add_header_above(c(" " = 1,
-                     "Industrial plantations" = 3,#,
-                     "Smallholder plantations" = 3
-                     #"All" = 1
-  ),
-  align = "c",
-  strikeout = F) %>%
-  pack_rows("FFB medium-run price", 1, 3, # FFB first if it is passed in first position in the commo argument of make_base_reg call
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 3, 
+                     "Overall" = 1
+                    ),
+                    align = "c",
+                    strikeout = F) %>%
+  pack_rows("-1 pct. change in FFB \n medium-run price", 1, 3, # FFB first if it is passed in first position in the commo argument of make_base_reg call
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows("CPO medium-run price", 4, 6, 
+  pack_rows("-1 pct. change in CPO \n medium-run price", 4, 6, 
             italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
@@ -1250,7 +1321,7 @@ kable(ape_mat, booktabs = T, align = "r",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
               width = "5em",
-              latex_valign = "b")
+              latex_valign = "b")z
 
 
 #### PRICE DYNAMICS - RUN REGRESSIONS ####
@@ -1275,25 +1346,35 @@ for(SIZE in size_list){
 }
 
 elm
-
+res_data_list_prdyn[[elm]] <- make_base_reg(island = "both",
+                                           outcome_variable = paste0("lucpfap_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                           dynamics = TRUE, 
+                                           offset = FALSE)
+names(res_data_list_prdyn)[elm] <- paste0("both_a")
+elm <- elm + 1
 res_list_prdyn <- lapply(res_data_list_prdyn, FUN = function(x){x[[1]]})
 
 # preview in R
 etable(res_list_prdyn,
        se = "cluster",
+       convergence = TRUE,
        subtitles = names(res_data_list_prdyn))
 
 
 #### PRICE DYNAMICS - MAKE APEss ####
 rm(ape_mat)
+#rm(res_data_list_prdyn)
+
 ape_mat <- bind_cols(lapply(res_data_list_prdyn, FUN = make_APEs, K = 2)) %>% as.matrix() 
-rm(res_data_list_prdyn)
 # prepare ape_mat for kable
-row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations")
-ape_mat <- ape_mat %>% round(digits = 3)
-ape_mat[nrow(ape_mat),] <- ape_mat[nrow(ape_mat),] %>% formatC(digits = 0, format = "f")
+row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations (9ha each)", "Treatment") # treatment is just for me to recall where the figures come from
+ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat["Observations (9ha each)",] <- ape_mat["Observations (9ha each)",] %>% formatC(digits = 0, format = "f")
 ape_mat
 colnames(ape_mat) <- NULL
+ape_mat <- ape_mat[row.names(ape_mat) != "Treatment",] # this was just for me
+ape_mat <- ape_mat[c(1,2,3,4,5,6,nrow(ape_mat)),]
 
 
 options(knitr.table.format = "latex")
@@ -1306,20 +1387,21 @@ kable(ape_mat, booktabs = T, align = "r",
                      "both" = 1,
                      "Sumatra" = 1,
                      "Kalimantan" = 1,
-                     "both" = 1
+                     "both" = 1,
+                     " " = 1
                     ),
                     bold = F,
                     align = "c") %>%
   add_header_above(c(" " = 1,
-                     "Industrial plantations" = 3,#,
-                     "Smallholder plantations" = 3
-                     #"All" = 1
-  ),
-  align = "c",
-  strikeout = F) %>%
-  pack_rows("CPO short-run price", 1, 3, # short run is indeed always before MR in the regressor vector construction in make_base_reg
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 3, 
+                     "Overall" = 1
+                    ),
+                    align = "c",
+                    strikeout = F) %>%
+  pack_rows("-1 pct. change in CPO \n short-run price", 1, 3, # short run is indeed always before MR in the regressor vector construction in make_base_reg
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows("CPO medium-run price", 4, 6, 
+  pack_rows("-1 pct. change in CPO \n medium-run price", 4, 6, 
             italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
@@ -1341,15 +1423,15 @@ comp_ape_mat <- matrix(ncol = 9, nrow = 7, data = NA)
 colnames(comp_ape_mat) <- c("Sumatra_a", "Kalimantan_a", "both_a", "Sumatra_i", "Kalimantan_i", "both_i", "Sumatra_sm", "Kalimantan_sm", "both_sm") 
 row.names(comp_ape_mat) <- c("Sumatra = Kalimantan", 
                              "industrial = smallholders", 
-                             "primary forest = any forest",
                              "legal = illegal", 
                              "rapid = slow",
-                             "FFB = CPO",
-                             "short-run = medium-run")
+                             "primary forest = any forest",
+                             "short-run = medium-run",
+                             "FFB = CPO")
 
 
 ### COMPARE APEs ACROSS GROUPS
-make_APEs_1regr <- function(res_data){
+make_APEs_1regr <- function(res_data, rel_price_change = -0.01, abs_price_change = -1){
   reg_res <- res_data[[1]]
   d_clean <- res_data[[2]]
   
@@ -1525,46 +1607,6 @@ for(SIZE in size_list){
 # these loops yield 18 estimates, elm should be 28
 elm
 
-## Adding estimations with distinction between legal and illegal plantations
-for(SIZE in size_list){
-  for(ISL in isl_list){
-    for(ILL in ill_status){#2
-      if(!(SIZE == "sm" & ISL == "Kalimantan" & ILL == "ill2")){# because in this case there is not enough variation
-        # make the regression
-        res_data <- make_base_reg(island = ISL,
-                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                  illegal = ILL,
-                                  offset = FALSE)
-        # make the APE
-        ape_mat_list[[elm]] <- make_APEs_1regr(res_data = res_data)
-        names(ape_mat_list)[elm] <- paste0(ISL,"_",SIZE,"_",ILL)
-        rm(res_data)
-        elm <- elm + 1
-      }
-    }
-  }
-}
-# these loops yield 17 estimates, elm should be 45
-elm 
-# elm <- 45
-
-## Adding estimations with distinction between rapid and low lucfp 
-for(DYN in dyn_list){#2x
-  for(ISL in isl_list){#3x
-    # make the regression
-    res_data <- make_base_reg(island = ISL,
-                              outcome_variable = paste0("lucpfip_",DYN,"_pixelcount"),
-                              offset = FALSE)
-    # make the APE
-    ape_mat_list[[elm]] <- make_APEs_1regr(res_data = res_data)
-    names(ape_mat_list)[elm] <- paste0(ISL,"_i_",DYN)
-    rm(res_data)
-    elm <- elm + 1  
-  }
-}
-# these loops yield 6 estimates, elm should be 51
-elm 
-
 # length(ape_mat_list)
 # names(ape_mat_list)
 # ape_mat_list_saved <- ape_mat_list[[1]]
@@ -1643,6 +1685,8 @@ for(SIZE in size_list){
                               offset = FALSE)
     # make the APE
     comp_ape_mat["FFB = CPO",paste0(ISL,"_",SIZE)] <- compare_coeff_within_groups(res_data = res_data)
+    res_data_list[[i]] <- res_data[[1]]
+    i <- i + 1
     rm(res_data)
   }
 }
@@ -1662,7 +1706,7 @@ for(SIZE in size_list){
 }
 
 
-saveRDS(comp_ape_mat, file.path(paste0("temp_data/reg_results/comp_ape_mat_CR_ln_cpo_price_imp1_4ya_lag1.rds")))
+saveRDS(comp_ape_mat, file.path(paste0("temp_data/reg_results/comp_ape_mat_CR_ln_cpo_price_imp1_4ya_lag1_allinteract.rds")))
 
 comp_ape_disp <- comp_ape_mat
 
@@ -1673,7 +1717,7 @@ comp_ape_disp
 
 options(knitr.table.format = "latex")
 kable(comp_ape_disp, booktabs = T, align = "r",
-      caption = "p-values from equality tests of LUCFP responsiveness to CPO prices") %>% #of 1 percentage change in medium-run price signal
+      caption = "p-values from equality tests of CPO price average partial effects on LUCFP") %>% #of 1 percentage change in medium-run price signal
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c("Ho" = 1,
                      "Sumatra" = 1,
@@ -1694,9 +1738,9 @@ kable(comp_ape_disp, booktabs = T, align = "r",
   ),
   bold = F,
   align = "c") %>%
-  pack_rows("Equality of APEs \n across groups", 1, 4, 
+  pack_rows("Equality of APEs \n across groups", 1, 5, 
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Equality of coefficients \n within groups", 5, 6, 
+  pack_rows("Equality of coefficients \n within groups", 6, 7, 
             italic = TRUE, bold = TRUE)  %>%
   column_spec(column = 1,
               width = "12em",
