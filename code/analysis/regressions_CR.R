@@ -268,6 +268,7 @@ rm(d_50)
 
 # Prefered specifications are passed as default arguments. 
 # Currently, the returned object is a fixest object, of *ONE* regression.  
+# catchment = "CR"
 # outcome_variable = "lucpfip_pixelcount"
 # island = "Sumatra"
 # alt_cr = FALSE
@@ -291,10 +292,12 @@ rm(d_50)
 # illegal = "all"
 # weights = FALSE
 
+rm(catchment,outcome_variable,island,alt_cr,commo,x_pya,dynamics,log_prices,yoyg,short_run,imp,distribution,fe,remaining_forest,offset,lag_or_not,controls,interaction_terms ,interacted,spatial_control,pya_ov,illegal)
 
 make_base_reg <- function(island,
                           outcome_variable = "lucpfip_pixelcount", # LHS. One of "lucfip_pixelcount", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount"p
-                            alt_cr = FALSE, # logical, if TRUE, Sumatra's catchment radius is 50000 meters, and Kalimantan's is 30000. 
+                          catchment = "CR",  
+                          alt_cr = FALSE, # logical, if TRUE, Sumatra's catchment radius is 50000 meters, and Kalimantan's is 30000. 
                             commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo"), commodities the price signals of which should be included in the RHS
                             x_pya = 3, # either 2, 3, or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
                             dynamics = FALSE, # Logical, should the total price signal(s) be split into current year and x_pya past year average. 
@@ -318,25 +321,41 @@ make_base_reg <- function(island,
 
   ### BASE DATA 
   
-  # Catchment radius
-  if(island == "Sumatra" & alt_cr == FALSE){
-    d <- d_30_suma
+  if(catchment == "CR"){
+    # these are preloaded, because CR is the preferred data set
+    # Catchment radius
+    if(island == "Sumatra" & alt_cr == FALSE){
+      d <- d_30_suma
+    }
+    if(island == "Sumatra" & alt_cr == TRUE){
+      d <- d_50_suma
+    }
+    if(island == "Kalimantan" & alt_cr == FALSE){
+      d <- d_50_kali
+    }
+    if(island == "Kalimantan" & alt_cr == TRUE){
+      d <- d_30_kali
+    }
+    if(island == "both" & alt_cr == FALSE){
+      d <- rbind(d_30_suma, d_50_kali)#, d_50_papu
+    }
+    if(island == "both" & alt_cr == TRUE){
+      d <- rbind(d_50_suma, d_30_kali)#, d_30_papu
+    }
+  } else if(catchment == "CA"){
+    # here we load it, it slows the function but we will use it only once or twice.
+    d <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
+                                      parcel_size/1000,"km_",
+                                      "2h_CA.rds")))
+    if(island == "Sumatra"){
+      d <- d[d$island == "Sumatra",]
+    }
+    if(island == "Kalimantan"){
+      d <- d[d$island == "Kalimantan",]
+    }
+    
   }
-  if(island == "Sumatra" & alt_cr == TRUE){
-    d <- d_50_suma
-  }
-  if(island == "Kalimantan" & alt_cr == FALSE){
-    d <- d_50_kali
-  }
-  if(island == "Kalimantan" & alt_cr == TRUE){
-    d <- d_30_kali
-  }
-  if(island == "both" & alt_cr == FALSE){
-    d <- rbind(d_30_suma, d_50_kali)#, d_50_papu
-  }
-  if(island == "both" & alt_cr == TRUE){
-    d <- rbind(d_50_suma, d_30_kali)#, d_30_papu
-  }
+  
   
   ### SPECIFICATIONS  
   
@@ -430,7 +449,7 @@ make_base_reg <- function(island,
   if(pya_ov){controls <- c(controls, paste0(outcome_variable,"_",x_pya,"pya"))}
   
   # lag controls or not
-  if(lag_or_not=="_lag1"){controls <- paste0(controls,lag_or_not)}
+  if(lag_or_not=="_lag1" & length(controls)>0){controls <- paste0(controls,lag_or_not)}
   
   # add spatial control or not
   if(spatial_control){controls <- c(controls, "ngb_ov_lag4")}
@@ -683,13 +702,14 @@ make_base_reg <- function(island,
         reg_res <- fixest::feglm(fe_model,
                                  data = d_clean, 
                                  family = distribution, 
-                                 glm.iter = 300,
+                                 glm.iter = 200,
                                  fixef.iter = 100000,
                                  notes = TRUE)
       }
     }else{ # no weights allowed in negative binomial
       reg_res <- fixest::fenegbin(fe_model,
-                                  data = d_clean, 
+                                  data = d_clean,
+                                  fixef.iter = 100000,
                                   notes = TRUE)
     }
   }
@@ -707,7 +727,7 @@ make_base_reg <- function(island,
 # for the K first regressors in the models fitted by make_base_reg 
 # If there are interactions in the models, the APEs (and SEs) of the interaction effects are computed (may not work if K > 1 then)
 #res_data <- res_data_list_main[[1]]
-make_APEs <- function(res_data, K=1, rel_price_change = 0.01, abs_price_change = -1){
+make_APEs <- function(res_data, K=1, SE = "cluster", rel_price_change = 0.01, abs_price_change = -1){
   
   # store APEs and their deltaMethod statistics in this list 
   dM_ape_roi_list <- list()
@@ -775,7 +795,7 @@ make_APEs <- function(res_data, K=1, rel_price_change = 0.01, abs_price_change =
     } 
     
     dM_ape_roi <- deltaMethod(object = coef(reg_res), 
-                              vcov. = vcov(reg_res, se = "cluster"), 
+                              vcov. = vcov(reg_res, se = SE), 
                               g. = ape_fml_roi, 
                               rhs = 0)
     
@@ -817,7 +837,7 @@ make_APEs <- function(res_data, K=1, rel_price_change = 0.01, abs_price_change =
         }
         
         dM <- deltaMethod(object = coef(reg_res), 
-                          vcov. = vcov(reg_res, se = "cluster"), 
+                          vcov. = vcov(reg_res, se = SE), 
                           g. = ape_fml_it, 
                           rhs = 0)
         
@@ -858,7 +878,7 @@ make_APEs <- function(res_data, K=1, rel_price_change = 0.01, abs_price_change =
     }
     
     dM <- deltaMethod(object = coef(reg_res), 
-                      vcov. = vcov(reg_res, se = "cluster"), 
+                      vcov. = vcov(reg_res, se = SE), 
                       g. = ape_fml_it, 
                       rhs = 0)
     
@@ -868,6 +888,7 @@ make_APEs <- function(res_data, K=1, rel_price_change = 0.01, abs_price_change =
     dM_ape_roi_list[[length(dM_ape_roi_list) + 1]] <- dM
   }
   
+
   # make a one column matrix with all computed APEs' estimates, SEs and p values. 
   mat <- matrix(ncol = 1, 
                 nrow = length(unlist(dM_ape_roi_list)), 
@@ -956,15 +977,16 @@ rm(res_list_main)
 
 rm(ape_mat)
 ape_mat <- bind_cols(lapply(res_data_list_main, FUN = make_APEs)) %>% as.matrix()
-rm(res_data_list_main)
 # prepare ape_mat for kable
 row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations", "Treatment") # treatment is just for me to recall where the figures come from
 ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 5)
-ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% formatC(digits = 2, format = "g")
 ape_mat["Observations",] <- ape_mat["Observations",] %>% formatC(digits = 0, format = "f")
 ape_mat
 colnames(ape_mat) <- NULL
 ape_mat <- ape_mat[row.names(ape_mat) != "Treatment",]
+# do not run the line below and un-comment the pack_rows calls in kable below to display all interactions together with the main elasticity. 
+ape_mat <- ape_mat[c(1,2,3,nrow(ape_mat)),]
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
@@ -988,9 +1010,9 @@ kable(ape_mat, booktabs = T, align = "r",
                   ),
                   align = "c",
                   strikeout = F) %>%
-  pack_rows("Elasticity to \n CPO price (4-year avg.)", 1, 3, 
+  pack_rows("Elasticity to CPO \n (4-year avg.) price", 1, 3, 
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Interaction with \n domestic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
+  pack_rows("Interaction with dom-\n-estic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
             italic = TRUE, bold = TRUE)  %>%
   pack_rows("Interaction with \n foreign ownership", 7, 9,
             italic = TRUE, bold = TRUE)  %>%
@@ -1000,7 +1022,7 @@ kable(ape_mat, booktabs = T, align = "r",
             italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
-              width = "13em",
+              width = "10em",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
               width = "5em",
@@ -1054,7 +1076,7 @@ ape_mat <- bind_cols(lapply(res_data_list_prdyn, FUN = make_APEs, K = 2)) %>% as
 # prepare ape_mat for kable
 row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), (nrow(ape_mat)-2)/3), "Observations", "Treatment") # treatment is just for me to recall where the figures come from
 ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
-ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% formatC(digits = 2, format = "g")
 ape_mat["Observations",] <- ape_mat["Observations",] %>% formatC(digits = 0, format = "f")
 ape_mat
 colnames(ape_mat) <- NULL
@@ -1065,7 +1087,7 @@ ape_mat <- ape_mat[c(1,2,3,4,5,6, nrow(ape_mat)-3, nrow(ape_mat)-2, nrow(ape_mat
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
-      caption = "Partial effects on LUCFP (ha)") %>% #of 1 percentage change in medium-run price signal
+      caption = "Short and medium run price elasticities of LUCFP") %>% #of 1 percentage change in medium-run price signal
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c(" " = 1,
                      "Sumatra" = 1,
@@ -1085,15 +1107,15 @@ kable(ape_mat, booktabs = T, align = "r",
                     ),
                     align = "c",
                     strikeout = F) %>%
-  pack_rows("Elasticity to \n CPO annual price", 1, 3, # short run is indeed always before MR in the regressor vector construction in make_base_reg
+  pack_rows("CPO annual price", 1, 3, # short run is indeed always before MR in the regressor vector construction in make_base_reg
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Elasticity to \n CPO price (4-year avg.)", 4, 6, 
+  pack_rows("CPO 4-year avg. price ", 4, 6, 
             italic = TRUE, bold = TRUE)  %>%
   pack_rows("Interaction between both", 7, 9, 
             italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
-              width = "12em",
+              width = "11em",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
               width = "5em",
@@ -1147,7 +1169,7 @@ ape_mat <- bind_cols(lapply(res_data_list_commo, FUN = make_APEs, K = 2)) %>% as
 # prepare ape_mat for kable
 row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), (nrow(ape_mat)-2)/3), "Observations", "Treatment") # treatment is just for me to recall where the figures come from
 ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
-ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% formatC(digits = 2, format = "g")
 ape_mat["Observations",] <- ape_mat["Observations",] %>% formatC(digits = 0, format = "f")
 ape_mat
 colnames(ape_mat) <- NULL
@@ -1159,7 +1181,7 @@ ape_mat <- ape_mat[c(1,2,3,4,5,6, nrow(ape_mat)-3, nrow(ape_mat)-2, nrow(ape_mat
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
-      caption = "Partial effects on LUCFP - FFB and CPO markets") %>% #of 1 percentage change in medium-run price signal
+      caption = "FFB and CPO price elasticities of LUCFP") %>% #of 1 percentage change in medium-run price signal
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c(" " = 1,
                      "Sumatra" = 1,
@@ -1179,15 +1201,15 @@ kable(ape_mat, booktabs = T, align = "r",
                     ),
                     align = "c",
                     strikeout = F) %>%
-  pack_rows("Elasticity to \n FFB price (4-year avg.)", 1, 3, # FFB first if it is passed in first position in the commo argument of make_base_reg call
+  pack_rows("FFB price elasticity", 1, 3, # FFB first if it is passed in first position in the commo argument of make_base_reg call
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Elasticity to \n CPO price (4-year avg.)", 4, 6, 
+  pack_rows("CPO price elasticity", 4, 6, 
             italic = TRUE, bold = TRUE)  %>%
   pack_rows("Interaction of both", 7, 9, 
             italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
-              width = "12em",
+              width = "10em",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
               width = "5em",
@@ -1247,11 +1269,10 @@ etable(res_list_ill,
 
 rm(ape_mat)
 ape_mat <- bind_cols(lapply(res_data_list_ill, FUN = make_APEs)) %>% as.matrix() # [lengths(res_data_list_ill)>0] not necessary now that elm + 1 is in the condition above; 
-rm(res_data_list_ill)
 # prepare ape_mat for kable
 row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations", "Treatment") # treatment is just for me to recall where the figures come from
 ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
-ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% formatC(digits = 2, format = "g")
 ape_mat["Observations",] <- ape_mat["Observations",] %>% formatC(digits = 0, format = "f")
 ape_mat
 colnames(ape_mat) <- NULL
@@ -1264,7 +1285,7 @@ ape_mat <- ape_mat[c(1,2,3,nrow(ape_mat)),]
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
-      caption = "Partial effects on legal and illegal LUCFP") %>%
+      caption = "Price elasticities of legal and illegal LUCFP") %>%
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c(" " = 1,
                      "legal" = 1, 
@@ -1295,7 +1316,7 @@ kable(ape_mat, booktabs = T, align = "r",
                      "Smallholder plantations" = 5),
                    align = "c",
                    strikeout = F) %>%
-  pack_rows("Elasticity to \n CPO (4-year avg.) price", 1, 3, 
+  pack_rows("Price elasticity", 1, 3, 
             italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n # of reachable mills", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
   #           italic = TRUE, bold = TRUE)  %>%
@@ -1305,7 +1326,7 @@ kable(ape_mat, booktabs = T, align = "r",
   #           italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
-              width = "12em",
+              width = "10em",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
               width = "4em",
@@ -1347,13 +1368,12 @@ etable(res_list_dyn,
 #### LUCFIP DYNAMICS - MAKE APEs #### 
 
 rm(ape_mat)
-rm(res_data_list_dyn)
 
 ape_mat <- bind_rows(lapply(res_data_list_dyn, FUN = make_APEs)) %>% as.matrix()
 # prepare ape_mat for kable
 row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations", "Treatment") # treatment is just for me to recall where the figures come from
 ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
-ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% formatC(digits = 2, format = "g")
 ape_mat["Observations",] <- ape_mat["Observations",] %>% formatC(digits = 0, format = "f")
 ape_mat
 colnames(ape_mat) <- NULL
@@ -1363,7 +1383,7 @@ ape_mat <- ape_mat[c(1,2,3,nrow(ape_mat)),]
 # remove here the models that did not converge.
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
-      caption = "Partial effects on rapid and slow industrial LUCFP") %>%
+      caption = "Price elasticities on rapid and slow industrial LUCFP") %>%
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c(" " = 1,
                      "Sumatra" = 1,
@@ -1379,7 +1399,7 @@ kable(ape_mat, booktabs = T, align = "r",
                      "Slow transition to industrial plantations" = 3),
                    align = "c",
                    strikeout = F) %>%
-  pack_rows("Elasticity to \n CPO (4-year avg.) price", 1, 3, 
+  pack_rows("Price elasticity", 1, 3, 
             italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n # of reachable mills", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
   #           italic = TRUE, bold = TRUE)  %>%
@@ -1389,7 +1409,7 @@ kable(ape_mat, booktabs = T, align = "r",
   #           italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
-              width = "12em",
+              width = "10em",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
               width = "4em",
@@ -1444,11 +1464,10 @@ etable(res_list_alt,
 
 rm(ape_mat)
 ape_mat <- bind_cols(lapply(res_data_list_alt, FUN = make_APEs)) %>% as.matrix()
-rm(res_data_list_for)
 # prepare ape_mat for kable
 row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations", "Treatment") # treatment is just for me to recall where the figures come from
 ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 3)
-ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% round(digits = 4)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% formatC(digits = 2, format = "g")
 ape_mat["Observations",] <- ape_mat["Observations",] %>% formatC(digits = 0, format = "f")
 ape_mat
 colnames(ape_mat) <- NULL
@@ -1457,7 +1476,7 @@ ape_mat <- ape_mat[c(1,2,3,nrow(ape_mat)),]
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
-      caption = "Average partial effects on LUCFP in 30% tree cover forest") %>%
+      caption = "Price elasticities of LUCFP in 30% tree cover forest") %>%
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c(" " = 1,
                      "Sumatra" = 1,
@@ -1477,7 +1496,7 @@ kable(ape_mat, booktabs = T, align = "r",
   ),
   align = "c",
   strikeout = F) %>%
-  pack_rows("Elasticity to \n CPO (4-year avg.) price", 1, 3, 
+  pack_rows("Price elasticity", 1, 3, 
             italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n domestic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
   #           italic = TRUE, bold = TRUE)  %>%
@@ -1489,7 +1508,7 @@ kable(ape_mat, booktabs = T, align = "r",
   #           italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
-              width = "14em",
+              width = "10em",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
               width = "5em",
@@ -1497,37 +1516,46 @@ kable(ape_mat, booktabs = T, align = "r",
 
 rm(ape_mat)
 
+
+master_list <- list(res_data_list_main, 
+                    res_data_list_prdyn, 
+                    res_data_list_commo, 
+                    res_data_list_ill, 
+                    res_data_list_dyn, 
+                    res_data_list_alt)
+saveRDS(master_list, file.path(paste0("temp_data/reg_results/six_res_data_lists.rds")))
 #### COMPARE APEs - FOREST DEF., LEGAL, LUCFIP DYNAMICS, COMMODITY, PRICE DYNAMICS ####
 
 ## infrastructure to store results
 ape_mat_list <- list()
 elm <- 1
 
-comp_ape_mat <- matrix(ncol = 9, nrow = 7, data = NA)
+comp_ape_mat <- matrix(ncol = 9, nrow = 5, data = NA)
 colnames(comp_ape_mat) <- c("Sumatra_a", "Kalimantan_a", "both_a", "Sumatra_i", "Kalimantan_i", "both_i", "Sumatra_sm", "Kalimantan_sm", "both_sm") 
 row.names(comp_ape_mat) <- c("Sumatra = Kalimantan", 
                              "industrial = smallholders", 
                              "legal = illegal", 
                              "rapid = slow",
-                             "primary forest = any forest",
-                             "short-run = medium-run",
-                             "FFB = CPO")
+                             "primary forest = any forest")#,
+                             # "short-run = medium-run",
+                             # "FFB = CPO"
+                             
 
 
 ### COMPARE APEs ACROSS GROUPS
-make_APEs_1regr <- function(res_data, rel_price_change = -0.01, abs_price_change = -1){
+# this is a simpler version of make_APEs function above. 
+make_APEs_1regr <- function(res_data, SE = "cluster", rel_price_change = 0.01, abs_price_change = 1){
+  # get estimation results and data 
   reg_res <- res_data[[1]]
   d_clean <- res_data[[2]]
   
+  # identify the nature of different variables
   coeff_names <- names(coef(reg_res))
-  
   # define actual interaction terms (possibly lagged)
-  
   interaction_effects <- coeff_names[grepl(pattern = "X", names(coef(reg_res)))]
-  
   others <- coeff_names[!(grepl(pattern = "X", coeff_names))]
-  
   interaction_terms <- others[paste0(others,"X",coeff_names[1]) %in% interaction_effects]
+  
   
   # data POINTS that deltaMethod will grab 
   
@@ -1539,25 +1567,30 @@ make_APEs_1regr <- function(res_data, rel_price_change = -0.01, abs_price_change
     }
   }
   
-  # average of the regressor of interest
-  reg_bar <- mean(d_clean[,coeff_names[1]]) 
-  
   # average fitted values
-  fv_bar <- mean(reg_res$fitted.values)
+  fv_bar <- mean(reg_res$fitted.values) 
   
   ## FORMULA FOR APE OF REGRESSOR OF INTEREST 
+  
   linear_ape_fml <- paste0(coeff_names[1])
   i_t <- 1
   while(i_t<=length(interaction_terms)){
-    linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[i_t],"*",int_term_avg[[i_t]])
+    linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[grepl(coeff_names[1],interaction_effects)][i_t],"*",int_term_avg[[i_t]])
     i_t <- i_t +1
   }
-  ape_fml_roi <- paste0("(",linear_ape_fml,")*fv_bar*",pixel_area_ha)
+  
+  # the final formula is different depending on the regressor of interest being in the log scale or not. 
+  if(grepl("ln_",coeff_names[1])){
+    ape_fml_roi <- paste0("((",1+rel_price_change,")^(",linear_ape_fml,") - 1)")#*fv_bar*",pixel_area_ha)
+  } else{
+    ape_fml_roi <- paste0("(exp(",linear_ape_fml,"*",abs_price_change,") - 1)")#*fv_bar*",pixel_area_ha)
+  }   
   
   dM_ape_roi <- deltaMethod(object = coef(reg_res), 
-                            vcov. = vcov(reg_res, se = "cluster"), 
+                            vcov. = vcov(reg_res, se = SE), 
                             g. = ape_fml_roi, 
                             rhs = 0)
+
   
   row.names(dM_ape_roi) <- coeff_names[1]
   dM_ape_roi <- as.matrix(dM_ape_roi)
@@ -1566,41 +1599,8 @@ make_APEs_1regr <- function(res_data, rel_price_change = -0.01, abs_price_change
   dM_ape_list <- list()
   dM_ape_list[[1]] <- dM_ape_roi
   
-  ## FORMULA FOR APE OF INTERACTION TERMS 
-  
-  # if(length(interaction_terms) >0){
-  #   for(i in 1:length(interaction_terms)){
-  #     
-  #     # there are several parts 
-  #     # 1. the coeff of the interaction effect of interest
-  #     iei <- paste0(interaction_terms[i], "X", coeff_names[1])
-  #     ape_fml1 <- paste0(iei," + ") 
-  #     
-  #     # 2. the linear expression derivative wrt. the regressor of interest 
-  #     ape_fml2 <- paste0("(",linear_ape_fml,")")
-  #     
-  #     # 3. the derivative of the linear expression wrt. the interaction term 
-  #     ape_fml3 <- paste0("*(",
-  #                        coeff_names[coeff_names==interaction_terms[i]]," + ",
-  #                        iei,"*",reg_bar,")")#
-  #     
-  #     # paste everything together
-  #     ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*",fv_bar,"*",pixel_area_ha)
-  #     
-  #     dM <- deltaMethod(object = coef(reg_res), 
-  #                       vcov. = vcov(reg_res, se = "cluster"), 
-  #                       g. = ape_fml_it, 
-  #                       rhs = 0)
-  #     
-  #     row.names(dM) <- interaction_terms[i]
-  #     dM <- as.matrix(dM)
-  #     dM <- dM[,c(1,2,7)]
-  #     dM_ape_list[[i+1]] <- dM
-  #     
-  #   }
-  # }
   mat <- matrix(ncol = 1, 
-                nrow = 3+3*length(interaction_terms), 
+                nrow = length(unlist(dM_ape_list)), 
                 data = unlist(dM_ape_list))  
   
   # add a row with the number of observations
@@ -1663,19 +1663,54 @@ for(SIZE in size_list){
 # these loops yield 9 estimates, elm should be 10
 elm 
 elm <- 10
+
+# Adding estimations with distinction between legal and illegal luc
+for(SIZE in size_list){
+  for(ISL in isl_list){
+    for(ILL in ill_status){#2
+      if(!(SIZE == "sm" & ISL == "Kalimantan" & ILL == "ill2")){# because in this case there is not enough variation
+        # make the regression
+        res_data <- make_base_reg(island = ISL,
+                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                  illegal = ILL,
+                                  offset = FALSE)
+        # make the APE
+        ape_mat_list[[elm]] <- make_APEs_1regr(res_data = res_data)
+        names(ape_mat_list)[elm] <- paste0(ISL,"_",SIZE,"_",ILL)
+        rm(res_data)
+        elm <- elm + 1
+      }
+    }
+  }
+}
+
+# Adding estimations with distinction between rapid and slow luc
+for(DYN in dyn_list){
+  for(ISL in isl_list){
+    res_data <- make_base_reg(island = ISL, 
+                              outcome_variable = paste0("lucpfip_",DYN,"_pixelcount"),
+                              offset = FALSE)
+    # make the APE
+    ape_mat_list[[elm]] <- make_APEs_1regr(res_data = res_data)
+    names(ape_mat_list)[elm] <- paste0(ISL,"_i_",DYN)
+    rm(res_data)
+    elm <- elm + 1
+  }
+}
+
 ## Adding estimations with distinction between primary and 30% tree cover forest definitions
 for(SIZE in size_list){
   for(ISL in isl_list){
     # make the regression
-    # primary 
-    res_data <- make_base_reg(island = ISL,
-                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                              offset = FALSE)
-    # make the APE
-    ape_mat_list[[elm]] <- make_APEs_1regr(res_data = res_data)
-    names(ape_mat_list)[elm] <- paste0(ISL,"_",SIZE,"_pf")
-    rm(res_data)
-    elm <- elm + 1
+    # # primary  This does not have to be run again, it's already the first loop
+    # res_data <- make_base_reg(island = ISL,
+    #                           outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+    #                           offset = FALSE)
+    # # make the APE
+    # ape_mat_list[[elm]] <- make_APEs_1regr(res_data = res_data)
+    # names(ape_mat_list)[elm] <- paste0(ISL,"_",SIZE,"_pf")
+    # rm(res_data)
+    # elm <- elm + 1
     
     # 30% tree cover
     res_data <- make_base_reg(island = ISL,
@@ -1696,7 +1731,7 @@ elm
 # ape_mat_list_saved <- ape_mat_list[[1]]
 rm(ape_mat)
 ape_mat <- bind_cols(ape_mat_list) %>% as.matrix()
-row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations")
+row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), (nrow(ape_mat)-1)/3), "Observations")
 # keep ape_mat like this for later comparisons between APEs
 
 # fill the matrix of p values of equality tests BY ROW
@@ -1708,14 +1743,6 @@ for(ISL in c("both", "Sumatra", "Kalimantan")){
   comp_ape_mat["industrial = smallholders",paste0(ISL,"_a")] <- compare_APEs_across_groups(group1 = paste0(ISL,"_i"), 
                                                                                            group2 = paste0(ISL,"_sm")) 
 }
-
-for(SIZE in size_list){
-  for(ISL in isl_list){
-      comp_ape_mat["primary forest = any forest",paste0(ISL,"_",SIZE)] <- compare_APEs_across_groups(group1 = paste0(ISL,"_",SIZE,"_pf"), 
-                                                                                                     group2 = paste0(ISL,"_",SIZE,"_f")) 
-  }
-}
-
 for(SIZE in size_list){
   for(ISL in isl_list){
     if(!(ISL=="Kalimantan" & SIZE == "sm")){
@@ -1728,7 +1755,12 @@ for(ISL in isl_list){
   comp_ape_mat["rapid = slow",paste0(ISL,"_i")] <- compare_APEs_across_groups(group1 = paste0(ISL,"_i_rapid"), 
                                                                               group2 = paste0(ISL,"_i_slow")) 
 }
-
+for(SIZE in size_list){
+  for(ISL in isl_list){
+      comp_ape_mat["primary forest = any forest",paste0(ISL,"_",SIZE)] <- compare_APEs_across_groups(group1 = paste0(ISL,"_",SIZE), 
+                                                                                                     group2 = paste0(ISL,"_",SIZE,"_f")) 
+  }
+}
 
 
 ### COMPARE APEs WITHIN GROUPS
@@ -1801,7 +1833,7 @@ comp_ape_disp
 
 options(knitr.table.format = "latex")
 kable(comp_ape_disp, booktabs = T, align = "r",
-      caption = "p-values from equality tests of CPO price average partial effects on LUCFP") %>% #of 1 percentage change in medium-run price signal
+      caption = "p-values from equality tests of price elasticities") %>% #of 1 percentage change in medium-run price signal
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c("Ho" = 1,
                      "Sumatra" = 1,
@@ -1822,10 +1854,10 @@ kable(comp_ape_disp, booktabs = T, align = "r",
   ),
   bold = F,
   align = "c") %>%
-  pack_rows("Equality of APEs \n across groups", 1, 5, 
-            italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Equality of coefficients \n within groups", 6, 7, 
-            italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Equality of APEs \n across groups", 1, 5, 
+  #           italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Equality of coefficients \n within groups", 6, 7, 
+  #           italic = TRUE, bold = TRUE)  %>%
   column_spec(column = 1,
               width = "12em",
               latex_valign = "b") %>% 
@@ -2049,35 +2081,40 @@ schart <- function(data, labels=NA, highlight=NA, n=1, index.est=1, index.se=2, 
 
 ## We now produce the "data" argument for the function schart, i.e. we run one regression, and bind in a dataframe 
 # the coefficients, the SE, and indicator variables for the correponding specifications. 
-make_spec_chart_df <- function(island,
+make_spec_chart_df <- function(island = "both",
+                               outcome_variable = "lucpfip_pixelcount", # LHS. One of "lucfip_pixelcount", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount"p
+                               catchment = "CR",
                                alt_cr = FALSE, # logical, if TRUE, Sumatra's catchment radius is 50000 meters, and Kalimantan's is 30000. 
-                               outcome_variable = "lucpfip_pixelcount_total", # LHS. One of "lucfip_pixelcount", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount_total"p
-                               commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo")), commodities the price signals of which should be included in the RHS
-                               log_prices = TRUE, # Logical, should the price variables be included as their logarithms instead of levels. No effect if yoyg is TRUE.    
+                               commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo"), commodities the price signals of which should be included in the RHS
                                x_pya = 3, # either 2, 3, or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
                                dynamics = FALSE, # Logical, should the total price signal(s) be split into current year and x_pya past year average. 
                                yoyg = FALSE, # logical, should the price variables be computed in year-on-year growth rate instead of level.
+                               log_prices = TRUE, # Logical, should the price variables be included as their logarithms instead of levels. No effect if yoyg is TRUE.    
                                short_run = "full", # either "full", or "dev". Used only if dynamics = TRUE and yoyg = FALSE. Should the short run (SR) measure of regressors be the price signal as such ("full") or be the deviation to past year average price signal ("dev"). 
                                imp = 1, # either 1 or 2. 1 selects the data cleaned with the stronger imputations. 
                                distribution = "quasipoisson", # either "poisson", "quasipoisson", or "negbin"
                                fe = "parcel_id + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
-                               remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
                                offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                                lag_or_not = "_lag1", # either "_lag1", or  "", should the 
-                               controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # character vectors of names of control variables (don't specify lags in their names)
+                               controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # character vectors of names of control variables (don't specify lags in their names)
+                               remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
+                               interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
+                               interacted = "regressors",
                                spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
                                pya_ov = FALSE, # logical, whether the pya (defined by x_pya) of the outcome_variable should be added in controls
+                               illegal = "all", # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
                                weights = FALSE, # logical, should obs. be weighted by the share of our sample reachable mills in all (UML) reachable mills. 
                                # additional argument to this function: 
-                               variable = "cpo",
-                               cluster = "cluster"
+                               SE = "cluster"
 ){
   
   ### Get coefficient and SE for a given specification passed to make_base_reg.
   
   # call make_base_reg
-  reg_res <- make_base_reg(island = island,
+  res_data <- make_base_reg(island = island,
                            outcome_variable = outcome_variable,
+                           catchment = catchment,
+                           alt_cr = alt_cr,
                            commo = commo, 
                            log_prices = log_prices,
                            x_pya = x_pya, 
@@ -2087,35 +2124,39 @@ make_spec_chart_df <- function(island,
                            imp = imp, 
                            distribution = distribution, 
                            fe = fe, 
-                           remaining_forest = remaining_forest, 
                            offset = offset,
                            lag_or_not = lag_or_not, 
                            controls = controls,
+                           interaction_terms = interaction_terms,
+                           interacted = interacted,
                            spatial_control = spatial_control, 
                            pya_ov = pya_ov, 
+                           illegal = illegal,
                            weights = weights)
   
-  # compute SE the way specified by cluster
-  reg_summary <- summary(reg_res, se = cluster)
-  # get coeff and SE
-  coeff_and_se <- reg_summary$coeftable[match(variable, commo), 1:2]
+  #if(dynamics){n_main_effects <- 2}else{n_main_effects <- length(commo)}
+  
+  # SEs are computed in the way specified by cluster, by the deltaMethod, in this function
+  ape_mat <- make_APEs(res_data, K = 1, SE = SE)
+  rm(res_data)
   
   ### make indicator variables that will be used to label specifications. 
-  ind_var <- data.frame(# outcome variable
-    "offset" = FALSE,
+  ind_var <- data.frame(
+    # outcome variable
     "larger_forest_def" = FALSE,
+    "rapid" = FALSE,
     # sample
-    "CR_30km" = FALSE,
-    "CR_50km" = FALSE,
+    "alt_cr" = FALSE,
+    "CA" = FALSE,
     "imp1" = FALSE, 
     # distribution assumptions
     "poisson" = FALSE,
     "quasipoisson" = FALSE,
     "negbin" = FALSE,
-    # dependent variable
-    "pya_3" = FALSE,
-    "pya_4" = FALSE,
-    "pya_5" = FALSE,
+    # RHS
+    "ya_3" = FALSE,
+    "ya_4" = FALSE,
+    "ya_5" = FALSE,
     "lag_or_not" = FALSE,
     # fixed effects
     "unit_fe" = FALSE,
@@ -2123,39 +2164,33 @@ make_spec_chart_df <- function(island,
     "unit_provyear_fe" = FALSE,
     "unit_distryear_fe" = FALSE,
     # controls
-    "two_commo" = FALSE, 
+    # "two_commo" = FALSE,
+    # "price_dynamics" = FALSE,
     "control_own" = FALSE,
     "n_reachable_uml_control" = FALSE, 
     "prex_cpo_control" = FALSE, 
     "remaining_forest" = FALSE,
     "ngb_ov_lag4" = FALSE,
+    # interactions
+    "own_interact" = FALSE,
+    "n_reachable_uml_interact" = FALSE,
+    "prex_cpo_interact" = FALSE,
+    "remaining_forest_interact"  = FALSE,
     # weights
-    "weights" = FALSE,
+    #"weights" = FALSE,
     # standard errors
     "oneway_cluster" = FALSE, 
     "twoway_cluster" = FALSE
   )
   
   # change the OV indicator variable to TRUE 
-  if(offset){ind_var[,"offset"] <- TRUE}
-  if(grepl("0th", outcome_variable)){ind_var[,"larger_forest_def"] <- TRUE}
+  if(grepl("lucf", outcome_variable)){ind_var[,"larger_forest_def"] <- TRUE}
+  if(grepl("rapid",outcome_variable)){ind_var[,"rapid"] <- TRUE}
   
   # sample  
-  # change the CR indicator variable to TRUE for the corresponding CR
-  # Catchment radius
-  if(island == "Sumatra"){
-    catchment_radius <- 3e4
-  }else{
-    catchment_radius <- 5e4}
-  
-  if(alt_cr){  
-    if(island == "Sumatra"){
-      catchment_radius <- 5e4
-    }else{
-      catchment_radius <- 3e4
-    }
-  }
-  ind_var[,grepl(paste0("CR_", catchment_radius/1000,"km"), colnames(ind_var))] <- TRUE
+  # Catchment 
+  if(alt_cr){ind_var[,"alt_cr"] <- TRUE} 
+  if(catchment == "CA"){ind_var[,"CA"] <- TRUE} 
   
   # set the indicator variable for the data imputation 
   if(imp == 1){ind_var[,"imp1"] <- TRUE}
@@ -2165,7 +2200,7 @@ make_spec_chart_df <- function(island,
   
   # dependent variable
   # set # year average indicator variables (+1 because we look at the total effect)
-  ind_var[,grepl(paste0("pya_", x_pya+1), colnames(ind_var))] <- TRUE
+  ind_var[,grepl(paste0("ya_", x_pya+1), colnames(ind_var))] <- TRUE
   # set indicator variable for lagging or not
   if(lag_or_not == "_lag1"){ind_var[,"lag_or_not"] <- TRUE}
   
@@ -2178,205 +2213,294 @@ make_spec_chart_df <- function(island,
   # set indicator variables for controls included
   # second commo 
   if(length(commo) == 2){ind_var[,"two_commo"] <- TRUE}
+  if(dynamics){ind_var[,"price_dynamics"] <- TRUE}
   # ownership
   if(any(grepl("pct_own", controls))){ind_var[,"control_own"] <- TRUE}
   # n_reachable_uml
   if(any(grepl("n_reachable_uml", controls))){ind_var[,"n_reachable_uml_control"] <- TRUE}
   # prex_cpo
   if(any(grepl("prex_cpo", controls))){ind_var[,"prex_cpo_control"] <- TRUE}
-  # pya outcome
-  if(pya_ov){ind_var[,"remaining_forest"] <- TRUE}
+  # remaining forest
+  if("remain_pf_pixelcount" %in% controls){ind_var[,"remaining_forest"] <- TRUE}
   # pya outcome spatial
   if(spatial_control){ind_var[,"ngb_ov_lag4"] <- TRUE}
   
+  if(any(grepl("own_nat_priv",interaction_terms)) | any(grepl("own_for",interaction_terms))){ind_var[,"own_interact"] <- TRUE}
+  if(any(grepl("n_reachable_uml",interaction_terms))){ind_var[,"n_reachable_uml_interact"] <- TRUE}
+  if(any(grepl("prex_cpo",interaction_terms))){ind_var[,"prex_cpo_interact"] <- TRUE}
+  if(any(grepl("remain_pf",interaction_terms))){ind_var[,"remaining_forest_interact"] <- TRUE}
+  
+  
   # weights indicator variable
-  if(weights){ind_var[,"weights"] <- TRUE}
-  if(distribution == "negbin"){ind_var[,"weights"] <- FALSE} # turn it back to FALSE if negbin distribution
+  #if(weights){ind_var[,"weights"] <- TRUE}
+  #if(distribution == "negbin"){ind_var[,"weights"] <- FALSE} # turn it back to FALSE if negbin distribution
   
   # clustering
-  if(cluster == "cluster"){ind_var[,"oneway_cluster"] <- TRUE}
-  if(cluster == "twoway"){ind_var[,"twoway_cluster"] <- TRUE}
+  if(SE == "cluster"){ind_var[,"oneway_cluster"] <- TRUE}
+  if(SE == "twoway"){ind_var[,"twoway_cluster"] <- TRUE}
   
   ### Bind together coeff, SE, and specification labels
-  spec_df <- cbind(coeff_and_se, ind_var)
+  spec_df <- cbind(ape_mat[1,],ape_mat[2,], ind_var)
+
   return(spec_df)
-  
 }
 
+
 ### COMPUTE THE DATASETS FOR EACH ISLAND, AND COMMODITY OF INTEREST
-for(ISL in c("Sumatra", "Kalimantan")){
-  for(OV in c("lucpfip_pixelcount_total", "lucpfsmp_pixelcount_total")){
-    VAR <- "cpo"
+
+# we make the specification charts for 6 main estimates
+SIZE <- "a"
+ISL <- "both"
+for(ISL in c("Sumatra", "Kalimantan", "both")){
+  for(SIZE in c("i","sm")){
+  
+
+  reg_stats_indvar_list <- list()
+  i <- 1
+  ### Add to the list the specifications that are to be compared in the chart. 
+  # Specifying only arguments over which it's looping + those defining the estimate we are interested in plotting the spec chart. 
+  
+  # First loops over critical parameters
+  for(IMP in c(1, 2)){
+    for(XPYA in c(2, 3, 4)){
+      for(LAG in c("_lag1", "")){
+        reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                         outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                         imp = IMP,
+                                                         x_pya = XPYA,
+                                                         lag_or_not = LAG)
+        i <- i+1
+      }
+    }
+  }   
+  #}
     
-    #if(!file.exists(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",VAR,"_",OV)))){
+  # Then add particular departures from the preferred specification (which arguments are already set by default)
     
-    reg_stats_indvar_list <- list()
-    i <- 1
-    ### Add to the list the specifications that are to be compared in the chart. 
-    # in make_spec_chart_df, specify only arguments over which it's looping. Other arguments are set to default. 
-    
-    # First loops over critical parameters
+  ## For catchment area
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   catchment = "CA") 
+  i <- i+1
+
+  ## For alternative catchment radius
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   alt_cr = TRUE) 
+  i <- i+1
+  
+  ## For an alternative forest definition
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucf",SIZE,"p_pixelcount")) 
+  i <- i+1
+i # 16
+  ## RAPID LUCFP 
+  if(SIZE == "i"){
+    # loops over critical parameters (not repeating because the outcome is different)
     for(IMP in c(1, 2)){
-      #for(DISTR in c("quasipoisson", "negbin")){#
       for(XPYA in c(2, 3, 4)){
         for(LAG in c("_lag1", "")){
-          for(WGH in c(TRUE, FALSE)){
-            for(OFF in c(TRUE, FALSE)){
-              reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                               outcome_variable = OV,
-                                                               offset = OFF,
-                                                               imp = IMP,
-                                                               x_pya = XPYA,
-                                                               lag_or_not = LAG,
-                                                               weights = WGH,
-                                                               variable = VAR)
-              i <- i+1
-            }
-          }
+          reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                           outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+                                                           imp = IMP,
+                                                           x_pya = XPYA,
+                                                           lag_or_not = LAG)
+          i <- i+1
         }
       }
-    }
-    #}
+    }    
+    i # 28
     
-    # Then add particular departures from the preferred specification (which arguments are already set by default)
-    
-    ## For an alternative catchment radius (with and without weights)
-    for(WGH in c(TRUE, FALSE)){
-      for(OFF in c(TRUE, FALSE)){
-        reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                         outcome_variable = OV,
-                                                         offset = OFF,
-                                                         alt_cr = TRUE,
-                                                         weights = WGH,
-                                                         variable = VAR)
-        i <- i+1
-      }
-    } 
-    ## For an alternative outcome variable
-    if(OV == "lucpfip_pixelcount_total"){ 
-      for(OFF in c(TRUE, FALSE)){
-        reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                         outcome_variable = "lucfip_pixelcount",
-                                                         offset = OFF,
-                                                         variable = VAR)
-        i <- i+1
-      }
-    }
-    # if(OV == "lucpfsmp_pixelcount_total"){
-    # for(OFF in c(TRUE, FALSE)){
-    #   reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-    #                                                    outcome_variable = "lucfsmp_pixelcount",
-    #                                                    offset = OFF,
-    #                                                    variable = VAR)
-    #   i <- i+1
-    # }
-    # }
-    
-    ## For alternative distributionnal assumptions
-    for(DISTR in c("poisson", "negbin")){
-      reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                       outcome_variable = OV,
-                                                       distribution = DISTR,
-                                                       variable = VAR)
-      i <- i+1
-    }
-    
-    ## For alternative fixed effects
-    for(FE in c("parcel_id", "parcel_id + year", "parcel_id + province_year")){
-      reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                       outcome_variable = OV,
-                                                       fe = FE,
-                                                       variable = VAR)
-      i <- i+1
-    }
-    
-    ## For an alternative standard error computation (two-way clustering)
+    # in CA
     reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                     outcome_variable = OV,
-                                                     cluster = "twoway",
-                                                     variable = VAR)
+                                                     outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+                                                     catchment = "CA") 
     i <- i+1
     
-    ## For alternative control sets
-    # Without ownership control
+    # With 2way clustering
     reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                     outcome_variable = OV,
-                                                     control = c("n_reachable_uml"),
-                                                     variable = VAR)
+                                                     outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+                                                     SE = "twoway")
     i <- i+1
     
-    # Without remoteness/competition control
+    # negbin
+    # reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+    #                                                  outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+    #                                                  distribution = "negbin")
+    # i <- i+1
+    
+    # unit FE
     reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                     outcome_variable = OV,
-                                                     control = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp"),
-                                                     variable = VAR)
+                                                     outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+                                                     fe = "parcel_id")
     i <- i+1
-    
-    # With FFB price signal control
+  }
+
+  
+  ## For alternative distributional assumptions
+  for(DISTR in c("poisson")){#, "negbin"
     reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                     outcome_variable = OV,
-                                                     commo = c("ffb", "cpo"),
-                                                     variable = VAR)
+                                                     outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                     distribution = DISTR)
     i <- i+1
+  }
     
-    
-    # With percentage exported control
+  ## For alternative fixed effects
+  for(FE in c("parcel_id", "parcel_id + year", "parcel_id + province_year")){
     reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                     outcome_variable = OV,
-                                                     control = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1"),
-                                                     variable = VAR)
+                                                     outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                     fe = FE)
     i <- i+1
+  }
     
+  ## For an alternative standard error computation (two-way clustering)
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   SE = "twoway")
+  i <- i+1
     
-    # With past remaining forest control 
-    reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                     outcome_variable = OV,
-                                                     remaining_forest = TRUE,
-                                                     variable = VAR)
-    i <- i+1
+  ## For alternative control sets, with their interaction each time
+  # Without controls
+  # reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+  #                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+  #                                                  controls = c(), 
+  #                                                  interaction_terms = NULL)
+
+  # Ownership control only
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp"), 
+                                                   interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp"))
+  i <- i+1
+  
+  # remoteness/competition control only
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("n_reachable_uml"), 
+                                                   interaction_terms = c("n_reachable_uml"))
+  i <- i+1
+  
+  # prex cpo control only
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_prex_cpo_imp1"), 
+                                                   interaction_terms = c("wa_prex_cpo_imp1"))
+  i <- i+1
+  
+  # Ownership and remoteness control
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml"), 
+                                                   interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml"))
+  i <- i+1
+  
+  # Ownership and wa_prex_cpo_imp1 control
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "wa_prex_cpo_imp1"), 
+                                                   interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "wa_prex_cpo_imp1"))
+  i <- i+1
+  
+  # remoteness and wa_prex_cpo_imp1 control
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("n_reachable_uml", "wa_prex_cpo_imp1"), 
+                                                   interaction_terms = c("n_reachable_uml", "wa_prex_cpo_imp1"))
+  i <- i+1
+  
+  ## Now with less interactions
+  # With all controls, but no interaction
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1"), 
+                                                   interaction_terms = NULL)
+  i <- i+1
     
-    
-    # With average of neighbors' 4-year-lagged outcome   
-    long_to_compute <- file.path(paste0("temp_data/reg_results/spec_chart_df_spatial_",ISL,"_",VAR))
-    if(file.exists(long_to_compute)){
-      reg_stats_indvar_list[[i]] <- readRDS(long_to_compute)
-    }else{
-      reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-                                                       outcome_variable = OV,
-                                                       spatial_control = TRUE,
-                                                       variable = VAR)
-    }
-    i <- i+1
-    
-    
-    
-    
-    # convert to dataframe to be able to chart
-    reg_stats_indvar <- bind_rows(reg_stats_indvar_list)
-    
-    if(sum(duplicated(reg_stats_indvar))==0 & nrow(reg_stats_indvar)+1 == i){
-      # save it 
-      if(length(ISL) ==1){
-        saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",VAR,"_",OV)))
-      }else{
-        saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_all_",VAR,"_",OV)))
-      }
-    }else{print(paste0("SOMETHING WENT WRONG in spec_chart_df_",ISL,"_",VAR,"_",OV))}
-    
-    #}else{reg_stats_indvar <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",VAR,"_",OV)))}
+  # With all controls, but only ownership interactions
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1"), 
+                                                   interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp"))
+  i <- i+1
+  
+  # With all controls, but only remoteness interactions
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1"), 
+                                                   interaction_terms = c("n_reachable_uml"))
+  i <- i+1
+  
+  # With all controls, but only wa_prex_cpo_imp1 interactions
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1"), 
+                                                   interaction_terms = c("wa_prex_cpo_imp1"))
+  i <- i+1
+  
+  # With all controls, but only ownership and remoteness interactions
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1"), 
+                                                   interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml"))
+  i <- i+1
+  
+  # With all controls, but only ownership and wa_prex_cpo_imp1 interactions
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1"), 
+                                                   interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "wa_prex_cpo_imp1"))
+  i <- i+1
+  
+  # With all controls, but only remoteness and wa_prex_cpo_imp1 interactions
+  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1"), 
+                                                   interaction_terms = c("n_reachable_uml", "wa_prex_cpo_imp1"))
+  i <- i+1
+  
+  
+  # Additional controls
+  # long_to_compute <- file.path(paste0("temp_data/reg_results/spec_chart_df_spatialcontrol_",ISL,"_",SIZE))
+  # if(file.exists(long_to_compute)){
+  #   reg_stats_indvar_list[[i]] <- readRDS(long_to_compute)
+  # }else{
+  #   reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+  #                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+  #                                                    spatial_control = TRUE) # TAKES A WHILE  /!\
+  #   i <- i+1
+  # }
+  # reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
+  #                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+  #                                                  controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1", "remain_pf_pixelcount"), 
+  #                                                  interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1", "remain_pf_pixelcount"))
+  # i <- i+1
+  
+  # convert to dataframe to be able to chart
+  reg_stats_indvar <- bind_rows(reg_stats_indvar_list)
+  
+  # save it 
+  if(sum(duplicated(reg_stats_indvar))==0 & nrow(reg_stats_indvar)+1 == i){ # i.e. 50 currently
+    saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE)))
+  } else{print(paste0("SOMETHING WENT WRONG in spec_chart_df_",ISL,"_",SIZE))}
+  
+  #}else{reg_stats_indvar <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",ISL)))}
   }
 }
 
 ### PLOTTING 
 ### GIVE HERE THE ISLAND, THE OUTCOME AND THE COMMODITY FOR WHICH YOU WANT THE SPEC CHART TO BE PLOTTED
-ISL <- "Kalimantan"
-OV <-   "lucpfsmp_pixelcount_total"
-VAR <- "ffb"
+scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a")))
+
+# some modifications for now because scdf run with some "mistakes"
+scdf <- dplyr::select(scdf, -weights)
+scdf <- dplyr::mutate(scdf, own_interact = (own_for_interact | own_nat_priv_interact))
+scdf <- dplyr::select(scdf, -own_for_interact, -own_nat_priv_interact)
+scdf <- scdf[,c(1:23,29,24:28)]
 # make labels for the chart
-schart_labels <- list("Dependent variable:" = c("Relative to remaining forest",
-                                                "Larger forest definition"),
-                      "Sample:" = c("30km catchment radius",
-                                    "50km catchment radius", 
+schart_labels <- list("Dependent variable:" = c("Larger forest definition",
+                                                "Rapid LUCFP"),
+                      "Sample:" = c("Alternative catchment radius",
+                                    "2-hour driving catchment area", 
                                     "Data cleaning stronger imputations"),
                       "Distribution assumption:" = c("Poisson",
                                                      "Quasi-Poisson", 
@@ -2389,48 +2513,57 @@ schart_labels <- list("Dependent variable:" = c("Relative to remaining forest",
                                            "Grid cell and year", 
                                            "Grid cell and province-year",
                                            "Grid cell and district-year"),
-                      "Controls:" = c(paste0(toupper(c("ffb", "cpo")[!grepl(VAR, c("ffb", "cpo"))]), " price signal"), 
+                      "Controls:" = c(#paste0(toupper(c("ffb", "cpo")[!grepl(VAR, c("ffb", "cpo"))]), " price signal"), 
                                       "Ownership",
                                       "# reachable UML mills", 
                                       "% CPO exported", 
                                       "Remaining forest", 
                                       "Neighbors' outcomes, 4-year lagged"),
-                      "Weights" = "", 
+                      "Interaction with:" = c(#paste0(toupper(c("ffb", "cpo")[!grepl(VAR, c("ffb", "cpo"))]), " price signal"), 
+                        "Ownership",
+                        "# reachable UML mills", 
+                        "% CPO exported", 
+                        "Remaining forest"),
+                      #"Weights" = "", 
                       "Standard errors:" = c("Grid cell cluster", 
-                                             "Two-way cluster")
+                                             "Grid cell and district-year clusters")
 ) 
 
-# remove rows where SEs could not be computed
-problems <- reg_stats_indvar[is.na(reg_stats_indvar$`Std. Error`),]
-reg_stats_indvar <- reg_stats_indvar[!is.na(reg_stats_indvar$`Std. Error`),]
-rownames(reg_stats_indvar) <- seq(1, nrow(reg_stats_indvar))
+# # remove rows where SEs could not be computed
+# problems <- reg_stats_indvar[is.na(reg_stats_indvar$`Std. Error`),]
+# reg_stats_indvar <- reg_stats_indvar[!is.na(reg_stats_indvar$`Std. Error`),]
+# rownames(reg_stats_indvar) <- seq(1, nrow(reg_stats_indvar))
 
 # find position of model to highlight in original data frame
-a <- reg_stats_indvar
-a <- a[a$imp1 &
+a <- scdf
+a <- a[a$larger_forest_def==FALSE & 
+         a$rapid == FALSE &
+         a$alt_cr == FALSE &
+         a$CA == FALSE &
+         a$imp1 &
          #a$CR_30km &  
          a$quasipoisson &
-         a$pya_4 &
+         a$ya_4 &
          a$lag_or_not &
          a$unit_distryear_fe &
-         a$two_commo == FALSE & 
+         #a$two_commo == FALSE & 
          a$control_own & 
          a$n_reachable_uml_control  &
-         a$prex_cpo_control == FALSE &
+         a$prex_cpo_control  &
          a$remaining_forest == FALSE & 
-         a$weights == FALSE & 
+         a$ngb_ov_lag4 == FALSE & 
+         a$own_interact & 
+         a$n_reachable_uml_interact & 
+         a$prex_cpo_interact & 
+         a$remaining_forest_interact == FALSE & 
+         #a$weights == FALSE & 
          a$oneway_cluster, ] 
 
-if(ISL == "Sumatra"){
-  model_idx <- a[a$CR_30km, ] %>% rownames() 
-}else{  
-  model_idx <- a[a$CR_50km, ] %>% rownames() 
-}
-
+model_idx <- row.names(a)
 # this is our baseline model(s)
 a[model_idx,]
 
-schart(reg_stats_indvar, 
+schart(scdf, 
        labels = schart_labels,
        order="increasing",
        heights=c(.6,1.5),
@@ -2448,7 +2581,7 @@ schart(reg_stats_indvar,
        adj=c(1,1), 
        #offset=c(10.4,10.1),
        leftmargin = 12,
-       ylab = "Semi-elasticity estimates",
+       ylab = "Elasticity estimates",
        lwd.est = 5.8,
        lwd.symbol = 1
        #pch.est=20
@@ -3167,6 +3300,9 @@ make_spec_chart_df <- function(island,
   if(any(grepl("prex_cpo", controls))){ind_var[,"prex_cpo_control"] <- TRUE}
   # pya outcome
   if(pya_ov){ind_var[,"remaining_forest"] <- TRUE}
+  # remaining
+  if(remaining_forest){ind_var[,"remaining_forest"] <- TRUE}
+  
   # pya outcome spatial
   if(spatial_control){ind_var[,"ngb_ov_lag4"] <- TRUE}
   
