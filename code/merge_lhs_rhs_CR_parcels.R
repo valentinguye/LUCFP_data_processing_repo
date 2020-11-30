@@ -52,8 +52,8 @@ lapply(neededPackages, library, character.only = TRUE)
 # (lucfip, lucpfip, emissions, lucpfsmp...)
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
-# parcel_size <- 3000
-# catchment_radius <- 5e4
+parcel_size <- 3000
+catchment_radius <- 3e4
 
 merge_lhs_rhs <- function(parcel_size, catchment_radius){
   
@@ -114,17 +114,17 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
 
   ## make a variable that counts rapid and slow lucfp events (this is only computed for primary forest as of now)
   # THIS IS GOING TO BE THE MAIN OUTCOME VARIABLE INSTEAD OF lucpfip_pixelcount_total
-  d$lucpfip_pixelcount <- d$lucpfip_rapid_pixelcount + d$lucpfip_slow_pixelcount
-  d$lucfip_pixelcount <- d$lucfip_pixelcount_30th# pour l'instant on met lucfip_pixelcount_total dans "all producers" et pas rapid + slow, car on n'a 
+  LHS$lucpfip_pixelcount <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount
+  LHS$lucfip_pixelcount <- LHS$lucfip_pixelcount_30th# pour l'instant on met lucfip_pixelcount_total dans "all producers" et pas rapid + slow, car on n'a 
   # pas calculé rapid et slow pour ce type de forêt encore
   
   # make variable that counts lucfp events on both small and medium sized plantations 
-  d$lucpfsmp_pixelcount <- d$lucpfsp_pixelcount_total + d$lucpfmp_pixelcount_total
-  d$lucfsmp_pixelcount <- d$lucfsp_pixelcount_30th + d$lucfmp_pixelcount_30th
+  LHS$lucpfsmp_pixelcount <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
+  LHS$lucfsmp_pixelcount <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
   
   ## make a variable that counts lucfp events on all types of plantations
-  d$lucpfap_pixelcount <- d$lucpfip_pixelcount + d$lucpfsmp_pixelcount
-  d$lucfap_pixelcount <- d$lucfip_pixelcount + d$lucfsmp_pixelcount 
+  LHS$lucpfap_pixelcount <- LHS$lucpfip_pixelcount + LHS$lucpfsmp_pixelcount
+  LHS$lucfap_pixelcount <- LHS$lucfip_pixelcount + LHS$lucfsmp_pixelcount 
 
 
   

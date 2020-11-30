@@ -309,9 +309,9 @@ make_base_reg <- function(island,
                             fe = "parcel_id + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
                             offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                             lag_or_not = "_lag1", # either "_lag1", or  "", should the 
-                            controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # character vectors of names of control variables (don't specify lags in their names)
+                            controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # , "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
                             remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
-                            interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
+                            interaction_terms = NULL, # c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
                             interacted = "regressors",
                             spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
                             pya_ov = FALSE, # logical, whether the pya (defined by x_pya) of the outcome_variable should be added in controls
@@ -727,7 +727,7 @@ make_base_reg <- function(island,
 # for the K first regressors in the models fitted by make_base_reg 
 # If there are interactions in the models, the APEs (and SEs) of the interaction effects are computed (may not work if K > 1 then)
 #res_data <- res_data_list_main[[1]]
-make_APEs <- function(res_data, K=1, SE = "cluster", rel_price_change = 0.01, abs_price_change = -1){
+make_APEs <- function(res_data, K=1, controls_pe = FALSE, SE = "cluster", rel_price_change = 0.01, abs_price_change = -1){
   
   # store APEs and their deltaMethod statistics in this list 
   dM_ape_roi_list <- list()
@@ -853,6 +853,19 @@ make_APEs <- function(res_data, K=1, SE = "cluster", rel_price_change = 0.01, ab
     linear_ape_fml_list[[k]] <- linear_ape_fml
   }
   
+  # COMPUTE THE PARTIAL EFFECTS OF CONTROLS
+  if(controls_pe & K == 1){
+    dM <- deltaMethod(object = coef(reg_res), 
+                      vcov. = vcov(reg_res, se = SE), 
+                      g. = ape_fml_it, 
+                      rhs = 0)
+    
+    row.names(dM) <- interaction_terms[i]
+    dM <- as.matrix(dM)
+    dM <- dM[,c(1,2,7)]
+    
+    dM_ape_roi_list[[3]] <- dM
+  }
 
   # FINALLY, COMPUTE THE APE OF THE INTERACTION BETWEEN TWO REGRESSORS OF INTEREST
   if(K == 2){
@@ -1012,14 +1025,14 @@ kable(ape_mat, booktabs = T, align = "r",
                   strikeout = F) %>%
   pack_rows("Elasticity to CPO \n (4-year avg.) price", 1, 3, 
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Interaction with dom-\n-estic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
-            italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Interaction with \n foreign ownership", 7, 9,
-            italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Interaction with \n # of reachable mills", 10, 12,
-            italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Interaction with \n pct. CPO exported", 13, 15,
-            italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with dom-\n-estic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
+  #           italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with \n foreign ownership", 7, 9,
+  #           italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with \n # of reachable mills", 10, 12,
+  #           italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with \n pct. CPO exported", 13, 15,
+  #           italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
               width = "10em",
