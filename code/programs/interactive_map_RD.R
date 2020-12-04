@@ -73,48 +73,91 @@ parcel_size <- 3000
 # the code is not quite identical because we want to leave some more variables, but it's important 
 # that it does not change the actual analysis sample. 
 
-d_30 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
-                                 parcel_size/1000,"km_",
-                                 "30CR.rds")))
-# Split them into islands of interest
-d_30_suma <- d_30[d_30$island == "Sumatra",]
-d_30_kali <- d_30[d_30$island == "Kalimantan",]
-d_30_papu <- d_30[d_30$island == "Papua",]
-
-rm(d_30)
-
 d_50 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
                                  parcel_size/1000,"km_",
                                  "50CR.rds")))
 # Split them into islands of interest
 d_50_suma <- d_50[d_50$island == "Sumatra",]
 d_50_kali <- d_50[d_50$island == "Kalimantan",]
-d_50_papu <- d_50[d_50$island == "Papua",]
+#d_50_papu <- d_50[d_50$island == "Papua",]
 
-rm(d_50)
 
-outcome_variable = "lucpfip_pixelcount_total"
-island = "all"
+d_30 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
+                                 parcel_size/1000,"km_",
+                                 "30CR.rds")))
+d_30 <- d_30[,names(d_50)]
+# Split them into islands of interest
+d_30_suma <- d_30[d_30$island == "Sumatra",]
+d_30_kali <- d_30[d_30$island == "Kalimantan",]
+#d_30_papu <- d_30[d_30$island == "Papua",]
+
+rm(d_30, d_50)
+
+catchment = "CR"
+outcome_variable = "lucpfip_pixelcount"
+island = "Sumatra"
 alt_cr = FALSE
+only_sr = FALSE
 commo = c("ffb", "cpo")
 x_pya = 3
-dynamics = FALSE
-log_prices = TRUE
+dynamics = TRUE
+log_prices = FALSE
 yoyg = FALSE
 short_run = "full"
 imp = 1
 distribution = "quasipoisson"
 fe = "parcel_id + district_year"
-remaining_forest = TRUE
-offset = TRUE
-lag_or_not = "_lag1"
-controls = c("wa_pct_own_loc_gov_imp","wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")
-interaction_terms = NULL
+remaining_forest = FALSE
+offset = FALSE
+lag_or_not = ""
+controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
+baseline_forest_trend = FALSE
+interaction_terms = NULL #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
+interact_regressors = FALSE
 interacted = "regressors"
 spatial_control = FALSE
 pya_ov = FALSE
-illegal = "all"
+illegal = "all"# "no_ill2"
 weights = FALSE
+
+### SPECIFICATIONS  
+### BASE DATA 
+
+if(catchment == "CR"){
+  # these are preloaded, because CR is the preferred data set
+  # Catchment radius
+  if(island == "Sumatra" & alt_cr == FALSE){
+    d <- d_30_suma
+  }
+  if(island == "Sumatra" & alt_cr == TRUE){
+    d <- d_50_suma
+  }
+  if(island == "Kalimantan" & alt_cr == FALSE){
+    d <- d_50_kali
+  }
+  if(island == "Kalimantan" & alt_cr == TRUE){
+    d <- d_30_kali
+  }
+  if(island == "both" & alt_cr == FALSE){
+    d <- rbind(d_30_suma, d_50_kali)#, d_50_papu
+  }
+  if(island == "both" & alt_cr == TRUE){
+    d <- rbind(d_50_suma, d_30_kali)#, d_30_papu
+  }
+} else if(catchment == "CA"){
+  # here we load it, it slows the function but we will use it only once or twice.
+  d <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
+                                parcel_size/1000,"km_",
+                                "2h_CA.rds")))
+  if(island == "Sumatra"){
+    d <- d[d$island == "Sumatra",]
+  }
+  if(island == "Kalimantan"){
+    d <- d[d$island == "Kalimantan",]
+  }
+  
+}
+
 
 ### SPECIFICATIONS  
 
@@ -193,8 +236,34 @@ if(dynamics == TRUE){
   }
 }
 
-if(log_prices == TRUE & yoyg == FALSE){
+if(only_sr){
+  if(length(commo) == 1){
+    if(yoyg == TRUE){
+      regressors <- paste0("wa_",commo,"_price_imp",imp,"_yoyg",lag_or_not)
+    }else{
+      regressors <- paste0("wa_",commo,"_price_imp",imp,lag_or_not)
+    }
+  }
+  # if we don't omit a commodity. 
+  if(length(commo) == 2){
+    if(yoyg == TRUE){
+      regressors <- c(paste0("wa_",commo[1],"_price_imp",imp,"_yoyg",lag_or_not),
+                      paste0("wa_",commo[2],"_price_imp",imp,"_yoyg",lag_or_not))
+      
+    }else{
+      regressors <- c(paste0("wa_",commo[1],"_price_imp",imp,lag_or_not),
+                      paste0("wa_",commo[2],"_price_imp",imp,lag_or_not)) 
+    }
+  }
+}
+
+# Logarithms
+if(log_prices){
+  for(reg in regressors){
+    d[,paste0("ln_",reg)] <- log(d[,reg])
+  }
   regressors <- paste0("ln_", regressors)
+  rm(reg)
 }
 
 ## CONTROLS
@@ -202,7 +271,7 @@ if(log_prices == TRUE & yoyg == FALSE){
 if(pya_ov){controls <- c(controls, paste0(outcome_variable,"_",x_pya,"pya"))}
 
 # lag controls or not
-if(lag_or_not=="_lag1"){controls <- paste0(controls,lag_or_not)}
+if(lag_or_not=="_lag1" & length(controls)>0){controls <- paste0(controls,lag_or_not)}
 
 # add spatial control or not
 if(spatial_control){controls <- c(controls, "ngb_ov_lag4")}
@@ -219,36 +288,41 @@ if(remaining_forest){
   offset <- FALSE
 }
 
-## INTERACTIONS
-# here we produce the names of the actual interaction variables
-if(length(interaction_terms)>0){
-  # unless variables of interest to be interacted are specified, they are all the presently defined regressors
-  if(interacted == "regressors"){interacted <- regressors}
-  make_int_term <- function(x){int_term <- controls[grepl(x,controls)] %>% paste0("X",interacted)}
-  interaction_vars <- sapply(interaction_terms, FUN = make_int_term)
-}else{interacted <- NULL}
+if(baseline_forest_trend){
+  if(grepl("lucpf", outcome_variable)){
+    d[,"baseline_forest_trend"] <- d$pfc2000_total_pixelcount*(d$year-2000)
+    controls <- c(controls, "baseline_forest_trend")
+  }
+  if(grepl("lucf", outcome_variable)){
+    d[,"baseline_forest_trend"] <- d$fc2000_30th_pixelcount*(d$year-2000)
+    controls <- c(controls, "baseline_forest_trend")
+  }
+}
 
-### DATA FOR REGRESSIONS
+# ### WEIGHTS
+# if(weights){
+#   d$sample_coverage <- d$n_reachable_ibs/d$n_reachable_uml
+# }
 
-# Catchment radius
-if(island == "Sumatra" & alt_cr == FALSE){
-  d <- d_30_suma
-}
-if(island == "Sumatra" & alt_cr == TRUE){
-  d <- d_50_suma
-}
-if(island == "Kalimantan" & alt_cr == FALSE){
-  d <- d_50_kali
-}
-if(island == "Kalimantan" & alt_cr == TRUE){
-  d <- d_30_kali
-}
-if(island == "all" & alt_cr == FALSE){
-  d <- rbind(d_30_suma, d_50_kali, d_50_papu)
-}
-if(island == "all" & alt_cr == TRUE){
-  d <- rbind(d_50_suma, d_30_kali, d_30_papu)
-}
+### SELECT DATA FOR REGRESSION
+
+## group all the variables necessary in the regression
+# important to do that after outcome_variable, regressors controls etc. have been (re)defined. 
+# (interactions do not need to be in there as they are fully built from the used_vars)
+used_vars <- c(outcome_variable, regressors, controls,
+               "parcel_id", "year", "lat", "lon", "idncrs_lat", "idncrs_lon", "district", "province", "island", "district_year", "province_year", "lucpfsmp_pixelcount")
+#"n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
+#"remain_f30th_pixelcount","remain_pf_pixelcount"
+
+# if we use an offset (for now only remaining forest possible) then it should be in the necessary variables, but not among the controls. 
+if(offset){
+  if(grepl("lucpf", outcome_variable)){
+    used_vars <- c(used_vars, "remain_pf_pixelcount")
+  }
+  if(grepl("lucf", outcome_variable)){
+    used_vars <- c(used_vars, "remain_f30th_pixelcount")
+  }
+} 
 
 ## Keep observations that: 
 
@@ -258,10 +332,23 @@ if(grepl("lucpf", outcome_variable)){
   d <- d[d$remain_pf_pixelcount > 0,]
 }
 
-if(grepl("lucf", outcome_variable)){
-  d <- d[d$remain_f30th_pixelcount > 0,]
+# remain_f30th_pixelcount has not been computed yet  
+# if(grepl("lucf", outcome_variable)){
+#   d <- d[d$remain_f30th_pixelcount > 0,]
+# }
+
+# - are in years when the outcome can actually be observed
+if(grepl("_slow_",outcome_variable)){
+  d <- d[d$year<2011,]
 }
 
+if(grepl("fsmp_", outcome_variable) | grepl("fsp_", outcome_variable) | grepl("fmp_", outcome_variable)){
+  d <- d[d$year<2015,]
+}
+
+# should be applied to d_clean rather no ? or at least d_nona...
+# to speed up computation, and also because we do not want to control for values in neighboring cells that are not entering the regressions
+# these values are not bringing any bias by definition as they are excluded
 if(spatial_control){
   
   # restrict the data set to years where the paste outcome is available
@@ -320,41 +407,46 @@ if(illegal == "ill2"){
   d <- d[d$illegal2 == TRUE, ]
 }
 
-# - have no NA on any of the variables used (otherwise they get removed by {fixest})
-used_vars <- c(outcome_variable, regressors, interacted, controls,
-               "parcel_id", "year", "lat", "lon", "district", "province", "island", "district_year", "province_year",
-               "n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
-               #"remain_f30th_pixelcount",
-               "remain_pf_pixelcount")
-
-filter_vec <- base::rowSums(!is.na(d[,used_vars]))
+# - have no NA nor INF on any of the variables used (otherwise they get removed by {fixest})
+usable <- lapply(used_vars, FUN = function(var){is.finite(d[,var]) | is.character(d[,var])})
+names(usable) <- used_vars            
+usable <- bind_cols(usable)
+filter_vec <- base::rowSums(usable)
 filter_vec <- filter_vec == length(used_vars)
-d_nona <- d[filter_vec,]
+d_nona <- d[filter_vec, c(used_vars)]
 if(anyNA(d_nona)){stop()}
+rm(filter_vec, usable)
 
 # - sometimes there are a couple obs. that have 0 ibs reachable despite being in the sample 
 # probably due to some small distance calculation difference between this variable computation and wa_at_parcels.R script. 
 # just remove them if any, so that there is no bug. 
-if(weights == TRUE){
-  d_nona <- d_nona[d_nona$sample_coverage_lag1!=0,]
+if(weights){
+  d_nona <- d_nona[d_nona$sample_coverage!=0,]
+  d_nona[d_nona$sample_coverage>1,"sample_coverage"] <- 1
 }
 
+pixel_area <- (27.8*27.6)/(1e4)
+d_nona$lucpfip_ha_total <- d_nona$lucpfip_pixelcount*pixel_area
+d_nona$lucpfsmp_ha_total <- d_nona$lucpfsmp_pixelcount*pixel_area
+
 # - and those with not only zero outcome, i.e. that feglm would remove, see ?fixest::obs2remove
-d_clean_ind <- d_nona[-obs2remove(fml = as.formula(paste0("lucpfip_pixelcount_total ~ ", fe)),
+d_clean_ind <- d_nona[-obs2remove(fml = as.formula(paste0("lucpfip_pixelcount ~ ", fe)),
                                   d_nona, 
                                   family = "poisson"),]
-d_clean_sm <- d_nona[-obs2remove(fml = as.formula(paste0("lucpfsmp_pixelcount_total ~ ", fe)),
+d_clean_sm <- d_nona[-obs2remove(fml = as.formula(paste0("lucpfsmp_pixelcount ~ ", fe)),
                                   d_nona, 
                                   family = "poisson"),]
 
 d_clean_ls <- list(d_clean_ind, d_clean_sm)
-# pixel_area <- (27.8*27.6)/(1e4)
+# 
+
 prepare_d_clean <- function(d_clean){
+  
   parcel_avg <- ddply(d_clean, "parcel_id", summarise,
                       avg_lucpfip_ha_total = mean(lucpfip_ha_total),
                       avg_lucpfsmp_ha_total = mean(lucpfsmp_ha_total),
-                      avg_wa_ffb_price_imp1_4ya = mean(wa_ffb_price_imp1_4ya),
-                      avg_wa_cpo_price_imp1_4ya = mean(wa_cpo_price_imp1_4ya),
+                      # avg_wa_ffb_price_imp1_4ya = mean(wa_ffb_price_imp1_4ya),
+                      # avg_wa_cpo_price_imp1_4ya = mean(wa_cpo_price_imp1_4ya),
                       avg_wa_ffb_price_imp1 = mean(wa_ffb_price_imp1),
                       avg_wa_cpo_price_imp1 = mean(wa_cpo_price_imp1)
                       )
@@ -364,8 +456,8 @@ prepare_d_clean <- function(d_clean){
   # or even, the mean deviation
   d_clean$md_lucpfip_ha_total <- (d_clean$avg_lucpfip_ha_total - d_clean$lucpfip_ha_total) %>% round(1)
   d_clean$md_lucpfsmp_ha_total <- (d_clean$avg_lucpfsmp_ha_total - d_clean$lucpfsmp_ha_total) %>% round(1)
-  d_clean$md_wa_ffb_price_imp1_4ya <- (d_clean$avg_wa_ffb_price_imp1_4ya - d_clean$wa_ffb_price_imp1_4ya) %>% round(1)
-  d_clean$md_wa_cpo_price_imp1_4ya <- (d_clean$avg_wa_cpo_price_imp1_4ya - d_clean$wa_cpo_price_imp1_4ya) %>% round(1)
+  # d_clean$md_wa_ffb_price_imp1_4ya <- (d_clean$avg_wa_ffb_price_imp1_4ya - d_clean$wa_ffb_price_imp1_4ya) %>% round(1)
+  # d_clean$md_wa_cpo_price_imp1_4ya <- (d_clean$avg_wa_cpo_price_imp1_4ya - d_clean$wa_cpo_price_imp1_4ya) %>% round(1)
   d_clean$md_wa_ffb_price_imp1 <- (d_clean$avg_wa_ffb_price_imp1 - d_clean$wa_ffb_price_imp1) %>% round(1)
   d_clean$md_wa_cpo_price_imp1 <- (d_clean$avg_wa_cpo_price_imp1 - d_clean$wa_cpo_price_imp1) %>% round(1)
   
@@ -380,7 +472,7 @@ prepare_d_clean <- function(d_clean){
   
   # prepare shapes of a cross section 
   d_clean_cs <- d_clean[d_clean$year == 2008,]
-  d_clean_cs <- st_as_sf(d_clean_cs, coords = c("lon", "lat"), crs = indonesian_crs)
+  d_clean_cs <- st_as_sf(d_clean_cs, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs)
   d_clean_cs <- st_buffer(d_clean_cs, dist = 1500)
   st_geometry(d_clean_cs) <- sapply(st_geometry(d_clean_cs), FUN = function(x){st_as_sfc(st_bbox(x))}) %>% st_sfc(crs = indonesian_crs)
   d_clean_cs <- st_transform(d_clean_cs, crs = 4326)
@@ -504,12 +596,12 @@ leaflet() %>%
               popup = ~mills$popup) %>% 
   addPolygons(data = ibsuml, 
               fill = FALSE, col = "lightblue", weight = 2) %>% 
-  addPolygons(data = d_clean_cs_ls[[2]], 
+  addPolygons(data = d_clean_cs_ls[[2]] , 
               opacity = 0, color = "black", weight = 2, 
               fill = TRUE, fillColor = ~cb_sm(d_clean_cs_ls[[2]]$md_lucpfsmp_ha_total), fillOpacity = 0.5, 
               popup = ~d_clean_cs_ls[[2]]$popup) %>% 
   addLegend(pal = cb_sm,  
-            values = d_clean_cs_ls[[1]]$md_lucpfsmp_ha_total, 
+            values = d_clean_cs_ls[[2]]$md_lucpfsmp_ha_total, 
             bins = 2, opacity = 0.4,
             title = "LUCFP 2008 MD<br/>smallholders",
             position = "bottomright") %>% 

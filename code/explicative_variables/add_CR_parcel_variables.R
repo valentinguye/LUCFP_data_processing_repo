@@ -102,8 +102,6 @@ parcel_size <- 3000
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
-# This takes ~1h 
-#### ADD N REACHABLE UML AND SAMPLE COVERAGE ####
 
 # The sample coverage has to be computed as the number of reachable IBS-UML matched sample
 # related to the number of reachable UML mills, with the all the former being included in the latter. 
@@ -113,8 +111,10 @@ parcel_size <- 3000
 
 # read the sample panel of IBS geolocalized mills
 ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
+ibsuml <- ibs[!duplicated(ibs$firm_id),]
 # keep only those that are matched with UML. 
-ibsuml <- ibs[ibs$uml_matched_sample==1,]
+ibsuml <- ibsuml[ibsuml$uml_matched_sample==1,]
+
 # make it a cross section
 ibsuml <- ibsuml[!duplicated(ibsuml$firm_id),]
 ibsuml <- ibsuml[!is.na(ibsuml$lat),]
@@ -144,17 +144,22 @@ uml <- st_transform(uml, crs = indonesian_crs)
 # all_mills_cs <- lapply(all_mills_cs, FUN = st_geometry)
 ### ### ###
 
+
+#### ADD THE NEAREST MILL OBSERVATIONS ####
+
+
+# This takes ~1h 
+#### ADD N REACHABLE UML AND SAMPLE COVERAGE ####
 make_n_reachable_uml <- function(parcel_size, catchment_radius){
   
   # read the parcel panel
-  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
+  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
                                       parcel_size/1000,"km_",
-                                      catchment_radius/1000,"CR.rds")))
+                                      catchment_radius/1000,"km_IBS_CR.rds")))
   
 
-  
   # make a spatial cross section of it (parcels' coordinates are constant over time)
-  parcels_centro <- parcels[parcels$year == 1998, c("lonlat", "idncrs_lat", "idncrs_lon")]
+  parcels_centro <- parcels[!duplicated(parcels$lonlat), c("lonlat", "idncrs_lat", "idncrs_lon")]
   # (lon lat are already expressed in indonesian crs)
   parcels_centro <- st_as_sf(parcels_centro, coords = c("idncrs_lon", "idncrs_lat"), remove = T, crs = indonesian_crs)
   
@@ -202,20 +207,56 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
   colnames(parcels)[colnames(parcels) == "newv_uml"] <- paste0("n_reachable_uml")
   colnames(parcels)[colnames(parcels) == "ratio"] <- paste0("sample_coverage")
   
-  return(parcels)
+  
+  
+  
+  
+  ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))  
+  # keep only geolocalized mills
+  ibs <- ibs[ibs$analysis_sample == 1,]
+  ibs_cs <- ibs[!duplicated(ibs$firm_id),]
+  ibs_cs <- st_as_sf(ibs_cs, coords = c("lon", "lat"), crs = 4326)
+  ibs_cs <- st_transform(ibs_cs, crs = indonesian_crs)
+  
+  
+  # make spatial
+  # parcels_cs <- parcels[!duplicated(parcels$lonlat),c("lonlat", "year", "idncrs_lat", "idncrs_lon", "lon", "lat")]
+  # parcels_cs <- st_as_sf(parcels_cs, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
+  # row.names(parcels_cs) <- parcels_cs$lonlat
+  
+  # define the set of mills within a distance. 
+  sgbp <- st_is_within_distance(parcels_centro, ibs_cs, dist = catchment_radius, sparse = TRUE)
+  
+  usgbp <- unique(sgbp)
+  
+  parcels_centro$reachable <- rep(NA,nrow(parcels_centro))
+  for(i in 1:length(usgbp)){
+    parcels_centro$reachable[sgbp %in% usgbp[i]] <- i
+  }
+  
+  
+  # # Define the nearest mill 
+  # nearest_mill_idx <- st_nearest_feature(parcels_centro, ibs_cs)
+  # 
+  # parcels_centro$nearest_firm_id <- ibs_cs$firm_id[nearest_mill_idx]
+
+  parcels <- left_join(parcels, parcels_centro[,c("lonlat", "reachable")], by = "lonlat")#, "nearest_firm_id"
+  
+  saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_reachable_uml_",
+                               parcel_size/1000,"km_",
+                               catchment_radius/1000,"CR.rds")))
 }
+
 
 catchment_radius <- 10000
 while(catchment_radius < 60000){
   
-  make_n_reachable_uml(parcel_size, catchment_radius) %>% 
-    saveRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_reachable_uml_",
-                             parcel_size/1000,"km_",
-                             catchment_radius/1000,"CR.rds")))
-  
+  make_n_reachable_uml(parcel_size, catchment_radius) 
+
   catchment_radius <- catchment_radius + 20000
 }
-  
+
+
 
 #### ADD GEOGRAPHIC VARIABLES AND THEIR TRENDS ####
 
@@ -242,10 +283,11 @@ district_sf_prj <- st_transform(district_sf, crs = indonesian_crs)
 
 catchment_radiuseS <- c(1e4, 3e4, 5e4)#
 for(catchment_radius in catchment_radiuseS){
-  # this is prepared in this script's previous part (add n reachable uml... )
-  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_reachable_uml_",
+  
+  # read the parcel panel
+  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
                                       parcel_size/1000,"km_",
-                                      catchment_radius/1000,"CR.rds")))
+                                      catchment_radius/1000,"km_IBS_CR.rds")))
   
   parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
   
@@ -306,13 +348,17 @@ for(catchment_radius in catchment_radiuseS){
   parcels_cs <- st_as_sf(parcels_cs, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
   
   # identify neighbors
-  # this definition of neighbors includes the 8 closest, surounding, grid cells. 
+  # this definition of neighbors includes the 8 closest, surrounding, grid cells.
   parcels_buf <- st_buffer(parcels_cs, dist = parcel_size - 10)
   row.names(parcels_buf) <- parcels_buf$lonlat
   sgbp <- st_intersects(parcels_buf)
   
+  neighbors <- list()
+  length(neighbors) <- nrow(parcels_cs)
+  parcels_cs$neighbors <- neighbors
+  parcels_cs$neighbors <- lapply(1:nrow(parcels_cs), FUN = function(i){parcels_cs$lonlat[sgbp[[i]]]}) 
   
-  
+  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "neighbors")], by = "lonlat")
   
   
   
@@ -332,29 +378,96 @@ for(catchment_radius in catchment_radiuseS){
 
 
 #### TIME DYNAMICS VARIABLES ####
+
+### TIME SERIES 
+ts <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
+ts <- dplyr::select(ts, year, 
+                    taxeffectiverate,
+                    ref_int_cpo_price,
+                    cif_rtdm_cpo,
+                    dom_blwn_cpo,
+                    fob_blwn_cpo,
+                    spread_int_dom_paspi,
+                    rho,
+                    dom_blwn_pko,
+                    cif_rtdm_pko,
+                    spread1, spread2, spread3, spread4, spread5, spread6)
+# we only need the time series
+ts <- ts[!duplicated(ts$year),]
+
 catchment_radiuseS <- c(1e4, 3e4, 5e4)# 
 for(catchment_radius in catchment_radiuseS){ 
-  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
-                                                  parcel_size/1000,"km_",
-                                                  catchment_radius/1000,"CR.rds")))
   
+  
+  ### MERGE WEIGHTED AVERAGE AND NEAREST MILL VARIABLES
+  
+  wavars <- readRDS(file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
+                                                                  parcel_size/1000,"km_",
+                                                                  catchment_radius/1000,"CR.rds")))
+  # TEMPORARY NECESSARY PREPARATION OF PARCELS
+  wavars <- st_as_sf(wavars, coords = c("lon", "lat"), crs = indonesian_crs, remove = FALSE)
+  names(wavars)[names(wavars)=="lon"] <- "idncrs_lon"
+  names(wavars)[names(wavars)=="lat"] <- "idncrs_lat"
+  wavars <- st_transform(wavars, crs = 4326)
+  wavars$lon <- st_coordinates(wavars)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates...
+  wavars$lat <- st_coordinates(wavars)[,"Y"]%>% round(6)
+  wavars <- mutate(wavars, lonlat = paste0(lon, lat))
+  wavars <- st_drop_geometry(wavars)
+  wavars <- dplyr::select(wavars, -parcel_id)
+  
+  # ONCE  wa_at_parcels_distances.R IS RERUN ONCE, THE PREPARATION CODE WILL RATHER BE 
+  # nothing actually. 
+  
+  nmvars <- readRDS(file.path(paste0("temp_data/processed_parcels/nm_panel_parcels_",
+                                                                 parcel_size/1000,"km_",
+                                                                 catchment_radius/1000,"CR.rds")))
+  
+  names(nmvars) %in% names(wavars)
+  
+  parcels <- inner_join(wavars, nmvars, by = c("lonlat","year"))
+  
+  rm(wavars, nmvars)
   
   ### EXPORT SHARES FROM PCT TO FRACTION   
   parcels$wa_prex_cpo_imp1 <- parcels$wa_prex_cpo_imp1/100 
   parcels$wa_prex_cpo_imp2 <- parcels$wa_prex_cpo_imp2/100 
-
   
-  ### LAGS AND LEADS OF A LARGE SET OF VARIABLES 
   
-  variables <- c("wa_ffb_price_imp1", "wa_ffb_price_imp2", 
-                "wa_cpo_price_imp1", "wa_cpo_price_imp2", "wa_prex_cpo_imp1","wa_prex_cpo_imp2",       
-                #"wa_pko_price_imp1",       "wa_pko_price_imp2",       "wa_prex_pko_imp1",        "wa_prex_pko_imp2",       
-                "wa_pct_own_cent_gov_imp", "wa_pct_own_loc_gov_imp",  "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp",     
-                #"wa_concentration_10",     "wa_concentration_30", "wa_concentration_50",     
-                "n_reachable_ibs", "n_reachable_uml", "n_reachable_ibsuml",   "sample_coverage")
+  ### SHORT LAGS OF OTHER VARIABLES THAN PRICES 
+  
+  variables <- c("wa_prex_cpo_imp1","wa_prex_cpo_imp2",       
+                 "wa_pct_own_cent_gov_imp", "wa_pct_own_loc_gov_imp",  "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp",     
+                 #"wa_concentration_10",     "wa_concentration_30", "wa_concentration_50",
+                 "prex_cpo_imp1", "prex_cpo_imp2",
+                 "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp",
+                 "concentration_30", "concentration_50",
+                 "n_reachable_uml")#"n_reachable_ibs", "n_reachable_ibsuml",   "sample_coverage"
   
   for(voi in variables){
     ## lags
+    parcels <- dplyr::arrange(parcels, lonlat, year)
+    parcels <- DataCombine::slide(parcels,
+                                  Var = voi, 
+                                  TimeVar = "year",
+                                  GroupVar = "lonlat",
+                                  NewVar = paste0(voi,"_lag1"),
+                                  slideBy = -1, 
+                                  keepInvalid = TRUE)
+    parcels <- dplyr::arrange(parcels, lonlat, year)
+  }
+  
+  #parcels1 <- parcels
+  
+  
+  ### Operations relating contemporaneous to past information - on prices only
+  variables <- c("wa_ffb_price_imp1", "wa_ffb_price_imp2", 
+                 "wa_cpo_price_imp1", "wa_cpo_price_imp2",
+                 "ffb_price_imp1", "ffb_price_imp2",
+                 "cpo_price_imp1", "cpo_price_imp2") #,"wa_pko_price_imp1", "wa_pko_price_imp2"
+  
+  for(voi in variables){
+    
+    ## short to long lags
     for(lag in c(1:5)){
       parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
@@ -367,7 +480,6 @@ for(catchment_radius in catchment_radiuseS){
       parcels <- dplyr::arrange(parcels, lonlat, year)
       
     }
-      
     # ## leads                               
     # for(lag in c(1:5)){
     #   parcels <- dplyr::arrange(parcels, lonlat, year)
@@ -380,19 +492,8 @@ for(catchment_radius in catchment_radiuseS){
     #                                 keepInvalid = TRUE) 
     #   parcels <- dplyr::arrange(parcels, lonlat, year)
     # } 
-  }
-  
-  #parcels1 <- parcels
-  
-  
-  ### Operations relating contemporaneous to past information - on prices only
-  variables <- c("wa_ffb_price_imp1", "wa_ffb_price_imp2", 
-                 "wa_cpo_price_imp1", "wa_cpo_price_imp2") #,"wa_pko_price_imp1", "wa_pko_price_imp2"
-  
-  for(voi in variables){
     
     for(py in c(2,3,4)){
-      
       ## Past-year averages (2, 3 and 4 years) - LONG RUN MEASURE - 
       parcels$newv <- rowMeans(x = parcels[,paste0(voi,"_lag",c(1:py))], na.rm = FALSE)
       parcels[is.nan(parcels$newv),"newv"] <- NA
@@ -411,26 +512,26 @@ for(catchment_radius in catchment_radiuseS){
       parcels <- dplyr::arrange(parcels, lonlat, year)
       
       
-      ## and absolute deviation - SHORT RUN MEASURE -
-      parcels <- mutate(parcels,
-                        !!as.symbol(paste0(voi,"_dev_",py,"pya")) := !!as.symbol(paste0(voi)) - 
-                                                                     !!as.symbol(paste0(voi,"_",py,"pya")))
-      # # and relative deviation
+      # ## and absolute deviation - SHORT RUN MEASURE -
       # parcels <- mutate(parcels,
-      #                   !!as.symbol(paste0(voi,"_rdev_",py,"pya")) := (!!as.symbol(paste0(voi)) - 
-      #                                                               !!as.symbol(paste0(voi,"_",py,"pya"))) /
-      #  
-      
-      # Lag these deviations by one year
-      parcels <- dplyr::arrange(parcels, lonlat, year)
-      parcels <- DataCombine::slide(parcels,
-                                  Var = paste0(voi,"_dev_",py,"pya"), 
-                                  TimeVar = "year",
-                                  GroupVar = "lonlat",
-                                  NewVar = paste0(voi,"_dev_",py,"pya_lag1"),
-                                  slideBy = -1, 
-                                  keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, lonlat, year)
+      #                   !!as.symbol(paste0(voi,"_dev_",py,"pya")) := !!as.symbol(paste0(voi)) - 
+      #                     !!as.symbol(paste0(voi,"_",py,"pya")))
+      # # # and relative deviation
+      # # parcels <- mutate(parcels,
+      # #                   !!as.symbol(paste0(voi,"_rdev_",py,"pya")) := (!!as.symbol(paste0(voi)) - 
+      # #                                                               !!as.symbol(paste0(voi,"_",py,"pya"))) /
+      # #  
+      # 
+      # # Lag these deviations by one year
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
+      # parcels <- DataCombine::slide(parcels,
+      #                               Var = paste0(voi,"_dev_",py,"pya"), 
+      #                               TimeVar = "year",
+      #                               GroupVar = "lonlat",
+      #                               NewVar = paste0(voi,"_dev_",py,"pya_lag1"),
+      #                               slideBy = -1, 
+      #                               keepInvalid = TRUE)  
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
       
       ## and mean of contemporaneous and pya - OVERALL MEASURE - 
       
@@ -466,9 +567,9 @@ for(catchment_radius in catchment_radiuseS){
     ## contemporaneous yoyg - SHORT RUN MEASURE - (invalid for at least the first record of each lonlat)
     parcels <- mutate(parcels,
                       !!as.symbol(paste0(voi,"_yoyg")) := 100*(!!as.symbol(paste0(voi)) - 
-                                                               !!as.symbol(paste0(voi,"_lag1"))) /
-                                                               !!as.symbol(paste0(voi,"_lag1")))
-                        
+                                                                 !!as.symbol(paste0(voi,"_lag1"))) /
+                        !!as.symbol(paste0(voi,"_lag1")))
+    
     ## Lagged yoyg 
     # (the first lag is invalid for at least two first records of each lonlat;    
     # the fourth lag is invalid for at least 5 first records)
@@ -491,76 +592,136 @@ for(catchment_radius in catchment_radiuseS){
       # treat NaNs that arise from means over only NAs when na.rm = T 
       parcels[is.nan(parcels$newv),"newv"] <- NA
       colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_yoyg_",py,"pya")
-    
-    
-    # Lag by one year
-    parcels <- dplyr::arrange(parcels, lonlat, year)
-    parcels <- DataCombine::slide(parcels,
-                                  Var = paste0(voi,"_yoyg_",py,"pya"), 
-                                  TimeVar = "year",
-                                  GroupVar = "lonlat",
-                                  NewVar = paste0(voi,"_yoyg_",py,"pya_lag1"),
-                                  slideBy = -1, 
-                                  keepInvalid = TRUE)  
-    parcels <- dplyr::arrange(parcels, lonlat, year)
-    
-    
-    ## contemporaneous AND pya yoyg mean - OVERALLMEASURE -   
-    
-    # note that we add voi column (not lagged) in the row mean
-    parcels$newv <- rowMeans(x = parcels[,c(paste0(voi,"_yoyg"), paste0(voi,"_yoyg_lag",c(1:py)))], na.rm = FALSE)
-    parcels[is.nan(parcels$newv),"newv"] <- NA
-    # note that we name it ya (year average) and not past year average (pya). It the average of past years AND
-    # contemporaneous obs..
-    # When e.g. the looping variable py = 2, then pya are computed as averages of t-1 and t-2 values and
-    # ya are computed as averages of t, t-1 and t-2 values. 
-    # Coherently, the names of ya variables have _3ya_ (the py+1) to reflect the average being made over 3 years.    
-    colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_yoyg_",py+1,"ya")
-
-    
-    # Lag by one year
-    parcels <- dplyr::arrange(parcels, lonlat, year)
-    parcels <- DataCombine::slide(parcels,
-                                  Var = paste0(voi,"_yoyg_",py+1,"ya"), 
-                                  TimeVar = "year",
-                                  GroupVar = "lonlat",
-                                  NewVar = paste0(voi,"_yoyg_",py+1,"ya_lag1"),
-                                  slideBy = -1, 
-                                  keepInvalid = TRUE)  
-    parcels <- dplyr::arrange(parcels, lonlat, year)
-    
+      
+      
+      # Lag by one year
+      parcels <- dplyr::arrange(parcels, lonlat, year)
+      parcels <- DataCombine::slide(parcels,
+                                    Var = paste0(voi,"_yoyg_",py,"pya"), 
+                                    TimeVar = "year",
+                                    GroupVar = "lonlat",
+                                    NewVar = paste0(voi,"_yoyg_",py,"pya_lag1"),
+                                    slideBy = -1, 
+                                    keepInvalid = TRUE)  
+      parcels <- dplyr::arrange(parcels, lonlat, year)
+      
+      
+      ## contemporaneous AND pya yoyg mean - OVERALLMEASURE -   
+      
+      # note that we add voi column (not lagged) in the row mean
+      parcels$newv <- rowMeans(x = parcels[,c(paste0(voi,"_yoyg"), paste0(voi,"_yoyg_lag",c(1:py)))], na.rm = FALSE)
+      parcels[is.nan(parcels$newv),"newv"] <- NA
+      # note that we name it ya (year average) and not past year average (pya). It the average of past years AND
+      # contemporaneous obs..
+      # When e.g. the looping variable py = 2, then pya are computed as averages of t-1 and t-2 values and
+      # ya are computed as averages of t, t-1 and t-2 values. 
+      # Coherently, the names of ya variables have _3ya_ (the py+1) to reflect the average being made over 3 years.    
+      colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_yoyg_",py+1,"ya")
+      
+      
+      # Lag by one year
+      parcels <- dplyr::arrange(parcels, lonlat, year)
+      parcels <- DataCombine::slide(parcels,
+                                    Var = paste0(voi,"_yoyg_",py+1,"ya"), 
+                                    TimeVar = "year",
+                                    GroupVar = "lonlat",
+                                    NewVar = paste0(voi,"_yoyg_",py+1,"ya_lag1"),
+                                    slideBy = -1, 
+                                    keepInvalid = TRUE)  
+      parcels <- dplyr::arrange(parcels, lonlat, year)
+      
     }
-  }  
+  }# closes the loop on variables  
   
   # remove some variables that were only temporarily necessary
   vars_torm <- names(parcels)[grepl(pattern = "price_", x = names(parcels)) &
-                              (grepl(pattern = "_lag2", x = names(parcels)) |
-                              grepl(pattern = "_lag3", x = names(parcels)) |
-                              grepl(pattern = "_lag4", x = names(parcels)) |
-                              grepl(pattern = "_lag5", x = names(parcels)))]
+                                (grepl(pattern = "_lag2", x = names(parcels)) |
+                                   grepl(pattern = "_lag3", x = names(parcels)) |
+                                   grepl(pattern = "_lag4", x = names(parcels)) |
+                                   grepl(pattern = "_lag5", x = names(parcels)))]
   
   parcels <- parcels[,!(names(parcels) %in% vars_torm)]
   
   
   ### PRICE LOGARITHMS
-  # select prices for which it's relevant/useful to compute the log
-  price_variables <- names(parcels)[grepl(pattern = "price_", x = names(parcels)) &
-                                      !grepl(pattern = "pko", x = names(parcels)) &
-                                      !grepl(pattern = "dev", x = names(parcels)) &
-                                      !grepl(pattern = "yoyg", x = names(parcels))]
+  # Eventhough they are useful, we builod them within the regression function, to make the data sets a bit lighter. 
+  # # select prices for which it's relevant/useful to compute the log
+  # price_variables <- names(parcels)[grepl(pattern = "price_", x = names(parcels)) &
+  #                                     !grepl(pattern = "pko", x = names(parcels)) &
+  #                                     !grepl(pattern = "dev", x = names(parcels)) &
+  #                                     !grepl(pattern = "yoyg", x = names(parcels))]
+  # 
+  # 
+  # for(var in price_variables){
+  #   parcels[,paste0("ln_",var)] <- log(parcels[,var])
+  # }
   
   
-  for(var in price_variables){
-    parcels[,paste0("ln_",var)] <- log(parcels[,var])
+  ### TIME SERIES & IV
+  parcels <- merge(parcels, ts, by = "year")
+  
+  # Make the SHIFT SHARE INSTRUMENTAL VARIABLES 
+  for(IMP in c(1,2)){
+    for(SP in c(1:6)){
+      parcels[,paste0("iv",SP,"_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_lag1")]*parcels[,paste0("spread",SP)] 
+    }
   }
   
+  # lag the iv variables
+  ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
   
+  for(IV in ivS){
+    parcels <- dplyr::arrange(parcels, lonlat, year)
+    parcels <- DataCombine::slide(parcels,
+                                  Var = IV, 
+                                  TimeVar = "year",
+                                  GroupVar = "lonlat",
+                                  NewVar = paste0(IV,"_lag1"),
+                                  slideBy = -1, 
+                                  keepInvalid = TRUE)  
+    parcels <- dplyr::arrange(parcels, lonlat, year)
+  }
+  
+  # View(parcels[!is.na(parcels$wa_prex_cpo_imp1_lag1) &
+  #                parcels$year>2007 &
+  #                parcels$wa_prex_cpo_imp1_lag1!=0 ,c("lonlat" ,"year", paste0("wa_prex_cpo_imp",c(1,2),"_lag1"),
+  #                                                      paste0("spread",c(1:4)),
+  #                                                      paste0("iv",c(1:4),"_imp1"),
+  #                                                      paste0("iv",c(1:4),"_imp2"), 
+  #                                                      paste0("iv",c(1:4),"_imp1_lag1"))])
+  
+  
+  
+  rm(parcels)
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
                                     parcel_size/1000,"km_",
                                     catchment_radius/1000,"CR.rds")))  
+  
+  # voi <- "wa_ffb_price_imp1"
+  # View(parcels[500,c("lonlat", "year",
+  #                    voi,#
+  #                    paste0(voi,"_lag",c(1:4)),#
+  #                    paste0(voi,"_3ya"),
+  #                    paste0(voi,"_3ya_lag1"),
+  #                    paste0(voi,"_4ya"),
+  #                    paste0(voi,"_4ya_lag1"),
+  #                    paste0(voi,"_5ya"),
+  #                    paste0(voi,"_5ya_lag1"),
+  #                    paste0(voi,"_3pya"),#
+  #                    paste0(voi,"_3pya_lag1"),#
+  #                    paste0(voi,"_dev_3pya"),#
+  #                    paste0(voi,"_dev_3pya_lag1"),#
+  #                    paste0(voi,"_yoyg"),#
+  #                    paste0(voi,"_yoyg_lag", c(1:3)),#
+  #                    paste0(voi,"_yoyg_4ya"),
+  #                    paste0(voi,"_yoyg_4ya_lag1"),
+  #                    paste0(voi,"_yoyg_3pya"),#
+  #                    paste0(voi,"_yoyg_3pya_lag1"))])#
+  
+  
 }
-
+rm(ts)
 
 
 
@@ -610,32 +771,19 @@ llu <- llu[llu$Province == "Sumatra Utara" |
              llu$Province == "Sumatra Barat" |
              llu$Province == "Aceh", ]
 
-                  
-### TIME SERIES 
-ts <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
-ts <- dplyr::select(ts, year, 
-                    taxeffectiverate,
-                    ref_int_cpo_price,
-                    cif_rtdm_cpo,
-                    dom_blwn_cpo,
-                    fob_blwn_cpo,
-                    spread_int_dom_paspi,
-                    rho,
-                    dom_blwn_pko,
-                    cif_rtdm_pko,
-                    spread1, spread2, spread3, spread4, spread5, spread6)
-# we only need the time series
-ts <- ts[!duplicated(ts$year),]
 
 
 catchment_radiuseS <- c(1e4, 3e4, 5e4)# 
 for(catchment_radius in catchment_radiuseS){ 
-  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
+  # read the parcel panel
+  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
                                       parcel_size/1000,"km_",
-                                      catchment_radius/1000,"CR.rds")))
+                                      catchment_radius/1000,"km_IBS_CR.rds")))
+  
 
   parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
 
+  
   ### RSPO
   parcels$rspo_cert <- rep(FALSE, nrow(parcels))
   
@@ -648,11 +796,10 @@ for(catchment_radius in catchment_radiuseS){
     sgbp <- st_within(x = parcels_cs, y = rspo_cs)
 
     parcels$rspo_cert[parcels$year == y][lengths(sgbp) == 1] <- TRUE
-    
   }
   
-  ### OIL PALM CONCESSIONS
   
+  ### OIL PALM CONCESSIONS
   # We do not observe whether a grid cell is within a concession annually. 
   # Therefore we only proceed with a cross section
   parcels_cs <- parcels[!duplicated(parcels$lonlat),]
@@ -663,7 +810,7 @@ for(catchment_radius in catchment_radiuseS){
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- merge(parcels, parcels_cs[,c("lonlat", "concession")], by = "lonlat")
+  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "concession")], by = "lonlat")
   
   # note that some parcels fall within more than one concession record. There may be several reasons for concession overlaps 
   # like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
@@ -687,7 +834,7 @@ for(catchment_radius in catchment_radiuseS){
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- merge(parcels, parcels_cs[,c("lonlat", "llu")], by = "lonlat")
+  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "llu")], by = "lonlat")
   
   unique(parcels$llu)
   ### ILLEGAL LUCFP 
@@ -708,194 +855,184 @@ for(catchment_radius in catchment_radiuseS){
   
   
   
-  ### TIME SERIES & IV
-  parcels <- merge(parcels, ts, by = "year")
-  
-  # Make the SHIFT SHARE INSTRUMENTAL VARIABLES 
-  for(IMP in c(1,2)){
-    for(SP in c(1:6)){
-      parcels[,paste0("iv",SP,"_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_lag1")]*parcels[,paste0("spread",SP)] 
-    }
-  }
-  
-  # lag the iv variables
-  ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
-  
-  for(IV in ivS){
-    parcels <- dplyr::arrange(parcels, lonlat, year)
-    parcels <- DataCombine::slide(parcels,
-                                  Var = IV, 
-                                  TimeVar = "year",
-                                  GroupVar = "lonlat",
-                                  NewVar = paste0(IV,"_lag1"),
-                                  slideBy = -1, 
-                                  keepInvalid = TRUE)  
-    parcels <- dplyr::arrange(parcels, lonlat, year)
-  }
-  
-  # View(parcels[!is.na(parcels$wa_prex_cpo_imp1_lag1) &
-  #                parcels$year>2007 &
-  #                parcels$wa_prex_cpo_imp1_lag1!=0 ,c("lonlat" ,"year", paste0("wa_prex_cpo_imp",c(1,2),"_lag1"),
-  #                                                      paste0("spread",c(1:4)),
-  #                                                      paste0("iv",c(1:4),"_imp1"),
-  #                                                      paste0("iv",c(1:4),"_imp2"), 
-  #                                                      paste0("iv",c(1:4),"_imp1_lag1"))])
-  
-  
-  
-  
-  saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
+  saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_land_des_",
                                     parcel_size/1000,"km_",
                                     catchment_radius/1000,"CR.rds")))
 }
 
-rm(cns, llu, parcels, parcels_cs, rspo, rspo_cs, sgbp, ts)
+rm(cns, llu, parcels, parcels_cs, rspo, rspo_cs, sgbp)
 
 
-#### ADD N REACHABLE UML TO PARCELS IN ***UML*** CATCHMENT RADIUS #### 
-# this is a different thing, it does not add variables to our sample for analysis, but to 
-# another sample, that of parcels within CR of a **UML** mill, as outputed from prepare_lucpfip.R
-# this is necessary to later compute the aggregation factor in demand for deforestation. 
-
-# prepare geographic data once before looping
-# island
-island_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/island_sf"))
-names(island_sf)[names(island_sf)=="island"] <- "shape_des"
-
-island_sf_prj <- st_transform(island_sf, crs = indonesian_crs)
-#province
-province_sf <- st_read(file.path("input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp"))
-province_sf <- dplyr::select(province_sf, NAME_1)
-province_sf_prj <- st_transform(province_sf, crs = indonesian_crs)
-# district
-district_sf <- st_read(file.path("input_data/indonesia_spatial/district_shapefiles/district_2015_base2000.shp"))
-district_names <- read.dta13(file.path("temp_data/processed_indonesia_spatial/province_district_code_names_93_2016.dta"))
-district_names <- district_names[!duplicated(district_names$bps_),]
-district_sf$d__2000 <- district_sf$d__2000 %>% as.character()
-district_names$bps_ <- district_names$bps_ %>% as.character()
-district_sf <- left_join(x = district_sf, y = district_names[,c("name_", "bps_")], 
-                         by = c("d__2000" = "bps_"),
-                         all = FALSE, all.x = FALSE, all.y = FALSE)
 
 
-district_sf_prj <- st_transform(district_sf, crs = indonesian_crs)
+#### MERGE ALL ADDITIONAL VARIABLES #### 
 
-catchment_radius <- 10000
-while(catchment_radius < 60000){
-  # read the panel of parcels within CR of a **UML** mill, as outputed from prepare_lucpfip.R
-  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+for(catchment_radius in c(1e4, 3e4, 5e4)){
+  reachable <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_reachable_uml_",
                                       parcel_size/1000,"km_",
-                                      catchment_radius/1000,"km_UML_CR.rds")))
+                                      catchment_radius/1000,"CR.rds")))
   
-  # make a spatial cross section of it (parcels' coordinates are constant over time)
-  parcels_centro <- parcels[parcels$year == 2001, c("lonlat", "idncrs_lat", "idncrs_lon")]
-  # (lon lat are already expressed in indonesian crs)
-  parcels_centro <- st_as_sf(parcels_centro, coords = c("idncrs_lon", "idncrs_lat"), remove = T, crs = indonesian_crs)
+  geovars <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
+                                       parcel_size/1000,"km_",
+                                       catchment_radius/1000,"CR.rds")))
   
-  parcels$newv_uml <- rep(0, nrow(parcels))
+  time_dyna <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
+                                        parcel_size/1000,"km_",
+                                        catchment_radius/1000,"CR.rds")))
   
-  for(t in 1:length(years)){
-    
-    # UML
-    # This is not a panel, so the information on presence or not a given year is whether 
-    # the establishment year is anterior. We impute NA establishment year to be older than 1998. 
-    present_uml <- uml[uml$est_year_imp <= years[t] | is.na(uml$est_year_imp),]
-    
-    annual_reachable_uml <- st_is_within_distance(parcels_centro, present_uml, dist = catchment_radius)
-    parcels[parcels$year == years[t], "newv_uml"] <- lengths(annual_reachable_uml)
-  } 
-  colnames(parcels)[colnames(parcels) == "newv_uml"] <- paste0("n_reachable_uml")
+  land_des <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_land_des_",
+                                       parcel_size/1000,"km_",
+                                       catchment_radius/1000,"CR.rds")))
   
-  ### ADD GEOGRAPHIC VARIABLES
-  parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
+  parcels <- inner_join(reachable[,c("lonlat","year",
+                                     "n_reachable_uml","n_reachable_ibsuml","sample_coverage","reachable")], 
+                        geovars[,c("lonlat","year",
+                                   "island","province","district","island_year","province_year","district_year")],
+                        by = c("lonlat","year"))
   
-  # ISLAND variable
-  parcels$island <- rep("", nrow(parcels))
+  parcels <- inner_join(parcels, time_dyna,
+                        by = c("lonlat","year"))
   
-  # make the operation faster by using island bbox (other wise the island polygons make 
-  # the computation very long)
-  # (and this also includes parcel centroids in the sea)
-  island_sf_prj_bbox <- sapply(island_sf_prj$geometry, function(x){st_as_sfc(st_bbox(x))}) %>% st_sfc(crs = indonesian_crs)
+  parcels <- inner_join(parcels, 
+                        land_des[,c("lonlat","year",
+                                    "rspo_cert", "concession", "llu", "illegal1", "illegal2")],
+                        by = c("lonlat","year"))
+                                     
   
-  sgbp <- st_within(parcels$geometry, island_sf_prj_bbox)
-  # the bboxes of Sumatra and Kalimantan intersect a bit, so we check that no parcel falls 
-  # in the intersection, this is the case for catchment_radius = 50km, for 2538 parcels, 
-  # these parcel centroids belong to Kalimantan (after visual check). 
-  # intersect <- st_intersection(island_sf_prj_bbox[1], island_sf_prj_bbox[3])
-  # plot(island_sf_prj_bbox[[1]])
-  # plot(island_sf_prj, add = TRUE)
-  # plot(parcels$geometry[parcels$island==4], col = "red", add = TRUE)
-  
-  sgbp[lengths(sgbp)==2] <- 3
-  
-  # island_sf_prj features are in this order : 1 Sumatra; 2 Papua; 3 Kalimantan
-  unique(unlist(sgbp))
-  parcels$island <- unlist(sgbp)
-  
-  parcels$island <- replace(parcels$island, parcels$island == 1, "Sumatra")
-  unique(parcels$island)
-  parcels$island <- replace(parcels$island, parcels$island == 2, "Papua")
-  parcels$island <- replace(parcels$island, parcels$island == 3, "Kalimantan")
-  
-  
-  # PROVINCE variable
-  
-  # Work with a cross section for province and district attribution
-  parcels_cs <- parcels[!duplicated(parcels$lonlat),]
-  
-  
-  # the nearest feature function enables to also grab those parcels which centroids are in the sea.
-  nearest_prov_idx <- st_nearest_feature(parcels_cs, province_sf_prj)
-  
-  parcels_cs$province <- province_sf_prj$NAME_1[nearest_prov_idx]
-  
-  # DISTRICT variable
-  # the nearest feature function enables to also grab those parcels which centroids are in the sea.
-  nearest_dstr_idx <- st_nearest_feature(parcels_cs, district_sf_prj)
-  
-  # 4 parcels are closest to district with no name (NA) 
-  parcels_cs$district <- district_sf_prj$name_[nearest_dstr_idx]
-  
-  parcels <- merge(st_drop_geometry(parcels),
-                   st_drop_geometry(parcels_cs[,c("lonlat", "province", "district")]),
-                   by = "lonlat")
-  
-  # REGIONAL TRENDS VARIABLES
-  parcels$island_year <- paste0(parcels$island,"_",parcels$year)
-  parcels$province_year <- paste0(parcels$province,"_",parcels$year)
-  parcels$district_year <- paste0(parcels$district,"_",parcels$year)
-  
-  saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/lucpfip_panel_reachable_geovars_",
-                                    parcel_size/1000,"km_",
-                                    catchment_radius/1000,"km_UML_CR.rds")))
-  
-  
-  catchment_radius <- catchment_radius + 20000
 }
 
+
+
+
+
+
+
+
+
+# 
+# #### ADD N REACHABLE UML TO PARCELS IN ***UML*** CATCHMENT RADIUS #### 
+# # this is a different thing, it does not add variables to our sample for analysis, but to 
+# # another sample, that of parcels within CR of a **UML** mill, as outputed from prepare_lucpfip.R
+# # this is necessary to later compute the aggregation factor in demand for deforestation. 
+# 
+# # prepare geographic data once before looping
+# # island
+# island_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/island_sf"))
+# names(island_sf)[names(island_sf)=="island"] <- "shape_des"
+# 
+# island_sf_prj <- st_transform(island_sf, crs = indonesian_crs)
+# #province
+# province_sf <- st_read(file.path("input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp"))
+# province_sf <- dplyr::select(province_sf, NAME_1)
+# province_sf_prj <- st_transform(province_sf, crs = indonesian_crs)
+# # district
+# district_sf <- st_read(file.path("input_data/indonesia_spatial/district_shapefiles/district_2015_base2000.shp"))
+# district_names <- read.dta13(file.path("temp_data/processed_indonesia_spatial/province_district_code_names_93_2016.dta"))
+# district_names <- district_names[!duplicated(district_names$bps_),]
+# district_sf$d__2000 <- district_sf$d__2000 %>% as.character()
+# district_names$bps_ <- district_names$bps_ %>% as.character()
+# district_sf <- left_join(x = district_sf, y = district_names[,c("name_", "bps_")], 
+#                          by = c("d__2000" = "bps_"),
+#                          all = FALSE, all.x = FALSE, all.y = FALSE)
+# 
+# 
+# district_sf_prj <- st_transform(district_sf, crs = indonesian_crs)
+# 
+# catchment_radius <- 10000
+# while(catchment_radius < 60000){
+#   # read the panel of parcels within CR of a **UML** mill, as outputed from prepare_lucpfip.R
+#   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+#                                       parcel_size/1000,"km_",
+#                                       catchment_radius/1000,"km_UML_CR.rds")))
+#   
+#   # make a spatial cross section of it (parcels' coordinates are constant over time)
+#   parcels_centro <- parcels[parcels$year == 2001, c("lonlat", "idncrs_lat", "idncrs_lon")]
+#   # (lon lat are already expressed in indonesian crs)
+#   parcels_centro <- st_as_sf(parcels_centro, coords = c("idncrs_lon", "idncrs_lat"), remove = T, crs = indonesian_crs)
+#   
+#   parcels$newv_uml <- rep(0, nrow(parcels))
+#   
+#   for(t in 1:length(years)){
+#     
+#     # UML
+#     # This is not a panel, so the information on presence or not a given year is whether 
+#     # the establishment year is anterior. We impute NA establishment year to be older than 1998. 
+#     present_uml <- uml[uml$est_year_imp <= years[t] | is.na(uml$est_year_imp),]
+#     
+#     annual_reachable_uml <- st_is_within_distance(parcels_centro, present_uml, dist = catchment_radius)
+#     parcels[parcels$year == years[t], "newv_uml"] <- lengths(annual_reachable_uml)
+#   } 
+#   colnames(parcels)[colnames(parcels) == "newv_uml"] <- paste0("n_reachable_uml")
+#   
+#   ### ADD GEOGRAPHIC VARIABLES
+#   parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
+#   
+#   # ISLAND variable
+#   parcels$island <- rep("", nrow(parcels))
+#   
+#   # make the operation faster by using island bbox (other wise the island polygons make 
+#   # the computation very long)
+#   # (and this also includes parcel centroids in the sea)
+#   island_sf_prj_bbox <- sapply(island_sf_prj$geometry, function(x){st_as_sfc(st_bbox(x))}) %>% st_sfc(crs = indonesian_crs)
+#   
+#   sgbp <- st_within(parcels$geometry, island_sf_prj_bbox)
+#   # the bboxes of Sumatra and Kalimantan intersect a bit, so we check that no parcel falls 
+#   # in the intersection, this is the case for catchment_radius = 50km, for 2538 parcels, 
+#   # these parcel centroids belong to Kalimantan (after visual check). 
+#   # intersect <- st_intersection(island_sf_prj_bbox[1], island_sf_prj_bbox[3])
+#   # plot(island_sf_prj_bbox[[1]])
+#   # plot(island_sf_prj, add = TRUE)
+#   # plot(parcels$geometry[parcels$island==4], col = "red", add = TRUE)
+#   
+#   sgbp[lengths(sgbp)==2] <- 3
+#   
+#   # island_sf_prj features are in this order : 1 Sumatra; 2 Papua; 3 Kalimantan
+#   unique(unlist(sgbp))
+#   parcels$island <- unlist(sgbp)
+#   
+#   parcels$island <- replace(parcels$island, parcels$island == 1, "Sumatra")
+#   unique(parcels$island)
+#   parcels$island <- replace(parcels$island, parcels$island == 2, "Papua")
+#   parcels$island <- replace(parcels$island, parcels$island == 3, "Kalimantan")
+#   
+#   
+#   # PROVINCE variable
+#   
+#   # Work with a cross section for province and district attribution
+#   parcels_cs <- parcels[!duplicated(parcels$lonlat),]
+#   
+#   
+#   # the nearest feature function enables to also grab those parcels which centroids are in the sea.
+#   nearest_prov_idx <- st_nearest_feature(parcels_cs, province_sf_prj)
+#   
+#   parcels_cs$province <- province_sf_prj$NAME_1[nearest_prov_idx]
+#   
+#   # DISTRICT variable
+#   # the nearest feature function enables to also grab those parcels which centroids are in the sea.
+#   nearest_dstr_idx <- st_nearest_feature(parcels_cs, district_sf_prj)
+#   
+#   # 4 parcels are closest to district with no name (NA) 
+#   parcels_cs$district <- district_sf_prj$name_[nearest_dstr_idx]
+#   
+#   parcels <- merge(st_drop_geometry(parcels),
+#                    st_drop_geometry(parcels_cs[,c("lonlat", "province", "district")]),
+#                    by = "lonlat")
+#   
+#   # REGIONAL TRENDS VARIABLES
+#   parcels$island_year <- paste0(parcels$island,"_",parcels$year)
+#   parcels$province_year <- paste0(parcels$province,"_",parcels$year)
+#   parcels$district_year <- paste0(parcels$district,"_",parcels$year)
+#   
+#   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/lucpfip_panel_reachable_geovars_",
+#                                     parcel_size/1000,"km_",
+#                                     catchment_radius/1000,"km_UML_CR.rds")))
+#   
+#   
+#   catchment_radius <- catchment_radius + 20000
+# }
+# 
+#   
   
-  
-voi <- "wa_ffb_price_imp1"
-View(parcels[500,c("lonlat", "year",
-                                        voi,#
-                                        paste0(voi,"_lag",c(1:4)),#
-                                        paste0(voi,"_3ya"),
-                                        paste0(voi,"_3ya_lag1"),
-                                        paste0(voi,"_4ya"),
-                                        paste0(voi,"_4ya_lag1"),
-                                        paste0(voi,"_5ya"),
-                                        paste0(voi,"_5ya_lag1"),
-                                        paste0(voi,"_3pya"),#
-                                        paste0(voi,"_3pya_lag1"),#
-                                        paste0(voi,"_dev_3pya"),#
-                                        paste0(voi,"_dev_3pya_lag1"),#
-                                        paste0(voi,"_yoyg"),#
-                                        paste0(voi,"_yoyg_lag", c(1:3)),#
-                                        paste0(voi,"_yoyg_4ya"),
-                                        paste0(voi,"_yoyg_4ya_lag1"),
-                                        paste0(voi,"_yoyg_3pya"),#
-                                        paste0(voi,"_yoyg_3pya_lag1"))])#
-
 
   
 
@@ -909,6 +1046,25 @@ View(parcels[500,c("lonlat", "year",
 
 
 
+
+# # bon il y a ce truc bizarre que 33 mills ne sont les plus proches d'aucune parcelle, ce qui ne devrait pas arriver puisque toutes les mills ont au moins
+# # une parcelle qui les recouvre. Cela dit c'est possible qu'une parcelle couvre deux mills et que le centroid soit plus proche de l'une que de l'autre... mais 33 fois ??? 
+# # en fait c'est aussi toutes celles à Sulawesi, qui n'ont pas de parcelle qui les recouvre puisque on a sélectionné les parcelles par île.
+# # ok ce qu'il se passe c'est que plusieurs mills ont les mêmes coordonnées (de village centroid probablement)
+# nearest_mill_idx <- st_nearest_feature(parcels_cs, ibs_cs)
+# ibs2 <- ibs_cs[!(ibs_cs$firm_id %in% ibs_cs$firm_id[unique(nearest_mill_idx)]),]
+# ibs3 <- ibs2[ibs2$island_name == island,]
+# st_crs(ibs3)
+# st_within(ibs3, total_ca)
+# 
+# parcels2 <- parcels_cs[parcels_cs$lon > 97 &
+#                          parcels_cs$lon < 98 &
+#                          parcels_cs$lat > 1.4 &
+#                          parcels_cs$lat < 1.5, ]
+# nearest_test <- st_nearest_feature(parcels2, ibs_cs)
+# plot(ibs_cs[262,"geometry"], add = TRUE, col = "green")
+# ibs[ibs$firm_id==2072,]
+# ibs[ibs$firm_id %in% ibs3$firm_id,c("lon","lat")] %>% unique()
 
 
 

@@ -62,14 +62,14 @@ getFixest_nthreads()
 ### Set dictionary for names of variables to display in regression tables 
 setFixest_dict(c(parcel_id = "grid cell",
                  lucpfip_pixelcount_total = "Land use change from primary forest to industrial oil palm plantations", 
-                 lucpfip_pixelcount = "Land use change from primary forest to industrial oil palm plantations", 
-                 lucpfip_rapid_pixelcount = "Rapid land use change from primary forest to industrial oil palm plantations",
-                 lucpfip_slow_pixelcount = "Slow land use change from primary forest to industrial oil palm plantations",
-                 lucpfsmp_pixelcount = "Land use change from primary forest to small or medium-sized oil palm plantations", 
+                 lucpfip_pixelcount = "Industrial plantations", 
+                 lucpfip_rapid_pixelcount = "Rapid conversion to industrial plantations",
+                 lucpfip_slow_pixelcount = "Slow conversion to industrial plantations",
+                 lucpfsmp_pixelcount = "Smallholder plantations", 
                  lucfip_pixelcount = "Land use change from 30% tree cover forest to industrial oil palm plantations", 
                  lucfsmp_pixelcount = "Land use change from 30% tree cover forest to small or medium-sized oil palm plantations", 
-                 lucpfap_pixelcount = "Land use change from primary forest to any types of oil palm plantations", 
-                 lucfap_pixelcount = "Land use change from 30% tree cover forest to any types of oil palm plantations", 
+                 lucpfap_pixelcount = "Overall", 
+                 lucfap_pixelcount = "Overall", 
                  
                  lucfip_ha_30th = "LUCFIP (30 pct. canopy density, ha)",
                  lucfip_ha_60th = "LUCFIP (60 pct. canopy density, ha)",
@@ -77,107 +77,107 @@ setFixest_dict(c(parcel_id = "grid cell",
                  lucfip_pixelcount_60th = "LUCFIP (60 pct. canopy density, pixels)",
                  lucfip_pixelcount_90th = "LUCFIP (90 pct. canopy density, pixels)",
                  # No time dynamics FFB variables 
-                 wa_ffb_price_imp1_3ya = "FFB price signal, 3 year average",
-                 wa_ffb_price_imp1_3ya_lag1 = "FFB price signal, 3 year average",#(lagged)
-                 wa_ffb_price_imp1_4ya = "FFB price signal, 4 year average",
-                 wa_ffb_price_imp1_4ya_lag1 = "FFB price signal, 4 year average",#(lagged)
-                 wa_ffb_price_imp1_5ya = "FFB price signal, 5 year average",
-                 wa_ffb_price_imp1_5ya_lag1 = "FFB price signal, 5 year average",#(lagged)
-                 wa_ffb_price_imp1_yoyg_3ya = "FFB price signal y-o-y growth rate, 3 year average",
-                 wa_ffb_price_imp1_yoyg_3ya_lag1 = "FFB price signal y-o-y growth rate, 3 year average",#(lagged)
-                 wa_ffb_price_imp1_yoyg_4ya = "FFB price signal y-o-y growth rate, 4 year average",
-                 wa_ffb_price_imp1_yoyg_4ya_lag1 = "FFB price signal y-o-y growth rate, 4 year average",#(lagged)
-                 wa_ffb_price_imp1_yoyg_5ya = "FFB price signal y-o-y growth rate, 5 year average",
-                 wa_ffb_price_imp1_yoyg_5ya_lag1 = "FFB price signal y-o-y growth rate, 5 year average",#(lagged)
-                 ln_wa_ffb_price_imp1_3ya = "FFB price signal, 3 year average",
-                 ln_wa_ffb_price_imp1_3ya_lag1 = "FFB price signal, 3 year average",#(lagged)
-                 ln_wa_ffb_price_imp1_4ya = "FFB price signal, 4 year average",
-                 ln_wa_ffb_price_imp1_4ya_lag1 = "FFB price signal, 4 year average",#(lagged)
-                 ln_wa_ffb_price_imp1_5ya = "FFB price signal, 5 year average",
-                 ln_wa_ffb_price_imp1_5ya_lag1 = "FFB price signal, 5 year average",#(lagged)
+                 wa_ffb_price_imp1_3ya = "FFB price, 3-year average",
+                 wa_ffb_price_imp1_3ya_lag1 = "FFB price, 3-year average",#(lagged)
+                 wa_ffb_price_imp1_4ya = "FFB price, 4-year average",
+                 wa_ffb_price_imp1_4ya_lag1 = "FFB price, 4-year average",#(lagged)
+                 wa_ffb_price_imp1_5ya = "FFB price, 5-year average",
+                 wa_ffb_price_imp1_5ya_lag1 = "FFB price, 5-year average",#(lagged)
+                 wa_ffb_price_imp1_yoyg_3ya = "FFB price y-o-y growth rate, 3-year average",
+                 wa_ffb_price_imp1_yoyg_3ya_lag1 = "FFB price y-o-y growth rate, 3-year average",#(lagged)
+                 wa_ffb_price_imp1_yoyg_4ya = "FFB price y-o-y growth rate, 4-year average",
+                 wa_ffb_price_imp1_yoyg_4ya_lag1 = "FFB price y-o-y growth rate, 4-year average",#(lagged)
+                 wa_ffb_price_imp1_yoyg_5ya = "FFB price y-o-y growth rate, 5-year average",
+                 wa_ffb_price_imp1_yoyg_5ya_lag1 = "FFB price y-o-y growth rate, 5-year average",#(lagged)
+                 ln_wa_ffb_price_imp1_3ya = "FFB price, 3-year average",
+                 ln_wa_ffb_price_imp1_3ya_lag1 = "FFB price, 3-year average",#(lagged)
+                 ln_wa_ffb_price_imp1_4ya = "FFB price, 4-year average",
+                 ln_wa_ffb_price_imp1_4ya_lag1 = "FFB price, 4-year average",#(lagged)
+                 ln_wa_ffb_price_imp1_5ya = "FFB price, 5-year average",
+                 ln_wa_ffb_price_imp1_5ya_lag1 = "FFB price, 5-year average",#(lagged)
                  # No time dynamics CPO variables 
-                 wa_cpo_price_imp1_3ya = "CPO price signal, 3 year average",
-                 wa_cpo_price_imp1_3ya_lag1 = "CPO price signal, 3 year average",#(lagged)
-                 wa_cpo_price_imp1_4ya = "CPO price signal, 4 year average",
-                 wa_cpo_price_imp1_4ya_lag1 = "CPO price signal, 4 year average",#(lagged)
-                 wa_cpo_price_imp1_5ya = "CPO price signal, 5 year average",
-                 wa_cpo_price_imp1_5ya_lag1 = "CPO price signal, 5 year average",#(lagged)
-                 wa_cpo_price_imp1_yoyg_3ya = "CPO price signal y-o-y growth rate, 3 year average",
-                 wa_cpo_price_imp1_yoyg_3ya_lag1 = "CPO price signal y-o-y growth rate, 3 year average",#(lagged)
-                 wa_cpo_price_imp1_yoyg_4ya = "CPO price signal y-o-y growth rate, 4 year average",
-                 wa_cpo_price_imp1_yoyg_4ya_lag1 = "CPO price signal y-o-y growth rate, 4 year average",#(lagged)
-                 wa_cpo_price_imp1_yoyg_5ya = "CPO price signal y-o-y growth rate, 5 year average",
-                 wa_cpo_price_imp1_yoyg_5ya_lag1 = "CPO price signal y-o-y growth rate, 5 year average",#(lagged)
-                 ln_wa_cpo_price_imp1_3ya = "CPO price signal, 3 year average",
-                 ln_wa_cpo_price_imp1_3ya_lag1 = "CPO price signal, 3 year average",#(lagged)
-                 ln_wa_cpo_price_imp1_4ya = "CPO price signal, 4 year average",
-                 ln_wa_cpo_price_imp1_4ya_lag1 = "CPO price signal, 4 year average",#(lagged)
-                 ln_wa_cpo_price_imp1_5ya = "CPO price signal, 5 year average",
-                 ln_wa_cpo_price_imp1_5ya_lag1 = "CPO price signal, 5 year average",#(lagged)
+                 wa_cpo_price_imp1_3ya = "CPO price, 3-year average",
+                 wa_cpo_price_imp1_3ya_lag1 = "CPO price, 3-year average",#(lagged)
+                 wa_cpo_price_imp1_4ya = "CPO price, 4-year average",
+                 wa_cpo_price_imp1_4ya_lag1 = "CPO price, 4-year average",#(lagged)
+                 wa_cpo_price_imp1_5ya = "CPO price, 5-year average",
+                 wa_cpo_price_imp1_5ya_lag1 = "CPO price, 5-year average",#(lagged)
+                 wa_cpo_price_imp1_yoyg_3ya = "CPO price y-o-y growth rate, 3-year average",
+                 wa_cpo_price_imp1_yoyg_3ya_lag1 = "CPO price y-o-y growth rate, 3-year average",#(lagged)
+                 wa_cpo_price_imp1_yoyg_4ya = "CPO price y-o-y growth rate, 4-year average",
+                 wa_cpo_price_imp1_yoyg_4ya_lag1 = "CPO price y-o-y growth rate, 4-year average",#(lagged)
+                 wa_cpo_price_imp1_yoyg_5ya = "CPO price y-o-y growth rate, 5-year average",
+                 wa_cpo_price_imp1_yoyg_5ya_lag1 = "CPO price y-o-y growth rate, 5-year average",#(lagged)
+                 ln_wa_cpo_price_imp1_3ya = "CPO price, 3-year average",
+                 ln_wa_cpo_price_imp1_3ya_lag1 = "CPO price, 3-year average",#(lagged)
+                 ln_wa_cpo_price_imp1_4ya = "CPO price, 4-year average",
+                 ln_wa_cpo_price_imp1_4ya_lag1 = "CPO price, 4-year average",#(lagged)
+                 ln_wa_cpo_price_imp1_5ya = "CPO price, 5-year average",
+                 ln_wa_cpo_price_imp1_5ya_lag1 = "CPO price, 5-year average",#(lagged)
                  # SR FFB variables
-                 wa_ffb_price_imp1 = "FFB price signal",
-                 wa_ffb_price_imp1_lag1 = "FFB price signal",#(lagged)
-                 wa_ffb_price_imp1_yoyg = "FFB price signal y-o-y growth rate",
-                 wa_ffb_price_imp1_yoyg_lag1 = "FFB price signal y-o-y growth rate",#(lagged)
-                 wa_ffb_price_imp1_dev_2pya = "FFB price signal deviation from 2 past year average",
-                 wa_ffb_price_imp1_dev_2pya_lag1 = "FFB price signal deviation from 2 past year average",#(lagged)
-                 wa_ffb_price_imp1_dev_3pya = "FFB price signal deviation from 3 past year average",
-                 wa_ffb_price_imp1_dev_3pya_lag1 = "FFB price signal deviation from 3 past year average",#(lagged)
-                 wa_ffb_price_imp1_dev_4pya = "FFB price signal deviation from 4 past year average",
-                 wa_ffb_price_imp1_dev_4pya_lag1 = "FFB price signal deviation from 4 past year average",#(lagged)
-                 ln_wa_ffb_price_imp1 = "FFB price signal",
-                 ln_wa_ffb_price_imp1_lag1 = "FFB price signal",#(lagged)
+                 wa_ffb_price_imp1 = "FFB price",
+                 wa_ffb_price_imp1_lag1 = "FFB price",#(lagged)
+                 wa_ffb_price_imp1_yoyg = "FFB price y-o-y growth rate",
+                 wa_ffb_price_imp1_yoyg_lag1 = "FFB price y-o-y growth rate",#(lagged)
+                 wa_ffb_price_imp1_dev_2pya = "FFB price deviation from 2 past year average",
+                 wa_ffb_price_imp1_dev_2pya_lag1 = "FFB price deviation from 2 past year average",#(lagged)
+                 wa_ffb_price_imp1_dev_3pya = "FFB price deviation from 3 past year average",
+                 wa_ffb_price_imp1_dev_3pya_lag1 = "FFB price deviation from 3 past year average",#(lagged)
+                 wa_ffb_price_imp1_dev_4pya = "FFB price deviation from 4 past year average",
+                 wa_ffb_price_imp1_dev_4pya_lag1 = "FFB price deviation from 4 past year average",#(lagged)
+                 ln_wa_ffb_price_imp1 = "FFB price",
+                 ln_wa_ffb_price_imp1_lag1 = "FFB price",#(lagged)
                  # LR FFB variables
-                 wa_ffb_price_imp1_2pya = "FFB price signal, 2 past year average",
-                 wa_ffb_price_imp1_2pya_lag1 = "FFB price signal, 2 past year average",#(lagged)
-                 wa_ffb_price_imp1_3pya = "FFB price signal, 3 past year average",
-                 wa_ffb_price_imp1_3pya_lag1 = "FFB price signal, 3 past year average",#(lagged)
-                 wa_ffb_price_imp1_4pya = "FFB price signal, 4 past year average",
-                 wa_ffb_price_imp1_4pya_lag1 = "FFB price signal, 4 past year average",#(lagged)
-                 wa_ffb_price_imp1_yoyg_2pya = "FFB price signal y-o-y growth rate, 2 past year average",
-                 wa_ffb_price_imp1_yoyg_2pya_lag1 = "FFB price signal y-o-y growth rate, 2 past year average",#(lagged)                
-                 wa_ffb_price_imp1_yoyg_3pya = "FFB price signal y-o-y growth rate, 3 past year average",
-                 wa_ffb_price_imp1_yoyg_3pya_lag1 = "FFB price signal y-o-y growth rate, 3 past year average",#(lagged)
-                 wa_ffb_price_imp1_yoyg_4pya = "FFB price signal y-o-y growth rate, 4 past year average",
-                 wa_ffb_price_imp1_yoyg_4pya_lag1 = "FFB price signal y-o-y growth rate, 4 past year average",#(lagged)
-                 ln_wa_ffb_price_imp1_2pya = "FFB price signal, 2 past year average",
-                 ln_wa_ffb_price_imp1_2pya_lag1 = "FFB price signal, 2 past year average",#(lagged)
-                 ln_wa_ffb_price_imp1_3pya = "FFB price signal, 3 past year average",
-                 ln_wa_ffb_price_imp1_3pya_lag1 = "FFB price signal, 3 past year average",#(lagged)
-                 ln_wa_ffb_price_imp1_4pya = "FFB price signal, 4 past year average",
-                 ln_wa_ffb_price_imp1_4pya_lag1 = "FFB price signal, 4 past year average",#(lagged)                 
+                 wa_ffb_price_imp1_2pya = "FFB price, 2 past year average",
+                 wa_ffb_price_imp1_2pya_lag1 = "FFB price, 2 past year average",#(lagged)
+                 wa_ffb_price_imp1_3pya = "FFB price, 3 past year average",
+                 wa_ffb_price_imp1_3pya_lag1 = "FFB price, 3 past year average",#(lagged)
+                 wa_ffb_price_imp1_4pya = "FFB price, 4 past year average",
+                 wa_ffb_price_imp1_4pya_lag1 = "FFB price, 4 past year average",#(lagged)
+                 wa_ffb_price_imp1_yoyg_2pya = "FFB price y-o-y growth rate, 2 past year average",
+                 wa_ffb_price_imp1_yoyg_2pya_lag1 = "FFB price y-o-y growth rate, 2 past year average",#(lagged)                
+                 wa_ffb_price_imp1_yoyg_3pya = "FFB price y-o-y growth rate, 3 past year average",
+                 wa_ffb_price_imp1_yoyg_3pya_lag1 = "FFB price y-o-y growth rate, 3 past year average",#(lagged)
+                 wa_ffb_price_imp1_yoyg_4pya = "FFB price y-o-y growth rate, 4 past year average",
+                 wa_ffb_price_imp1_yoyg_4pya_lag1 = "FFB price y-o-y growth rate, 4 past year average",#(lagged)
+                 ln_wa_ffb_price_imp1_2pya = "FFB price, 2 past year average",
+                 ln_wa_ffb_price_imp1_2pya_lag1 = "FFB price, 2 past year average",#(lagged)
+                 ln_wa_ffb_price_imp1_3pya = "FFB price, 3 past year average",
+                 ln_wa_ffb_price_imp1_3pya_lag1 = "FFB price, 3 past year average",#(lagged)
+                 ln_wa_ffb_price_imp1_4pya = "FFB price, 4 past year average",
+                 ln_wa_ffb_price_imp1_4pya_lag1 = "FFB price, 4 past year average",#(lagged)                 
                  # SR CPO variables
-                 wa_cpo_price_imp1 = "CPO price signal",
-                 wa_cpo_price_imp1_lag1 = "CPO price signal",#(lagged)
-                 wa_cpo_price_imp1_yoyg = "CPO price signal y-o-y growth rate",
-                 wa_cpo_price_imp1_yoyg_lag1 = "CPO price signal y-o-y growth rate",#(lagged)
-                 wa_cpo_price_imp1_dev_2pya = "CPO price signal deviation from 2 past year average",
-                 wa_cpo_price_imp1_dev_2pya_lag1 = "CPO price signal deviation from 2 past year average",#(lagged) 
-                 wa_cpo_price_imp1_dev_3pya = "CPO price signal deviation from 3 past year average",
-                 wa_cpo_price_imp1_dev_3pya_lag1 = "CPO price signal deviation from 3 past year average",#(lagged) 
-                 wa_cpo_price_imp1_dev_4pya = "CPO price signal deviation from 4 past year average",
-                 wa_cpo_price_imp1_dev_4pya_lag1 = "CPO price signal deviation from 4 past year average",#(lagged) 
-                 ln_wa_cpo_price_imp1 = "CPO price signal",
-                 ln_wa_cpo_price_imp1_lag1 = "CPO price signal",#(lagged)
+                 wa_cpo_price_imp1 = "CPO price",
+                 wa_cpo_price_imp1_lag1 = "CPO price",#(lagged)
+                 wa_cpo_price_imp1_yoyg = "CPO price y-o-y growth rate",
+                 wa_cpo_price_imp1_yoyg_lag1 = "CPO price y-o-y growth rate",#(lagged)
+                 wa_cpo_price_imp1_dev_2pya = "CPO price deviation from 2 past year average",
+                 wa_cpo_price_imp1_dev_2pya_lag1 = "CPO price deviation from 2 past year average",#(lagged) 
+                 wa_cpo_price_imp1_dev_3pya = "CPO price deviation from 3 past year average",
+                 wa_cpo_price_imp1_dev_3pya_lag1 = "CPO price deviation from 3 past year average",#(lagged) 
+                 wa_cpo_price_imp1_dev_4pya = "CPO price deviation from 4 past year average",
+                 wa_cpo_price_imp1_dev_4pya_lag1 = "CPO price deviation from 4 past year average",#(lagged) 
+                 ln_wa_cpo_price_imp1 = "CPO price",
+                 ln_wa_cpo_price_imp1_lag1 = "CPO price",#(lagged)
                  # LR CPO variables
-                 wa_cpo_price_imp1_2pya = "CPO price signal, 2 past year average",
-                 wa_cpo_price_imp1_2pya_lag1 = "CPO price signal, 2 past year average",#(lagged)
-                 wa_cpo_price_imp1_yoyg_2pya = "CPO price signal y-o-y growth rate, 2 past year average",
-                 wa_cpo_price_imp1_yoyg_2pya_lag1 = "CPO price signal y-o-y growth rate, 2 past year average",#(lagged)
-                 wa_cpo_price_imp1_3pya = "CPO price signal, 3 past year average",
-                 wa_cpo_price_imp1_3pya_lag1 = "CPO price signal, 3 past year average",#(lagged)
-                 wa_cpo_price_imp1_yoyg_3pya = "CPO price signal y-o-y growth rate, 3 past year average",
-                 wa_cpo_price_imp1_yoyg_3pya_lag1 = "CPO price signal y-o-y growth rate, 3 past year average",#(lagged)
-                 wa_cpo_price_imp1_4pya = "CPO price signal, 4 past year average",
-                 wa_cpo_price_imp1_4pya_lag1 = "CPO price signal, 4 past year average",#(lagged)
-                 wa_cpo_price_imp1_yoyg_4pya = "CPO price signal y-o-y growth rate, 4 past year average",
-                 wa_cpo_price_imp1_yoyg_4pya_lag1 = "CPO price signal y-o-y growth rate, 4 past year average",#(lagged)
-                 ln_wa_cpo_price_imp1_2pya = "CPO price signal, 2 past year average",
-                 ln_wa_cpo_price_imp1_2pya_lag1 = "CPO price signal, 2 past year average",#(lagged)
-                 ln_wa_cpo_price_imp1_3pya = "CPO price signal, 3 past year average",
-                 ln_wa_cpo_price_imp1_3pya_lag1 = "CPO price signal, 3 past year average",#(lagged)
-                 ln_wa_cpo_price_imp1_4pya = "CPO price signal, 4 past year average",
-                 ln_wa_cpo_price_imp1_4pya_lag1 = "CPO price signal, 4 past year average",#(lagged)
+                 wa_cpo_price_imp1_2pya = "CPO price, 2 past year average",
+                 wa_cpo_price_imp1_2pya_lag1 = "CPO price, 2 past year average",#(lagged)
+                 wa_cpo_price_imp1_yoyg_2pya = "CPO price y-o-y growth rate, 2 past year average",
+                 wa_cpo_price_imp1_yoyg_2pya_lag1 = "CPO price y-o-y growth rate, 2 past year average",#(lagged)
+                 wa_cpo_price_imp1_3pya = "CPO price, 3 past year average",
+                 wa_cpo_price_imp1_3pya_lag1 = "CPO price, 3 past year average",#(lagged)
+                 wa_cpo_price_imp1_yoyg_3pya = "CPO price y-o-y growth rate, 3 past year average",
+                 wa_cpo_price_imp1_yoyg_3pya_lag1 = "CPO price y-o-y growth rate, 3 past year average",#(lagged)
+                 wa_cpo_price_imp1_4pya = "CPO price, 4 past year average",
+                 wa_cpo_price_imp1_4pya_lag1 = "CPO price, 4 past year average",#(lagged)
+                 wa_cpo_price_imp1_yoyg_4pya = "CPO price y-o-y growth rate, 4 past year average",
+                 wa_cpo_price_imp1_yoyg_4pya_lag1 = "CPO price y-o-y growth rate, 4 past year average",#(lagged)
+                 ln_wa_cpo_price_imp1_2pya = "CPO price, 2 past year average",
+                 ln_wa_cpo_price_imp1_2pya_lag1 = "CPO price, 2 past year average",#(lagged)
+                 ln_wa_cpo_price_imp1_3pya = "CPO price, 3 past year average",
+                 ln_wa_cpo_price_imp1_3pya_lag1 = "CPO price, 3 past year average",#(lagged)
+                 ln_wa_cpo_price_imp1_4pya = "CPO price, 4 past year average",
+                 ln_wa_cpo_price_imp1_4pya_lag1 = "CPO price, 4 past year average",#(lagged)
                  ## interactions 
                  n_reachable_uml_lag1Xln_wa_ffb_price_imp1_4ya_lag1 = "# reachable mills X FFB price",
                  n_reachable_uml_lag1Xln_wa_cpo_price_imp1_4ya_lag1 = "# reachable mills X CPO price",
@@ -200,14 +200,14 @@ setFixest_dict(c(parcel_id = "grid cell",
                  lucpfsmp_pixelcount_total_4pya = "LUCPFSMP (pixels, 4 past year average)",
                  n_reachable_uml = "# reachable UML mills",
                  n_reachable_uml_lag1 = "# reachable UML mills",#(lagged)
-                 wa_pct_own_cent_gov_imp = "Local government mill ownership (pct.)",
-                 wa_pct_own_cent_gov_imp_lag1 = "Local government mill ownership (pct., lagged)",
-                 wa_pct_own_loc_gov_imp = "Local government mill ownership (pct.)",
-                 wa_pct_own_loc_gov_imp_lag1 = "Local government mill ownership (pct., lagged)",
-                 wa_pct_own_nat_priv_imp = "Domestic private mill ownership (pct.)",
-                 wa_pct_own_nat_priv_imp_lag1 = "Domestic private mill ownership (pct., lagged)",
-                 wa_pct_own_for_imp = "Foreign mill ownership (pct.)",
-                 wa_pct_own_for_imp_lag1 = "Foreign mill ownership (pct., lagged)", 
+                 wa_pct_own_cent_gov_imp = "Local government mill ownership",
+                 wa_pct_own_cent_gov_imp_lag1 = "Local government mill ownership",
+                 wa_pct_own_loc_gov_imp = "Local government mill ownership",
+                 wa_pct_own_loc_gov_imp_lag1 = "Local government mill ownership",
+                 wa_pct_own_nat_priv_imp = "Domestic private mill ownership",
+                 wa_pct_own_nat_priv_imp_lag1 = "Domestic private mill ownership",
+                 wa_pct_own_for_imp = "Foreign mill ownership",
+                 wa_pct_own_for_imp_lag1 = "Foreign mill ownership", 
                  wa_prex_cpo_imp1 = "Percentage CPO exported",
                  wa_prex_cpo_imp1_lag1 = "Percentage CPO exported",#(lagged)
                  wa_prex_cpo_imp2 = "Percentage CPO exported",
@@ -238,15 +238,6 @@ pixel_area_ha <- (27.8*27.6)/(1e4)
 ### READ ALL POSSIBLE DATASETS HERE
 # They are outputs of merge_lhs_rhs_parcels.R
 
-d_30 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
-                              parcel_size/1000,"km_",
-                              "30CR.rds")))
-# Split them into islands of interest
-d_30_suma <- d_30[d_30$island == "Sumatra",]
-d_30_kali <- d_30[d_30$island == "Kalimantan",]
-#d_30_papu <- d_30[d_30$island == "Papua",]
-
-rm(d_30)
 
 d_50 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
                                  parcel_size/1000,"km_",
@@ -256,11 +247,40 @@ d_50_suma <- d_50[d_50$island == "Sumatra",]
 d_50_kali <- d_50[d_50$island == "Kalimantan",]
 #d_50_papu <- d_50[d_50$island == "Papua",]
 
-rm(d_50)
+
+d_30 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
+                                 parcel_size/1000,"km_",
+                                 "30CR.rds")))
+d_30 <- d_30[,names(d_50)]
+# Split them into islands of interest
+d_30_suma <- d_30[d_30$island == "Sumatra",]
+d_30_kali <- d_30[d_30$island == "Kalimantan",]
+#d_30_papu <- d_30[d_30$island == "Papua",]
+
+rm(d_30, d_50)
 
 # d_30_all <- d_30[d_30$island %in% c("Sumatra", "Kalimantan", "Papua"),]
 # d_50_all <- d_50[d_50$island %in% c("Sumatra", "Kalimantan", "Papua"),]
-
+# 
+# d_30_CA2 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
+#                                  parcel_size/1000,"km_",
+#                                  "30CR_CA2.rds")))
+# # Split them into islands of interest
+# d_30_CA2_suma <- d_30_CA2[d_30_CA2$island == "Sumatra",]
+# d_30_CA2_kali <- d_30_CA2[d_30_CA2$island == "Kalimantan",]
+# #d_30_papu <- d_30[d_30$island == "Papua",]
+# 
+# rm(d_30_CA2)
+# 
+# d_50_CA2 <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
+#                                  parcel_size/1000,"km_",
+#                                  "50CR_CA2.rds")))
+# # Split them into islands of interest
+# d_50_CA2_suma <- d_50_CA2[d_50_CA2$island == "Sumatra",]
+# d_50_CA2_kali <- d_50_CA2[d_50_CA2$island == "Kalimantan",]
+# #d_50_papu <- d_50[d_50$island == "Papua",]
+# 
+# rm(d_50_CA2)
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
@@ -268,29 +288,33 @@ rm(d_50)
 
 # Prefered specifications are passed as default arguments. 
 # Currently, the returned object is a fixest object, of *ONE* regression.  
-# catchment = "CR"
-# outcome_variable = "lucpfip_pixelcount"
-# island = "Sumatra"
-# alt_cr = FALSE
-# commo = c("cpo")
-# x_pya = 3
-# dynamics = FALSE
-# log_prices = TRUE
-# yoyg = FALSE
-# short_run = "full"
-# imp = 1
-# distribution = "quasipoisson"
-# fe = "parcel_id + district_year"
-# remaining_forest = FALSE
-# offset = FALSE
-# lag_or_not = "_lag1"
-# controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")#"wa_pct_own_loc_gov_imp",
-# interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
-# interacted = "regressors"
-# spatial_control = FALSE
-# pya_ov = FALSE
-# illegal = "all"
-# weights = FALSE
+# d <- d_30_kali
+catchment = "CR"
+outcome_variable = "lucpfip_pixelcount"
+island = "Sumatra"
+alt_cr = FALSE
+commo = c("cpo")
+x_pya = 3
+dynamics = FALSE
+log_prices = TRUE
+yoyg = FALSE
+only_sr = FALSE
+short_run = "full"
+imp = 1
+distribution = "quasipoisson"
+fe = "reachable + district_year"#
+remaining_forest = FALSE
+offset = FALSE
+lag_or_not = "_lag1"
+controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
+baseline_forest_trend = FALSE
+interaction_terms = NULL #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
+interact_regressors = TRUE
+interacted = "regressors"
+spatial_control = FALSE
+pya_ov = FALSE
+illegal = "all"# "no_ill2"
+weights = FALSE
 
 rm(catchment,outcome_variable,island,alt_cr,commo,x_pya,dynamics,log_prices,yoyg,short_run,imp,distribution,fe,remaining_forest,offset,lag_or_not,controls,interaction_terms ,interacted,spatial_control,pya_ov,illegal)
 
@@ -302,17 +326,20 @@ make_base_reg <- function(island,
                             x_pya = 3, # either 2, 3, or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
                             dynamics = FALSE, # Logical, should the total price signal(s) be split into current year and x_pya past year average. 
                             yoyg = FALSE, # logical, should the price variables be computed in year-on-year growth rate instead of level.
+                            only_sr = FALSE,
                             log_prices = TRUE, # Logical, should the price variables be included as their logarithms instead of levels. No effect if yoyg is TRUE.    
                             short_run = "full", # either "full", or "dev". Used only if dynamics = TRUE and yoyg = FALSE. Should the short run (SR) measure of regressors be the price signal as such ("full") or be the deviation to past year average price signal ("dev"). 
                             imp = 1, # either 1 or 2. 1 selects the data cleaned with the stronger imputations. 
-                            distribution = "quasipoisson", # either "poisson", "quasipoisson", or "negbin"
-                            fe = "parcel_id + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
+                            distribution = "poisson", # either "poisson", "quasipoisson", or "negbin"
+                            fe = "reachable + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
                             offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                             lag_or_not = "_lag1", # either "_lag1", or  "", should the 
                             controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # , "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
                             remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
+                            baseline_forest_trend = FALSE,
                             interaction_terms = NULL, # c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
                             interacted = "regressors",
+                            interact_regressors = TRUE, # if there are two regressors (e.g. ffb and cpo), should their interaction be included in the model? 
                             spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
                             pya_ov = FALSE, # logical, whether the pya (defined by x_pya) of the outcome_variable should be added in controls
                             illegal = "all", # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
@@ -434,6 +461,26 @@ make_base_reg <- function(island,
     }
   }
   
+  if(only_sr){
+    if(length(commo) == 1){
+      if(yoyg == TRUE){
+        regressors <- paste0("wa_",commo,"_price_imp",imp,"_yoyg",lag_or_not)
+      }else{
+        regressors <- paste0("wa_",commo,"_price_imp",imp,lag_or_not)
+      }
+    }
+    # if we don't omit a commodity. 
+    if(length(commo) == 2){
+      if(yoyg == TRUE){
+        regressors <- c(paste0("wa_",commo[1],"_price_imp",imp,"_yoyg",lag_or_not),
+                        paste0("wa_",commo[2],"_price_imp",imp,"_yoyg",lag_or_not))
+        
+      }else{
+        regressors <- c(paste0("wa_",commo[1],"_price_imp",imp,lag_or_not),
+                        paste0("wa_",commo[2],"_price_imp",imp,lag_or_not)) 
+      }
+    }
+  }
   
   # Logarithms
   if(log_prices){
@@ -466,6 +513,21 @@ make_base_reg <- function(island,
     offset <- FALSE
   }
   
+  if(baseline_forest_trend){
+    if(grepl("lucpf", outcome_variable)){
+      d[,"baseline_forest_trend"] <- d$pfc2000_total_pixelcount*(d$year-2000)
+      controls <- c(controls, "baseline_forest_trend")
+    }
+    if(grepl("lucf", outcome_variable)){
+      d[,"baseline_forest_trend"] <- d$fc2000_30th_pixelcount*(d$year-2000)
+      controls <- c(controls, "baseline_forest_trend")
+    }
+  }
+  
+  # ### WEIGHTS
+  # if(weights){
+  #   d$sample_coverage <- d$n_reachable_ibs/d$n_reachable_uml
+  # }
   
   ### SELECT DATA FOR REGRESSION
   
@@ -473,7 +535,7 @@ make_base_reg <- function(island,
   # important to do that after outcome_variable, regressors controls etc. have been (re)defined. 
   # (interactions do not need to be in there as they are fully built from the used_vars)
   used_vars <- c(outcome_variable, regressors, controls,
-                 "parcel_id", "year", "lat", "lon", "district", "province", "island", "district_year", "province_year")
+                 "parcel_id", "reachable", "nearest_firm_id", "year", "lat", "lon", "district", "province", "island", "district_year", "province_year")
   #"n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
   #"remain_f30th_pixelcount","remain_pf_pixelcount"
   
@@ -583,8 +645,9 @@ make_base_reg <- function(island,
   # - sometimes there are a couple obs. that have 0 ibs reachable despite being in the sample 
   # probably due to some small distance calculation difference between this variable computation and wa_at_parcels.R script. 
   # just remove them if any, so that there is no bug. 
-  if(weights == TRUE){
-    d_nona <- d_nona[d_nona$sample_coverage_lag1!=0,]
+  if(weights){
+    d_nona <- d_nona[d_nona$sample_coverage!=0,]
+    d_nona[d_nona$sample_coverage>1,"sample_coverage"] <- 1
   }
   
   # - and those with not only zero outcome, i.e. that feglm would remove, see ?fixest::obs2remove
@@ -600,7 +663,7 @@ make_base_reg <- function(island,
   # make the interaction variables in the data
   
   ## INTERACTIONS
-  interaction_var <- c()
+  interaction_vars <- c()
   
   # here we produce the names of the actual interaction variables
   if(length(interaction_terms)>0){
@@ -612,7 +675,7 @@ make_base_reg <- function(island,
   }else{interacted <- NULL}
     
   # add the interaction between the regressors 
-  if(length(regressors) == 2){
+  if(length(regressors) == 2 & interact_regressors){
     interaction_vars <- c(interaction_vars, paste0(regressors[1],"X",regressors[2]))
   }  
   
@@ -628,8 +691,9 @@ make_base_reg <- function(island,
   }
   
   # and add the interaction between the regressors 
-  if(length(regressors) == 2){
+  if(length(regressors) == 2 & interact_regressors){
     d_clean[,paste0(regressors[1],"X",regressors[2])] <- d_clean[,regressors[1]]*d_clean[,regressors[2]]
+    #d_clean[,paste0(regressors[2],"X",regressors[1])] <- d_clean[,regressors[2]]*d_clean[,regressors[1]]
   }
   
   
@@ -644,7 +708,7 @@ make_base_reg <- function(island,
                                 " | ",
                                 fe))
   
-  if(length(interaction_terms)>0){
+  if(length(interaction_terms)>0 | (interact_regressors & length(regressors) == 2)){
     fe_model <- as.formula(paste0(outcome_variable,
                                   " ~ ",
                                   paste0(regressors, collapse = "+"),
@@ -661,7 +725,7 @@ make_base_reg <- function(island,
   if(offset == TRUE){
     if(distribution != "negbin"){ # i.e. if it's poisson or quasipoisson or gaussian
       if(weights == TRUE){
-        var_weights <- d_clean$sample_coverage_lag1/100 
+        var_weights <- d_clean$sample_coverage
         reg_res <- fixest::feglm(fe_model,
                                  data = d_clean, 
                                  family = distribution,
@@ -689,7 +753,7 @@ make_base_reg <- function(island,
   if(offset == FALSE){
     if(distribution != "negbin"){ # i.e. if it's poisson or quasipoisson or gaussian
       if(weights == TRUE){
-        var_weights <- d_clean$sample_coverage_lag1/100 
+        var_weights <- d_clean$sample_coverage
         reg_res <- fixest::feglm(fe_model,
                                  data = d_clean, 
                                  family = distribution, 
@@ -699,17 +763,17 @@ make_base_reg <- function(island,
                                  weights = var_weights)
         
       }else{
-        reg_res <- fixest::feglm(fe_model,
+        reg_res <- fixest::femlm(fe_model,
                                  data = d_clean, 
                                  family = distribution, 
-                                 glm.iter = 200,
-                                 fixef.iter = 100000,
+                                 #glm.iter = 200,
+                                 #fixef.iter = 100000,
                                  notes = TRUE)
       }
     }else{ # no weights allowed in negative binomial
       reg_res <- fixest::fenegbin(fe_model,
                                   data = d_clean,
-                                  fixef.iter = 100000,
+                                  #fixef.iter = 100000,
                                   notes = TRUE)
     }
   }
@@ -726,8 +790,8 @@ make_base_reg <- function(island,
 # helper function that transforms the list of results into a data frame of average partial effects (APEs) and their standard errors (SEs), 
 # for the K first regressors in the models fitted by make_base_reg 
 # If there are interactions in the models, the APEs (and SEs) of the interaction effects are computed (may not work if K > 1 then)
-#res_data <- res_data_list_main[[1]]
-make_APEs <- function(res_data, K=1, controls_pe = FALSE, SE = "cluster", rel_price_change = 0.01, abs_price_change = -1){
+#res_data <- res_data_list_prdyn[[1]]
+make_APEs <- function(res_data, K=1, controls_pe = FALSE, SE = "cluster", rel_price_change = 0.01, abs_price_change = 1){
   
   # store APEs and their deltaMethod statistics in this list 
   dM_ape_roi_list <- list()
@@ -799,7 +863,7 @@ make_APEs <- function(res_data, K=1, controls_pe = FALSE, SE = "cluster", rel_pr
                               g. = ape_fml_roi, 
                               rhs = 0)
     
-    row.names(dM_ape_roi) <- coeff_names[k]
+    row.names(dM_ape_roi) <- NULL
     dM_ape_roi <- as.matrix(dM_ape_roi)
     dM_ape_roi <- dM_ape_roi[,c(1,2,7)]
     
@@ -841,7 +905,7 @@ make_APEs <- function(res_data, K=1, controls_pe = FALSE, SE = "cluster", rel_pr
                           g. = ape_fml_it, 
                           rhs = 0)
         
-        row.names(dM) <- interaction_terms[i]
+        row.names(dM) <- NULL
         dM <- as.matrix(dM)
         dM <- dM[,c(1,2,7)]
         
@@ -895,7 +959,7 @@ make_APEs <- function(res_data, K=1, controls_pe = FALSE, SE = "cluster", rel_pr
                       g. = ape_fml_it, 
                       rhs = 0)
     
-    row.names(dM) <- interaction_terms[i]
+    row.names(dM) <- NULL
     dM <- as.matrix(dM)
     dM <- dM[,c(1,2,7)]
     dM_ape_roi_list[[length(dM_ape_roi_list) + 1]] <- dM
@@ -923,6 +987,87 @@ make_APEs <- function(res_data, K=1, controls_pe = FALSE, SE = "cluster", rel_pr
 }
 
 
+
+#### ANY TABLE, code changing all the time ####
+res_data_list_any <- list()
+elm <- 1
+
+size_list <- list("i","sm")
+isl_list <- list("both")#
+for(SIZE in size_list){
+  for(ISL in isl_list){
+    res_data_list_any[[elm]] <- make_base_reg(island = ISL,
+                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                               #interaction_terms =  c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"),
+                                               #baseline_forest_trend = FALSE,
+                                               #catchment = "CA",
+                                               offset = FALSE)
+    names(res_data_list_any)[elm] <- paste0(ISL,"_",SIZE)
+    elm <- elm + 1
+  }
+}
+# And overall
+res_data_list_any[[elm]] <- make_base_reg(island = "both",
+                                           outcome_variable = paste0("lucpfap_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                           #interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"),
+                                           #baseline_forest_trend = FALSE,
+                                           #catchment = "CA",
+                                           offset = FALSE)
+names(res_data_list_any)[elm] <- paste0("both_a")
+elm <- elm + 1
+
+res_list_any <- lapply(res_data_list_any, FUN = function(x){x[[1]]})
+
+# preview in R
+etable(res_list_any,
+       se = "cluster",
+       #coefstat = "confint",
+       subtitles = names(res_data_list_any))
+rm(ape_mat)
+ape_mat <- bind_cols(lapply(res_data_list_any, FUN = make_APEs)) %>% as.matrix()
+# prepare ape_mat for kable
+row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), nrow(ape_mat)/3), "Observations", "Treatment") # treatment is just for me to recall where the figures come from
+ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] <- ape_mat[row.names(ape_mat)%in%c("Estimate","SE")] %>% round(digits = 5)
+ape_mat[row.names(ape_mat)=="p-value"] <- ape_mat[row.names(ape_mat)=="p-value"] %>% formatC(digits = 2, format = "g")
+ape_mat["Observations",] <- ape_mat["Observations",] %>% formatC(digits = 0, format = "f")
+ape_mat
+colnames(ape_mat) <- NULL
+ape_mat <- ape_mat[row.names(ape_mat) != "Treatment",]
+# do not run the line below and un-comment the pack_rows calls in kable below to display all interactions together with the main elasticity. 
+ape_mat <- ape_mat[c(1,2,3,nrow(ape_mat)),]
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "r",
+      caption = "Price elasticities of deforestation") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Industrial plantations" = 1,
+                     "Smallholder plantations" = 1, 
+                     "Overall" = 1
+                    ),
+                    align = "c",
+                    strikeout = F) %>%
+  pack_rows("CPO 4-year avg. price", 1, 3, 
+            italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with dom-\n-estic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
+  #           italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with \n foreign ownership", 7, 9,
+  #           italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with \n # of reachable mills", 10, 12,
+  #           italic = TRUE, bold = TRUE)  %>%
+  # pack_rows("Interaction with \n pct. CPO exported", 13, 15,
+  #           italic = TRUE, bold = TRUE)  %>%
+  pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
+  column_spec(column = 1,
+              width = "10em",
+              latex_valign = "b") %>% 
+  column_spec(column = c(2:(ncol(ape_mat))),
+              width = "5em",
+              latex_valign = "b")
+
+rm(ape_mat)
+
+
 #### MAIN - RUN REGRESSIONS #### 
 
 # infrastructure to store results
@@ -930,11 +1075,15 @@ res_data_list_main <- list()
 elm <- 1
 
 size_list <- list("i","sm")
-isl_list <- list("Sumatra", "Kalimantan", "both")
+isl_list <- list("Sumatra", "Kalimantan", "both")#
 for(SIZE in size_list){
   for(ISL in isl_list){
     res_data_list_main[[elm]] <- make_base_reg(island = ISL,
                                                outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                               #interaction_terms =  c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"),
+                                               #baseline_forest_trend = FALSE,
+                                               distribution = "poisson",
+                                               #catchment = "CA",
                                                offset = FALSE)
     names(res_data_list_main)[elm] <- paste0(ISL,"_",SIZE)
     elm <- elm + 1
@@ -943,6 +1092,10 @@ for(SIZE in size_list){
 # And overall
 res_data_list_main[[elm]] <- make_base_reg(island = "both",
                                            outcome_variable = paste0("lucpfap_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                           #interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"),
+                                           #baseline_forest_trend = FALSE,
+                                           distribution = "poisson",
+                                           #catchment = "CA",
                                            offset = FALSE)
 names(res_data_list_main)[elm] <- paste0("both_a")
 elm <- elm + 1
@@ -953,12 +1106,13 @@ res_list_main <- lapply(res_data_list_main, FUN = function(x){x[[1]]})
 etable(res_list_main,
        se = "cluster",
        #coefstat = "confint",
+       convergence = TRUE,
        subtitles = names(res_data_list_main))
 
 ### LATEX
 
 #table_title_dyn <- paste0("LUCFP semi-elasticities to medium-run price signals") 
-table_title_dyn <- paste0("LUCFP elasticities to medium-run price signals and all possible controls") 
+table_title_dyn <- paste0("Price elasticities of deforestation") 
 #table_title_dyn <- paste0("LUCFP semi-elasticities to medium-run y-o-y growth rates of price signals") 
 
 etable(res_list_main, 
@@ -968,14 +1122,14 @@ etable(res_list_main,
        # file = table_file, 
        # replace = TRUE,
        title = table_title_dyn,
-       subtitles = c(" ", "Sumatra", "Kalimantan", "both","Sumatra", "Kalimantan", "both"), # first empty subtitle is for the overall (islands and sizes) column 
+       subtitles = c("Sumatra", "Kalimantan", "both","Sumatra", "Kalimantan", "both", " "), # first empty subtitle is for the overall (islands and sizes) column 
        #family = TRUE,
        #drop = c("own", "reachable"),
        #coefstat = "confint",
        sdBelow = TRUE,
        yesNo = "X",
        fitstat = c("sq.cor"),
-       convergence = TRUE,
+       #convergence = TRUE,
        dict = TRUE, 
        style=list(model = "title:"),
        powerBelow = -7)
@@ -1023,7 +1177,7 @@ kable(ape_mat, booktabs = T, align = "r",
                   ),
                   align = "c",
                   strikeout = F) %>%
-  pack_rows("Elasticity to CPO \n (4-year avg.) price", 1, 3, 
+  pack_rows("Price elasticity", 1, 3, 
             italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with dom-\n-estic private ownership", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
   #           italic = TRUE, bold = TRUE)  %>%
@@ -1035,7 +1189,7 @@ kable(ape_mat, booktabs = T, align = "r",
   #           italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
-              width = "10em",
+              width = "8em",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
               width = "5em",
@@ -1072,6 +1226,7 @@ res_data_list_prdyn[[elm]] <- make_base_reg(island = "both",
                                            offset = FALSE)
 names(res_data_list_prdyn)[elm] <- paste0("both_a")
 elm <- elm + 1
+
 res_list_prdyn <- lapply(res_data_list_prdyn, FUN = function(x){x[[1]]})
 
 # preview in R
@@ -1454,7 +1609,7 @@ for(SIZE in size_list){
   }
 }
 # elm should be 7 here
-elm <- 7
+elm
 # And overall
 res_data_list_alt[[elm]] <- make_base_reg(island = "both",
                                            outcome_variable = paste0("lucfap_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
@@ -1521,7 +1676,7 @@ kable(ape_mat, booktabs = T, align = "r",
   #           italic = TRUE, bold = TRUE)  %>%
   pack_rows(start_row =  nrow(ape_mat), end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = TRUE) %>% 
   column_spec(column = 1,
-              width = "10em",
+              width = "7em",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
               width = "5em",
@@ -1537,6 +1692,10 @@ master_list <- list(res_data_list_main,
                     res_data_list_dyn, 
                     res_data_list_alt)
 saveRDS(master_list, file.path(paste0("temp_data/reg_results/six_res_data_lists.rds")))
+
+
+
+
 #### COMPARE APEs - FOREST DEF., LEGAL, LUCFIP DYNAMICS, COMMODITY, PRICE DYNAMICS ####
 
 ## infrastructure to store results
@@ -1605,7 +1764,7 @@ make_APEs_1regr <- function(res_data, SE = "cluster", rel_price_change = 0.01, a
                             rhs = 0)
 
   
-  row.names(dM_ape_roi) <- coeff_names[1]
+  row.names(dM_ape_roi) <- NULL
   dM_ape_roi <- as.matrix(dM_ape_roi)
   dM_ape_roi <- dM_ape_roi[,c(1,2,7)]
   
@@ -1777,62 +1936,62 @@ for(SIZE in size_list){
 
 
 ### COMPARE APEs WITHIN GROUPS
-
-# This function, as of now, is written to compare the first and the second coefficients of a fixest estimation result
-compare_coeff_within_groups <- function(res_data, m0 = 0, alternative = "two.sided") { 
-  reg_res <- res_data[[1]]
-  coeff1 <- reg_res$coefficients[1] 
-  coeff2 <- reg_res$coefficients[2]
-  # # n1 <- ape_mat["Observations","Sumatra industrial"]
-  # # n2 <- ape_mat["Observations","Sumatra smallholders"]
-  sigma1 <- vcov(reg_res, se = "cluster")[names(coeff1),names(coeff1)]
-  sigma2 <- vcov(reg_res, se = "cluster")[names(coeff2),names(coeff2)]
-  cov12 <- vcov(reg_res, se = "cluster")[names(coeff1),names(coeff2)]
-  
-  statistic <- (coeff1 - coeff2 - m0) / sqrt(sigma1 + sigma2 - 2*cov12)
-  
-  pval <- if (alternative == "two.sided") { 
-    2 * pnorm(abs(statistic), lower.tail = FALSE) 
-  } else if (alternative == "less") { 
-    pnorm(statistic, lower.tail = TRUE) 
-  } else { 
-    pnorm(statistic, lower.tail = FALSE) 
-  } 
-  # LCL <- (M1 - M2 - S * qnorm(1 - alpha / 2)) UCL <- (M1 - M2 + S * qnorm(1 - alpha / 2)) value <- list(mean1 = M1, mean2 = M2, m0 = m0, sigma1 = sigma1, sigma2 = sigma2, S = S, statistic = statistic, p.value = p, LCL = LCL, UCL = UCL, alternative = alternative) 
-  # print(sprintf("P-value = %g",p)) # print(sprintf("Lower %.2f%% Confidence Limit = %g", 
-  # alpha, LCL)) # print(sprintf("Upper %.2f%% Confidence Limit = %g", # alpha, UCL)) return(value) } test <- t.test_knownvar(dat1$sample1, dat1$sample2, V1 = 1, V2 = 1 )
-  return(pval)
-}
-
-## Adding estimations with FFB *and* CPO prices  
-for(SIZE in size_list){
-  for(ISL in isl_list){
-    # make the regression
-    res_data <- make_base_reg(island = ISL,
-                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-                              commo = c("ffb","cpo"), #
-                              offset = FALSE)
-    # make the APE
-    comp_ape_mat["FFB = CPO",paste0(ISL,"_",SIZE)] <- compare_coeff_within_groups(res_data = res_data)
-    res_data_list[[i]] <- res_data[[1]]
-    i <- i + 1
-    rm(res_data)
-  }
-}
-
-## Adding estimations with short-run *and* medium-run CPO prices  
-for(SIZE in size_list){
-  for(ISL in isl_list){
-    # make the regression
-    res_data <- make_base_reg(island = ISL,
-                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-                              dynamics = TRUE,
-                              offset = FALSE)
-    # make the APE
-    comp_ape_mat["short-run = medium-run",paste0(ISL,"_",SIZE)] <- compare_coeff_within_groups(res_data = res_data)
-    rm(res_data)
-  }
-}
+# 
+# # This function, as of now, is written to compare the first and the second coefficients of a fixest estimation result
+# compare_coeff_within_groups <- function(res_data, m0 = 0, alternative = "two.sided") { 
+#   reg_res <- res_data[[1]]
+#   coeff1 <- reg_res$coefficients[1] 
+#   coeff2 <- reg_res$coefficients[2]
+#   # # n1 <- ape_mat["Observations","Sumatra industrial"]
+#   # # n2 <- ape_mat["Observations","Sumatra smallholders"]
+#   sigma1 <- vcov(reg_res, se = "cluster")[names(coeff1),names(coeff1)]
+#   sigma2 <- vcov(reg_res, se = "cluster")[names(coeff2),names(coeff2)]
+#   cov12 <- vcov(reg_res, se = "cluster")[names(coeff1),names(coeff2)]
+#   
+#   statistic <- (coeff1 - coeff2 - m0) / sqrt(sigma1 + sigma2 - 2*cov12)
+#   
+#   pval <- if (alternative == "two.sided") { 
+#     2 * pnorm(abs(statistic), lower.tail = FALSE) 
+#   } else if (alternative == "less") { 
+#     pnorm(statistic, lower.tail = TRUE) 
+#   } else { 
+#     pnorm(statistic, lower.tail = FALSE) 
+#   } 
+#   # LCL <- (M1 - M2 - S * qnorm(1 - alpha / 2)) UCL <- (M1 - M2 + S * qnorm(1 - alpha / 2)) value <- list(mean1 = M1, mean2 = M2, m0 = m0, sigma1 = sigma1, sigma2 = sigma2, S = S, statistic = statistic, p.value = p, LCL = LCL, UCL = UCL, alternative = alternative) 
+#   # print(sprintf("P-value = %g",p)) # print(sprintf("Lower %.2f%% Confidence Limit = %g", 
+#   # alpha, LCL)) # print(sprintf("Upper %.2f%% Confidence Limit = %g", # alpha, UCL)) return(value) } test <- t.test_knownvar(dat1$sample1, dat1$sample2, V1 = 1, V2 = 1 )
+#   return(pval)
+# }
+# 
+# ## Adding estimations with FFB *and* CPO prices  
+# for(SIZE in size_list){
+#   for(ISL in isl_list){
+#     # make the regression
+#     res_data <- make_base_reg(island = ISL,
+#                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+#                               commo = c("ffb","cpo"), #
+#                               offset = FALSE)
+#     # make the APE
+#     comp_ape_mat["FFB = CPO",paste0(ISL,"_",SIZE)] <- compare_coeff_within_groups(res_data = res_data)
+#     res_data_list[[i]] <- res_data[[1]]
+#     i <- i + 1
+#     rm(res_data)
+#   }
+# }
+# 
+# ## Adding estimations with short-run *and* medium-run CPO prices  
+# for(SIZE in size_list){
+#   for(ISL in isl_list){
+#     # make the regression
+#     res_data <- make_base_reg(island = ISL,
+#                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+#                               dynamics = TRUE,
+#                               offset = FALSE)
+#     # make the APE
+#     comp_ape_mat["short-run = medium-run",paste0(ISL,"_",SIZE)] <- compare_coeff_within_groups(res_data = res_data)
+#     rm(res_data)
+#   }
+# }
 
 
 saveRDS(comp_ape_mat, file.path(paste0("temp_data/reg_results/comp_ape_mat_CR_ln_cpo_price_imp1_4ya_lag1_allinteract.rds")))

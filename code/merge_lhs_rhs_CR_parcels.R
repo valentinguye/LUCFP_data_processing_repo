@@ -302,52 +302,64 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   
   ### COMPUTE ESTIMATED ANNUAL FOREST REMAINING
   
-  # Do if for lucfp if we are sure that this is an important methodology
-  # parcels <- dplyr::mutate(parcels,
-  #                          total_lucfp_30th = lucfip_pixelcount_30th + lucfsmp_pixelcount_30th)
+  if(file.exists(file.path(paste0("temp_data/processed_parcels/remaining_forest_panel_",
+                                  parcel_size/1000,"km_",
+                                  catchment_radius/1000,"CR.rds")))){
+    
+    remaining <- readRDS(file.path(paste0("temp_data/processed_parcels/remaining_forest_panel_",
+                                          parcel_size/1000,"km_",
+                                          catchment_radius/1000,"CR.rds")))
+    
+    if(nrow(parcels)!=nrow(remaining)){stop("remaining does not have the same number of parcels as main panel")}
+    parcels <- inner_join(parcels, remaining, by = c("lonlat", "year"))
+    
+  } else { 
   
-  # parcels <- dplyr::mutate(parcels, 
-  #                          total_lucpfp_total = lucpfip_pixelcount_total + lucpfsmp_pixelcount_total)
+    # anyNA(parcels$lucpfap_pixelcount) returns FALSE
+    
+    # then annual lucfp accumulated over past years
+    
+    year_list <- list()
+    
+    # in the first year (2001), the past year accumulated lucfp is null. 
+    year_list[["2001"]] <- parcels[parcels$year == 2001, c("lonlat", "year")] 
+    # names(year_list[["2001"]]) <- "lonlat"%>% as.data.frame() 
+    year_list[["2001"]][,"accu_lucfp_since2k"] <- 0
+    year_list[["2001"]][,"accu_lucpfp_since2k"] <- 0
+    
+    # then, each year's lucfp accumulated in the past is the sum of *past years'* lucpfap_pixelcount
+    years <- 2002:max(parcels$year)
+    for(y in years){
+      sub_ <- parcels[parcels$year < y,]
+      year_list[[as.character(y)]] <- ddply(sub_, "lonlat", summarise,
+                                              accu_lucfp_since2k = sum(lucfap_pixelcount, na.rm = TRUE),
+                                              accu_lucpfp_since2k = sum(lucpfap_pixelcount, na.rm = TRUE))
+      year_list[[as.character(y)]][,"year"] <- y
+    }
+    
+    # data <- parcels[parcels$year < y,]
+    # t <- ddply(data, "lonlat", summarise,
+    #            #past_accu_lucfp = sum(total_lucfp_30th, na.rm = TRUE),
+    #            accu_lucpfp_since2k = sum(lucpfap_pixelcount, na.rm = TRUE))
+    
+    accu_lucfp_df <- bind_rows(year_list)
+    
+    parcels <- inner_join(parcels, accu_lucfp_df, by = c("lonlat", "year"))
+    
   
-  # anyNA(parcels$lucpfap_pixelcount) returns FALSE
+    # summary(parcels$accu_lucpfp_since2k)
+    parcels <- dplyr::mutate(parcels, 
+                             remain_f30th_pixelcount = fc2000_30th_pixelcount - accu_lucfp_since2k,
+                             remain_pf_pixelcount = pfc2000_total_pixelcount - accu_lucpfp_since2k)
   
-  # then annual lucfp accumulated over past years
-  
-  year_list <- list()
-  
-  # in the first year (2001), the past year accumulated lucfp is null. 
-  year_list[["2001"]] <- parcels[parcels$year == 2001, c("lonlat", "year")] 
-  # names(year_list[["2001"]]) <- "lonlat"%>% as.data.frame() 
-  year_list[["2001"]][,"accu_lucfp_since2k"] <- 0
-  year_list[["2001"]][,"accu_lucpfp_since2k"] <- 0
-  
-  # then, each year's lucfp accumulated in the past is the sum of *past years'* lucpfap_pixelcount
-  years <- 2002:max(parcels$year)
-  for(y in years){
-    sub_ <- parcels[parcels$year < y,]
-    year_list[[as.character(y)]] <- ddply(sub_, "lonlat", summarise,
-                                            accu_lucfp_since2k = sum(lucfap_pixelcount, na.rm = TRUE),
-                                            accu_lucpfp_since2k = sum(lucpfap_pixelcount, na.rm = TRUE))
-    year_list[[as.character(y)]][,"year"] <- y
+    # parcels[parcels$lonlat == 1267,c("lonlat", "year", "lucpfap_pixelcount", "accu_lucpfp_since2k", "remain_pf_pixelcount")] 
+    
+    
+    remaining <- parcels[,c("lonlat", "year", "remain_f30th_pixelcount", "remain_pf_pixelcount", "accu_lucfp_since2k", "accu_lucpfp_since2k" )]
+    saveRDS(remaining, file.path(paste0("temp_data/processed_parcels/remaining_forest_panel_",
+                                        parcel_size/1000,"km_",
+                                        catchment_radius/1000,"CR.rds")))
   }
-  
-  # data <- parcels[parcels$year < y,]
-  # t <- ddply(data, "lonlat", summarise,
-  #            #past_accu_lucfp = sum(total_lucfp_30th, na.rm = TRUE),
-  #            accu_lucpfp_since2k = sum(lucpfap_pixelcount, na.rm = TRUE))
-  
-  accu_lucfp_df <- bind_rows(year_list)
-  
-  parcels <- inner_join(parcels, accu_lucfp_df, by = c("lonlat", "year"))
-  
-
-  # summary(parcels$accu_lucpfp_since2k)
-  parcels <- dplyr::mutate(parcels, 
-                           remain_f30th_pixelcount = fc2000_30th_pixelcount - accu_lucfp_since2k,
-                           remain_pf_pixelcount = pfc2000_total_pixelcount - accu_lucpfp_since2k)
-  
-  # parcels[parcels$lonlat == 1267,c("lonlat", "year", "lucpfap_pixelcount", "accu_lucpfp_since2k", "remain_pf_pixelcount")] 
-  
   
   
   

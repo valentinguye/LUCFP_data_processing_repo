@@ -141,7 +141,9 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
   
   #### Prepare parcel panel ####
   # Import the parcel panel (for IBS)
-  parcels_centro <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
+  parcels_centro <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+                                             parcel_size/1000,"km_",
+                                             catchment_radius/1000,"km_IBS_CR.rds")))
   # keep only one cross-section, no matter which. 
   parcels_centro <- dplyr::filter(parcels_centro, year == 2001)
   # turn it into a sf object (idncrs_lon idncrs_lat are already expressed in indonesian crs)

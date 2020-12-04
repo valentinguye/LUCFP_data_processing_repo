@@ -304,7 +304,7 @@ for(travel_time in c(2,4,6)){
   parcels_cs$neighbors <- neighbors
   parcels_cs$neighbors <- lapply(1:nrow(parcels_cs), FUN = function(i){parcels_cs$lonlat[sgbp[[i]]]}) 
   
-  parcels <- merge(parcels, parcels_cs[,c("lonlat", "neighbors")], by = "lonlat", all = TRUE)
+  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "neighbors")], by = "lonlat")
   
   
   
