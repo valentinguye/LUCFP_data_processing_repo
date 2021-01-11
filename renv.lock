@@ -664,6 +664,13 @@
       "Repository": "CRAN",
       "Hash": "796afeea047cda6bdb308d374a33eeb6"
     },
+    "lwgeom": {
+      "Package": "lwgeom",
+      "Version": "0.2-5",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "cf96b08482dfbed1b7ab7d0ba4395077"
+    },
     "magick": {
       "Package": "magick",
       "Version": "2.2",
@@ -741,6 +748,13 @@
       "Repository": "CRAN",
       "Hash": "69fa7331e7410c2a2cb3f9868513904f"
     },
+    "nabor": {
+      "Package": "nabor",
+      "Version": "0.5.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "54388cc0cf3dfc0948a4bfbf9e8cceba"
+    },
     "nlme": {
       "Package": "nlme",
       "Version": "3.1-140",
@@ -761,6 +775,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "68287aec1f476c41d16ce1ace445800c"
+    },
+    "nngeo": {
+      "Package": "nngeo",
+      "Version": "0.4.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "38205788bdc575e3422f5e735df655e5"
     },
     "numDeriv": {
       "Package": "numDeriv",
@@ -998,6 +1019,13 @@
       "Repository": "CRAN",
       "Hash": "a9795ccb2d608330e841998b67156764"
     },
+    "s2": {
+      "Package": "s2",
+      "Version": "1.0.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "eb8b8886f8b94a510cac7d27a7daf6d8"
+    },
     "sandwich": {
       "Package": "sandwich",
       "Version": "3.0-0",
@@ -1165,6 +1193,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "7307d79f58d1885b38c4f4f1a8cb19dd"
+    },
+    "wk": {
+      "Package": "wk",
+      "Version": "0.3.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "145f6ec6f39a9fd88fe702b70625ea8d"
     },
     "writexl": {
       "Package": "writexl",

@@ -52,8 +52,8 @@ lapply(neededPackages, library, character.only = TRUE)
 # (lucfip, lucpfip, emissions, lucpfsmp...)
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
-parcel_size <- 3000
-catchment_radius <- 3e4
+# parcel_size <- 3000
+# catchment_radius <- 3e4
 
 merge_lhs_rhs <- function(parcel_size, catchment_radius){
   
@@ -180,21 +180,20 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   RHS <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
                                     parcel_size/1000,"km_",catchment_radius/1000,"CR.rds")))
   
-  # this is temporary necessary, but in the new version of wa_at_parcels_distances, lonlat is already available in RHS and merging can be directly executed with  #  
-  library(sf)
-  indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
-  RHS <- st_as_sf(RHS, coords = c("lon", "lat"), crs = indonesian_crs, remove = FALSE)
-  RHS <- st_transform(RHS, crs = 4326)
-  RHS$lon <- st_coordinates(RHS)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
-  RHS$lat <- st_coordinates(RHS)[,"Y"]%>% round(6) 
-  RHS <- mutate(RHS, lonlat = paste0(lon, lat))
-  RHS <- st_drop_geometry(RHS)
-  RHS <- dplyr::select(RHS, -lat, -lon, -parcel_id)
+  # # this is temporary necessary, but in the new version of wa_at_parcels_distances, lonlat is already available in RHS and merging can be directly executed with  #  
+  # library(sf)
+  # indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+  # RHS <- st_as_sf(RHS, coords = c("lon", "lat"), crs = indonesian_crs, remove = FALSE)
+  # RHS <- st_transform(RHS, crs = 4326)
+  # RHS$lon <- st_coordinates(RHS)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates... 
+  # RHS$lat <- st_coordinates(RHS)[,"Y"]%>% round(6) 
+  # RHS <- mutate(RHS, lonlat = paste0(lon, lat))
+  # RHS <- st_drop_geometry(RHS)
+  # RHS <- dplyr::select(RHS, -lat, -lon, -parcel_id)
   
   # Final code if wa_at_CR_parcels.R and add_CR_parcels.R are run again
-  # RHS <- dplyr::select(RHS, -lat, -lon, -idncrs_lat, -idncrs_lon)
-  # parcels <- inner_join(LHS, RHS, by = c("lonlat", "year"))
-  
+  RHS <- dplyr::select(RHS, -lat, -lon, -idncrs_lat, -idncrs_lon)
+
   # MERGE
   # years 1998 - 2000 from RHS will not match, we don't need to keep them because the information 
   # from these years is captured in add_parcel_variables.R within lag variables. Hence the inner_join
@@ -359,6 +358,8 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
     saveRDS(remaining, file.path(paste0("temp_data/processed_parcels/remaining_forest_panel_",
                                         parcel_size/1000,"km_",
                                         catchment_radius/1000,"CR.rds")))
+    
+    rm(accu_lucfp_df, year_list)
   }
   
   
@@ -385,7 +386,7 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   #                                   parcel_size/1000,"km_",
   #                                   catchment_radius/1000,"CR.xlsx")))  
   
-  rm(accu_lucfp_df, year_list, parcels)
+  rm(parcels)
 }
 
 PS <- 3000 

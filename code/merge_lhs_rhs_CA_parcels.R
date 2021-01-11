@@ -302,7 +302,37 @@ for(TT in c(2,4)){#s,6
 }
 rm(merge_lhs_rhs)
 
+### ACHTUNG TEMPORARY MODIFICATION, TO ADD SUBDISTRICT QUICKLY IN CA STREAM ### 
+parcels <- readRDS(file.path(paste0("temp_data/panel_parcels_ip_final_",
+                                    parcel_size/1000,"km_",
+                                    "2h_CA.rds")))
 
+parcels_cs <- parcels[!duplicated(parcels$lonlat),]
+parcels_cs <- st_as_sf(parcels_cs, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs)
+
+#sub-district
+subdistrict <- st_read(file.path("input_data/indonesia_spatial/podes_bps2014"))
+subdistrict_prj <- st_transform(subdistrict, crs = indonesian_crs)
+
+parcels_cs <- st_join(parcels_cs, 
+                      subdistrict_prj[,c("KECAMATAN", "DESA")], 
+                      join = st_nearest_feature)
+
+parcels_cs <- st_drop_geometry(parcels_cs)
+parcels <- st_drop_geometry(parcels)
+
+parcels <- left_join(parcels, parcels_cs[,c("lonlat", "KECAMATAN", "DESA")], by = "lonlat")
+
+names(parcels)[names(parcels)=="KECAMATAN"] <- "subdistrict"
+names(parcels)[names(parcels)=="DESA"] <- "village"
+
+parcels$subdistrict_year <- paste0(parcels$subdistrict,"_",parcels$year)
+parcels$village_year <- paste0(parcels$village,"_",parcels$year)
+
+rm(parcels_cs)
+saveRDS(parcels, file.path(paste0("temp_data/panel_parcels_ip_final_",
+                                  parcel_size/1000,"km_",
+                                  "2h_CA.rds")))  
 
 ### Write to Stata if analyses/tests are to be done there...
 # parcel_size <- 3000

@@ -1368,7 +1368,7 @@ ape_mat <- ape_mat[c(1,2,3,nrow(ape_mat)),]
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
-      caption = "Average partial effects on LUCFP (ha) in 30\% tree cover forest") %>%
+      caption = "Average partial effects on LUCFP (ha) in 30% tree cover forest") %>%
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c(" " = 1,
                      "Sumatra" = 1,

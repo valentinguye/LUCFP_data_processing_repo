@@ -48,8 +48,9 @@
 
 # These are the packages needed in this particular script. 
 neededPackages = c("plyr", "dplyr", "readstata13", "foreign", "sjmisc",
-                   "rgdal", "sf", 
-                   "DataCombine")
+                   "rgdal", "sf", "nngeo",
+                   "DataCombine", 
+                   "parallel")
 #install.packages("sf", source = TRUE)
 # library(sf)
 # 
@@ -145,9 +146,8 @@ uml <- st_transform(uml, crs = indonesian_crs)
 ### ### ###
 
 
-#### ADD THE NEAREST MILL OBSERVATIONS ####
 
-
+catchment_radius <- 3e4
 # This takes ~1h 
 #### ADD N REACHABLE UML AND SAMPLE COVERAGE ####
 make_n_reachable_uml <- function(parcel_size, catchment_radius){
@@ -208,8 +208,19 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
   colnames(parcels)[colnames(parcels) == "ratio"] <- paste0("sample_coverage")
   
   
+  # lag n reachable 
+  parcels <- dplyr::arrange(parcels, lonlat, year)
+  parcels <- DataCombine::slide(parcels,
+                                Var = "n_reachable_uml", 
+                                TimeVar = "year",
+                                GroupVar = "lonlat",
+                                NewVar = paste0("n_reachable_uml_lag1"),
+                                slideBy = -1, 
+                                keepInvalid = TRUE)
+  parcels <- dplyr::arrange(parcels, lonlat, year)
   
-  
+
+  ### MAKE ID FOR THE SET OF REACHABLE IBS MILLS
   
   ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))  
   # keep only geolocalized mills
@@ -242,6 +253,8 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
 
   parcels <- left_join(parcels, parcels_centro[,c("lonlat", "reachable")], by = "lonlat")#, "nearest_firm_id"
   
+  parcels <- st_drop_geometry(parcels)
+  
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_reachable_uml_",
                                parcel_size/1000,"km_",
                                catchment_radius/1000,"CR.rds")))
@@ -256,7 +269,7 @@ while(catchment_radius < 60000){
   catchment_radius <- catchment_radius + 20000
 }
 
-
+rm(ibs, ibsuml)
 
 #### ADD GEOGRAPHIC VARIABLES AND THEIR TRENDS ####
 
@@ -280,6 +293,9 @@ province_sf_prj <- st_transform(province_sf, crs = indonesian_crs)
 district_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/district2000_sf"))
 district_sf_prj <- st_transform(district_sf, crs = indonesian_crs)
 
+#sub-district
+subdistrict <- st_read(file.path("input_data/indonesia_spatial/podes_bps2014"))
+subdistrict_prj <- st_transform(subdistrict, crs = indonesian_crs)
 
 catchment_radiuseS <- c(1e4, 3e4, 5e4)#
 for(catchment_radius in catchment_radiuseS){
@@ -291,6 +307,8 @@ for(catchment_radius in catchment_radiuseS){
   
   parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs, remove = FALSE)
   
+  # Work with a cross section for province and district attribution
+  parcels_cs <- parcels[!duplicated(parcels$lonlat),]
   
   ### ISLAND variable
   
@@ -318,9 +336,6 @@ for(catchment_radius in catchment_radiuseS){
   
   
   ### PROVINCE variable
-  
-  # Work with a cross section for province and district attribution
-  parcels_cs <- parcels[!duplicated(parcels$lonlat),]
 
   # the nearest feature function enables to also grab those parcels which centroids are in the sea.
   nearest_prov_idx <- st_nearest_feature(parcels_cs, province_sf_prj)
@@ -332,20 +347,20 @@ for(catchment_radius in catchment_radiuseS){
   # the nearest feature function enables to also grab those parcels which centroids are in the sea.
   nearest_dstr_idx <- st_nearest_feature(parcels_cs, district_sf_prj)
   
-  # 4 parcels are closest to district with no name (NA) 
   parcels_cs$district <- district_sf_prj$name_[nearest_dstr_idx]
-  
-  parcels <- merge(st_drop_geometry(parcels),
-                   st_drop_geometry(parcels_cs[,c("lonlat", "province", "district")]),
-                   by = "lonlat")
+  # (4 parcels are closest to district with no name (NA) )
+
+
  
+  ### SUB-DISTRICT AND VILLAGE   VARIABLES
+  # use st_join, don't know why I did not use it above...
+  parcels_cs <- st_join(parcels_cs, 
+                        subdistrict_prj[,c("KECAMATAN", "DESA")], 
+                        join = st_nearest_feature)
   
+
   ### NEIGHBOR VARIABLE
   # create a grouping variable at the cross section (9 is to recall the the group id includes the 8 neighbors + the central grid cell.)
-  parcels_cs <- parcels[!duplicated(parcels$lonlat),c("lonlat", "year", "idncrs_lat", "idncrs_lon")]
-  
-  # spatial
-  parcels_cs <- st_as_sf(parcels_cs, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
   
   # identify neighbors
   # this definition of neighbors includes the 8 closest, surrounding, grid cells.
@@ -358,23 +373,108 @@ for(catchment_radius in catchment_radiuseS){
   parcels_cs$neighbors <- neighbors
   parcels_cs$neighbors <- lapply(1:nrow(parcels_cs), FUN = function(i){parcels_cs$lonlat[sgbp[[i]]]}) 
   
-  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "neighbors")], by = "lonlat")
+  rm(parcels_buf)
   
+  ### MERGE WITH PANEL  
+  parcels <- st_drop_geometry(parcels)
+  parcels_cs <- st_drop_geometry(parcels_cs)
+  
+  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "province", "district", "KECAMATAN", "DESA", "neighbors")], by = "lonlat")
+  
+  names(parcels)[names(parcels)=="KECAMATAN"] <- "subdistrict"
+  names(parcels)[names(parcels)=="DESA"] <- "village"
+
+  rm(parcels_cs)
   
   
   # SPATIAL TRENDS VARIABLES
   parcels$island_year <- paste0(parcels$island,"_",parcels$year)
   parcels$province_year <- paste0(parcels$province,"_",parcels$year)
   parcels$district_year <- paste0(parcels$district,"_",parcels$year)
+  parcels$subdistrict_year <- paste0(parcels$subdistrict,"_",parcels$year)
+  parcels$village_year <- paste0(parcels$village,"_",parcels$year)
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
                                      parcel_size/1000,"km_",
                                      catchment_radius/1000,"CR.rds")))
 }
-
+rm(district_sf, district_sf_prj, province_sf, province_sf_prj, island_sf, island_sf_prj, island_sf_prj_bbox)
   # parcels_list[[match(catchment_radius, catchment_radiuseS)]] <- parcels
 
 
+
+#### IDENTIFY "EXTENSIVE MARGIN" PARCELS ####
+# In theory, mills establish only if a sufficient supply base is available. In practice, this is insured by companies developing plantations 
+# in concomitance with opening a mill. In such an integrated development, there is no reason that mills and plantations are far appart. 
+# Hence, we identify these plantations as being very close to mills. 
+# Concretely, we identify all grid cells that are within
+
+# read the most complete version of UML we have. 
+uml <- read.dta13(file.path("temp_data/processed_UML/UML_valentin_imputed_est_year.dta"))
+uml <- uml[!is.na(uml$lat),]
+uml <- st_as_sf(uml, coords = c("lon", "lat"), remove = TRUE, crs = 4326)
+uml <- st_transform(uml, crs = indonesian_crs)
+
+catchment_radiuseS <- c(1e4, 3e4, 5e4)#
+for(catchment_radius in catchment_radiuseS){
+  
+  # read the parcel panel
+  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+                                      parcel_size/1000,"km_",
+                                      catchment_radius/1000,"km_IBS_CR.rds")))
+  
+  # make a spatial cross section of it (parcels' coordinates are constant over time)
+  parcels_grid <- parcels[!duplicated(parcels$lonlat), c("lonlat", "idncrs_lat", "idncrs_lon")]
+  # (lon lat are already expressed in indonesian crs)
+  
+  parcels_grid <- st_as_sf(parcels_grid, coords = c("idncrs_lon", "idncrs_lat"), remove = TRUE, crs = indonesian_crs)
+  
+  parcels_grid <- st_buffer(parcels_grid, dist = 1500)
+  
+  nn <- st_nn(uml, parcels_grid, sparse = TRUE, k = 4, maxdist = 3000, parallel = detectCores() - 1)
+  
+  length(nn[lengths(nn)>0]) # 952 mills have parcels from our sample that are within 3km and are among the 4 nearest ones.
+  # the other ~200 mills are UML mills that are not in our area of interest and hence have no parcel within 3km. 
+  unique(lengths(nn))
+  
+  # A parcel may be in the 4 nearest parcels from 2 mills. For now, we do not care to diferentiate which mill it should get the attributes of. 
+  extensive_idx <- unique(unlist(nn)) # length is 3487
+  length(unlist(nn)) # 3763 so not so many more
+  
+  # make the indicator variable
+  parcels_grid$extensive <- rep(FALSE,nrow(parcels_grid))
+  parcels_grid[extensive_idx,"extensive"] <-  TRUE
+  
+  
+  ## make a more restrictive indicator variable, based on time 
+  
+  # for this exercise, we consider that UML mills with unknown establishement date were not established after 2000
+  # for simplicity, we set the year to 2000 as we do not need to be more accurate for this exercise
+  uml[is.na(uml$est_year_imp),"est_year_imp"] <- 2000
+  
+  parcels_grid$mill_est_year_imp <- rep(NA,nrow(parcels_grid))
+  for(idx in extensive_idx){
+    # identify the mill(s) that each extensive parcel is closer to
+    mills <- uml[sapply(nn, FUN = function(nn_elm){idx %in% nn_elm}),]
+    # extract the earliest establishment year 
+    parcels_grid$mill_est_year_imp[idx] <- mills[mills$est_year_imp == min(mills$est_year_imp),]$est_year_imp
+  }
+  
+  parcels_grid <- st_drop_geometry(parcels_grid)
+  
+  parcels <- left_join(parcels[,c("lonlat","year")], parcels_grid, by = "lonlat")
+  
+  # switch the extensive indicator from TRUE to FALSE for the annual records that are posterior to the close mill establishment.
+  # in other words: let deforestation occurring very close to mills but after their establishment be counted as intensive margin. 
+  parcels$extensive_restr <- parcels$extensive
+  parcels$extensive_restr[parcels$year > parcels$mill_est_year_imp] <- FALSE
+  summary(parcels$extensive_restr)
+  summary(parcels$extensive)
+  
+  saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_extmar_",
+                                    parcel_size/1000,"km_",
+                                    catchment_radius/1000,"CR.rds")))
+}
 
 
 #### TIME DYNAMICS VARIABLES ####
@@ -440,8 +540,7 @@ for(catchment_radius in catchment_radiuseS){
                  #"wa_concentration_10",     "wa_concentration_30", "wa_concentration_50",
                  "prex_cpo_imp1", "prex_cpo_imp2",
                  "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp",
-                 "concentration_30", "concentration_50",
-                 "n_reachable_uml")#"n_reachable_ibs", "n_reachable_ibsuml",   "sample_coverage"
+                 "concentration_30", "concentration_50")
   
   for(voi in variables){
     ## lags
@@ -692,11 +791,10 @@ for(catchment_radius in catchment_radiuseS){
   
   
   
-  rm(parcels)
-  
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
                                     parcel_size/1000,"km_",
                                     catchment_radius/1000,"CR.rds")))  
+  rm(parcels)
   
   # voi <- "wa_ffb_price_imp1"
   # View(parcels[500,c("lonlat", "year",
@@ -871,10 +969,15 @@ for(catchment_radius in c(1e4, 3e4, 5e4)){
   reachable <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_reachable_uml_",
                                       parcel_size/1000,"km_",
                                       catchment_radius/1000,"CR.rds")))
-  
+
   geovars <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
                                        parcel_size/1000,"km_",
                                        catchment_radius/1000,"CR.rds")))
+
+  
+  extmar <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_extmar_",
+                                     parcel_size/1000,"km_",
+                                     catchment_radius/1000,"CR.rds")))
   
   time_dyna <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
                                         parcel_size/1000,"km_",
@@ -884,11 +987,15 @@ for(catchment_radius in c(1e4, 3e4, 5e4)){
                                        parcel_size/1000,"km_",
                                        catchment_radius/1000,"CR.rds")))
   
+  # the inner joins restrict the panel to only years in [2001, 2015]
   parcels <- inner_join(reachable[,c("lonlat","year",
-                                     "n_reachable_uml","n_reachable_ibsuml","sample_coverage","reachable")], 
+                                     "n_reachable_uml", "n_reachable_uml_lag1","n_reachable_ibsuml","sample_coverage","reachable")], 
                         geovars[,c("lonlat","year",
-                                   "island","province","district","island_year","province_year","district_year")],
+                                   "island","province","district", "subdistrict", "village",
+                                   "island_year","province_year","district_year", "subdistrict_year", "village_year")],
                         by = c("lonlat","year"))
+  
+  parcels <- inner_join(parcels, extmar[,c("lonlat","year", "extensive", "extensive_restr")], by = c("lonlat", "year"))
   
   parcels <- inner_join(parcels, time_dyna,
                         by = c("lonlat","year"))
@@ -897,11 +1004,15 @@ for(catchment_radius in c(1e4, 3e4, 5e4)){
                         land_des[,c("lonlat","year",
                                     "rspo_cert", "concession", "llu", "illegal1", "illegal2")],
                         by = c("lonlat","year"))
+  
+  saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
+                                    parcel_size/1000,"km_",
+                                    catchment_radius/1000,"CR.rds")))
                                      
   
 }
 
-
+rm(reachable, geovars, extmar, time_dyna, land_des, parcels)
 
 
 
