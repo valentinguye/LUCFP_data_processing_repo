@@ -29,7 +29,7 @@
 neededPackages <- c("data.table", "plyr", "tidyr", "dplyr",  "Hmisc", "sjmisc", "stringr",
                     "readstata13", "foreign", "readxl", "writexl",
                     "httr", "haven",
-                    "raster", "rgdal", "sp", "sf","gfcanalysis", "osrm", "osrmr", "nngeo",
+                    "raster", "rgdal", "sp", "spdep", "sf","gfcanalysis", "osrm", "osrmr", "nngeo",
                     "lubridate","exactextractr",
                     "doParallel", "foreach", "snow", 
                     "knitr", "kableExtra",
@@ -97,6 +97,7 @@ if(FALSE){
   library(rgdal)
   library(raster)
   library(sp)
+  library(spdep)
   library(sf)
   library(gfcanalysis)
   library(osrm)
@@ -137,7 +138,7 @@ if(FALSE){
 }
 
 # If new packages are needed along the project data processing workflow, one should: 
-new_pck <- c("nngeo")
+new_pck <- c("spdep")
 # 1. install the packages in the project library (the default if you are within the project)
 install.packages(new_pck)
 # devtools::install_github("julianhinz/R_glmhdfe")
