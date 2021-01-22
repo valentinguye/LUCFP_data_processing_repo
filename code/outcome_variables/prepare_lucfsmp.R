@@ -174,8 +174,9 @@ prepare_pixel_lucfsmp <- function(island){
   # We do this only for 30th forest type: 
   # Thus, we define only one overlay function.
   # overlay function
-  overlay_maps <- function(rs){rs[[1]]*(1-rs[[2]])}
+  overlay_maps <- function(rs){rs[[1]]*(1 - rs[[2]])*(1 - rs[[3]])}
   # multiplies a cell of forest loss (rs[[1]]) by 0 (i.e. "removes" it) if it is a plantation in 2000 (rs[[2]])
+  # or if it is an industrial plantation in 2015 (rs[[3]])
   
   ## Read necessary layers and stack them 
   
@@ -185,8 +186,11 @@ prepare_pixel_lucfsmp <- function(island){
   # 2000 industrial plantations (rs[[2]])
   ioppm2000 <- raster(file.path(paste0("temp_data/processed_lu/austin_ioppm_2000_",island,"_aligned.tif")))
   
+  # 2015 industrial plantations (rs[[3]])
+  ioppm2015 <- raster(file.path(paste0("temp_data/processed_lu/austin_ioppm_2015_",island,"_aligned.tif")))
+  
   # stack is necessary for clusterR
-  rs <- raster::stack(loss, ioppm2000)
+  rs <- raster::stack(loss, ioppm2000, ioppm2015)
   
   # note that using calc below is equivalent to using overlay but more appropriate to the input being a stack, 
   # which is necessary to pass several raster layers to the first argument of clusterR

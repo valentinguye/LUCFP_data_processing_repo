@@ -187,9 +187,9 @@ prepare_pixel_lucpfsmp <- function(island){
 
 # We do this only for total primary forest type: 
 # Thus, we define only one overlay function.
-overlay_total    <- function(rs){rs[[1]]*(rs[[2]] != 0)}
-# multiplies a cell of forest loss (rs[[1]]) by 0 if it something else than either 
-# intact or degraded primary forest in 2000 (overlay_total)
+overlay_total    <- function(rs){rs[[1]]*(rs[[2]] != 0)*(1 - rs[[3]])}
+# multiplies a cell of forest loss (rs[[1]]) by 0 if it something else than either intact or degraded primary forest in 2000 (overlay_total) (rs[[2]])
+# or if it is an industrial plantation in 2015 (rs[[3]])
 
 ## Read necessary layers and stack them 
 
@@ -199,8 +199,10 @@ loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th
 # primary forest (rs[[2]])
 pf <- raster(file.path(paste0("temp_data/processed_lu/margono_primary_forest_",island,"_aligned.tif")))
 
+ioppm <- raster(file.path(paste0("temp_data/processed_lu/austin_ioppm_2015_",island,"_aligned.tif")))
+
 # stack is necessary for clusterR
-rs <- raster::stack(loss, pf)
+rs <- raster::stack(loss, pf, ioppm)
 
 # note that using calc below is equivalent to using overlay but more appropriate to the input being a stack, 
 # which is necessary to pass several raster layers to the first argument of clusterR

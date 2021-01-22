@@ -122,10 +122,25 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   LHS$lucpfsmp_pixelcount <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
   LHS$lucfsmp_pixelcount <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
   
+#-------------------------
+  # MAKE A UNIQUE DEPENDENT VARIABLE, WITH DUMMIES FOR ONLY INDUSTRIAL, ONLY SMALLHOLDERS, AND OVERLAPS
+  
+  # This is true for obs. with positive lucpfip and lucpfsmp.
+  # It could be that both are positive while not overlapping (i.e. at the same place in the parcel), but we do not try to disentangle that here (would need to be done at the pixel level)
+  LHS$lucp_i_and_sm_bar <- (LHS$lucpfip_pixelcount == 0 | LHS$lucpfsmp_pixelcount == 0)
+  LHS$luc_i_and_sm_bar <- (LHS$lucfip_pixelcount == 0 | LHS$lucfsmp_pixelcount == 0)
+  
   ## make a variable that counts lucfp events on all types of plantations
-  LHS$lucpfap_pixelcount <- LHS$lucpfip_pixelcount + LHS$lucpfsmp_pixelcount
-  LHS$lucfap_pixelcount <- LHS$lucfip_pixelcount + LHS$lucfsmp_pixelcount 
+  LHS <- mutate(LHS, lucpfap_pixelcount = (lucpfip_pixelcount + lucpfsmp_pixelcount)*lucp_i_and_sm_bar) 
+  LHS <- mutate(LHS, lucfap_pixelcount = (lucfip_pixelcount + lucfsmp_pixelcount)*luc_i_and_sm_bar) 
+  
+  
+# ---------------------------  
+  ## make a variable that counts lucfp events on all types of plantations
+  # LHS$lucpfap_pixelcount <- LHS$lucpfip_pixelcount + LHS$lucpfsmp_pixelcount
+  # LHS$lucfap_pixelcount <- LHS$lucfip_pixelcount + LHS$lucfsmp_pixelcount 
 
+  
 
   
   

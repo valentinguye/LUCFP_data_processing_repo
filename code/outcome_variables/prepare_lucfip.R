@@ -272,10 +272,15 @@ prepare_pixel_lucfip <- function(island){
   
   ioppm2000 <- raster(file.path(paste0("temp_data/processed_lu/austin_ioppm_2000_",island,"_aligned.tif")))
   ioppm2015 <- raster(file.path(paste0("temp_data/processed_lu/austin_ioppm_2015_",island,"_aligned.tif")))
+
+  # primary forest
+  pf <- raster(file.path(paste0("temp_data/processed_lu/margono_primary_forest_",island,"_aligned.tif")))
   
   # overlay function
-  overlay_maps <- function(rs){rs[[1]]*(1-rs[[2]])*rs[[3]]}
-  # multiplies a cell of forest loss (rs[[1]]) by 0 (i.e. "removes" it) if it it is a plantation in 2000 (rs[[2]]) or if is not a plantation in 2015 (rs[[3]])
+  overlay_maps <- function(rs){rs[[1]]*(1-rs[[2]])*rs[[3]]*is.na(rs[[4]])}
+  # multiplies a cell of forest loss (rs[[1]]) by 0 (i.e. "removes" it) if it it is a plantation in 2000 (rs[[2]]) 
+  # or if is not a plantation in 2015 (rs[[3]])
+  # or if it is within primary forest (i.e. if pf is NA)
   
   ### For each threshold, overlay forest loss map with plantations maps in a clusterR setting 
   th <- 30
@@ -283,8 +288,9 @@ prepare_pixel_lucfip <- function(island){
     # call the loss layer for threshold th
     loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_",th,"th_prj.tif")))
     
+    
     # stack loss with plantation maps (necessary for clusterR)
-    rs <- stack(loss, ioppm2000, ioppm2015)
+    rs <- stack(loss, ioppm2000, ioppm2015, pf)
     
     # run the computation in parallel with clusterR, as cells are processed one by one independently.
     beginCluster() # uses by default detectedCores() - 1
