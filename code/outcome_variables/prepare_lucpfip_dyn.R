@@ -697,6 +697,39 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
                                     catchment_radius/1000,"km_IBS_CR_",
                                     "total.rds")))
 
+  }
+  
+  ### Execute it
+  dynamicS <- c("replace", "rapid", "slow")
+  for(dyna in dynamicS){
+    
+    raster_to_df(dyna = dyna)
+    
+    removeTmpFiles(h=0)
+  }
+  
+  
+  print(paste0("complete to_panel_within_CR ",island," ",parcel_size/1000,"km ",catchment_radius/1000,"CR"))
+  
+}
+
+
+
+# this one does not depend on catchment radius because we apply a unique 82km maximal CR.
+to_panel_within_UML_CR_dynamics <- function(island, parcel_size){
+  
+  
+  ### Function description
+  
+  # raster_to_df converts the raster bricks of annual layers of parcels to a panel dataframe.
+  # This is executed for each dyna, iteratively and not in parallel (not necessary because quite fast)
+  # The tasks are:
+  # 1. masking the brick of parcels of a given size (parcel_size) on a given island with the maximal CA of mills on that island;
+  # 2. selecting only the parcels that are within a given catchment radius.
+  # 3. reshaping the values in these parcels to a long format panel dataframe
+  raster_to_df <- function(dyna){
+    
+    years <- seq(from = 2001, to = 2018, by = 1)
     
     ### UML
     
@@ -718,7 +751,7 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
     mills_prj <- mills_prj[lengths(select_within)>0,]
     
     #define big catchment areas to have a large AOI.
-    mills_ca <- st_buffer(mills_prj, dist = 60000)
+    mills_ca <- st_buffer(mills_prj, dist = 82000) # 82km as in Heilmayr et al. 2020
     # work with squares rather than with circles
     for(i in 1:length(mills_ca)){
       mills_ca[i] <- st_as_sfc(st_bbox(mills_ca[i]))
@@ -761,11 +794,11 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
     
     # Remove here parcels that are not within the catchment area of a given size (defined by catchment radius)
     # coordinates of all mills (crs is indonesian crs, unit is meter)
-    within <- st_is_within_distance(uml_msk_df, mills_prj, dist = catchment_radius)
-    uml_msk_df <- uml_msk_df %>% dplyr::filter(lengths(within) >0)
+    # within <- st_is_within_distance(uml_msk_df, mills_prj, dist = catchment_radius)
+    # uml_msk_df <- uml_msk_df %>% dplyr::filter(lengths(within) >0)
     uml_msk_df <- uml_msk_df %>% st_drop_geometry()
     
-    rm(within, parcels_brick)
+    rm(parcels_brick)
     
     
     ## 3. Reshaping to long format
@@ -798,7 +831,7 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
                                     dyna,"_",
                                     island,"_",
                                     parcel_size/1000,"km_",
-                                    catchment_radius/1000,"km_UML_CR_",
+                                    "82km_UML_CR_",
                                     "total.rds")))
   }
   
@@ -812,9 +845,11 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
   }
   
   
-  print(paste0("complete to_panel_within_CR ",island," ",parcel_size/1000,"km ",catchment_radius/1000,"CR"))
-  
+  print(paste0("complete to_panel_within_UML_CR ",island," ",parcel_size/1000,"km CR"))
+
 }
+
+
 
 ##### EXECUTE FUNCTIONS AND MERGE THE OUTPUTS #####
 
@@ -851,62 +886,119 @@ for(Island in IslandS){
 }
 
 
+### Transform to panel data but within the maximal 82km CR from UML 
+PS <- 3000
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
+for(Island in IslandS){
+  to_panel_within_UML_CR_dynamics(island = Island,
+                                    parcel_size = PS)
+} 
+
+
 #### Gather the lucfip variables for each parcel_size and catchment_radius combinations. ####
 PS <- 3000  
-sampleS <- c("IBS", "UML")
-for(sample in sampleS){
-  CR <- 10000 # i.e. 10km radius
-  while(CR < 60000){
-    
-    # For each Island, join columns of lucfip variable for different forest definitions 
-    df_list <- list()
-    IslandS <- c("Sumatra", "Kalimantan")
-    for(Island in IslandS){
-      
-      df_replace   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_replace_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
-      df_rapid <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_rapid_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
-      df_slow    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_slow_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
-      
-      df_rapid <- dplyr::select(df_rapid, -lon, -lat, -idncrs_lon, -idncrs_lat)
-      df <- inner_join(df_replace, df_rapid, by = c("lonlat", "year"))
-      
-      df_slow <- dplyr::select(df_slow, -lon, -lat, -idncrs_lon, -idncrs_lat)
-      df_list[[match(Island, IslandS)]] <- inner_join(df, df_slow, by = c("lonlat", "year"))
 
-      # here, it's normal that df_replace do not have the same size as the two others. 
-      if(nrow(df_list[[match(Island, IslandS)]]) != nrow(df_slow)){stop("data frames do not all have the same set of grid cells")}
-      rm(df, df_replace, df_rapid, df_slow)
-    }
+### IBS
+CR <- 10000 # i.e. 10km radius
+while(CR < 60000){
+  
+  # For each Island, join columns of lucfip variable for different forest definitions 
+  df_list <- list()
+  IslandS <- c("Sumatra", "Kalimantan")
+  for(Island in IslandS){
     
-    # stack the three Islands together
-    indo_df <- bind_rows(df_list)
+    df_replace   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_replace_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
+    df_rapid <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_rapid_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
+    df_slow    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_slow_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
     
+    df_rapid <- dplyr::select(df_rapid, -lon, -lat, -idncrs_lon, -idncrs_lat)
+    df <- inner_join(df_replace, df_rapid, by = c("lonlat", "year"))
     
-    # ### Add columns of converted pixel counts to hectares.
-    # pixel_area <- (27.8*27.6)/(1e4)
-    # # replace
-    # indo_df <- mutate(indo_df, lucpfip_replace_ha = lucpfip_replace_pixelcount*pixel_area) 
-    # # rapid
-    # indo_df <- mutate(indo_df, lucpfip_rapid_ha = lucpfip_rapid_pixelcount*pixel_area) 
-    # # slow
-    # indo_df <- mutate(indo_df, lucpfip_slow_ha = lucpfip_slow_pixelcount*pixel_area) 
-    # 
-    # indo_df <- dplyr::select(indo_df, parcel_id, year, 
-    #                          lucpfip_replace_ha,
-    #                          lucpfip_rapid_ha, 
-    #                          lucpfip_slow_ha,
-    #                          lucpfip_replace_pixelcount,
-    #                          lucpfip_rapid_pixelcount, 
-    #                          lucpfip_slow_pixelcount,
-    #                          everything())
-    
-    
-    saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/lucpfip_panel_dynamics_",PS/1000,"km_",CR/1000,"km_",sample,"_CR.rds")))
-    
-    rm(indo_df, df_list)
-    CR <- CR + 20000
+    df_slow <- dplyr::select(df_slow, -lon, -lat, -idncrs_lon, -idncrs_lat)
+    df_list[[match(Island, IslandS)]] <- inner_join(df, df_slow, by = c("lonlat", "year"))
+
+    # here, it's normal that df_replace do not have the same size as the two others. 
+    if(nrow(df_list[[match(Island, IslandS)]]) != nrow(df_slow)){stop("data frames do not all have the same set of grid cells")}
+    rm(df, df_replace, df_rapid, df_slow)
   }
+  
+  # stack the three Islands together
+  indo_df <- bind_rows(df_list)
+  
+  
+  # ### Add columns of converted pixel counts to hectares.
+  # pixel_area <- (27.8*27.6)/(1e4)
+  # # replace
+  # indo_df <- mutate(indo_df, lucpfip_replace_ha = lucpfip_replace_pixelcount*pixel_area) 
+  # # rapid
+  # indo_df <- mutate(indo_df, lucpfip_rapid_ha = lucpfip_rapid_pixelcount*pixel_area) 
+  # # slow
+  # indo_df <- mutate(indo_df, lucpfip_slow_ha = lucpfip_slow_pixelcount*pixel_area) 
+  # 
+  # indo_df <- dplyr::select(indo_df, parcel_id, year, 
+  #                          lucpfip_replace_ha,
+  #                          lucpfip_rapid_ha, 
+  #                          lucpfip_slow_ha,
+  #                          lucpfip_replace_pixelcount,
+  #                          lucpfip_rapid_pixelcount, 
+  #                          lucpfip_slow_pixelcount,
+  #                          everything())
+  
+  
+  saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/lucpfip_panel_dynamics_",PS/1000,"km_",CR/1000,"km_IBS_CR.rds")))
+  
+  rm(indo_df, df_list)
+  CR <- CR + 20000
 }
+
+### UML
+# For each Island, join columns of lucfip variable for different forest definitions 
+df_list <- list()
+IslandS <- c("Sumatra", "Kalimantan")
+for(Island in IslandS){
+  
+  df_replace   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_replace_",Island,"_",PS/1000,"km_82km_UML_CR_total.rds")))
+  df_rapid <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_rapid_",Island,"_",PS/1000,"km_82km_UML_CR_total.rds")))
+  df_slow    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_slow_",Island,"_",PS/1000,"km_82km_UML_CR_total.rds")))
+  
+  df_rapid <- dplyr::select(df_rapid, -lon, -lat, -idncrs_lon, -idncrs_lat)
+  df <- inner_join(df_replace, df_rapid, by = c("lonlat", "year"))
+  
+  df_slow <- dplyr::select(df_slow, -lon, -lat, -idncrs_lon, -idncrs_lat)
+  df_list[[match(Island, IslandS)]] <- inner_join(df, df_slow, by = c("lonlat", "year"))
+  
+  # here, it's normal that df_replace do not have the same size as the two others. 
+  if(nrow(df_list[[match(Island, IslandS)]]) != nrow(df_slow)){stop("data frames do not all have the same set of grid cells")}
+  rm(df, df_replace, df_rapid, df_slow)
+}
+
+# stack the three Islands together
+indo_df <- bind_rows(df_list)
+
+
+# ### Add columns of converted pixel counts to hectares.
+# pixel_area <- (27.8*27.6)/(1e4)
+# # replace
+# indo_df <- mutate(indo_df, lucpfip_replace_ha = lucpfip_replace_pixelcount*pixel_area) 
+# # rapid
+# indo_df <- mutate(indo_df, lucpfip_rapid_ha = lucpfip_rapid_pixelcount*pixel_area) 
+# # slow
+# indo_df <- mutate(indo_df, lucpfip_slow_ha = lucpfip_slow_pixelcount*pixel_area) 
+# 
+# indo_df <- dplyr::select(indo_df, parcel_id, year, 
+#                          lucpfip_replace_ha,
+#                          lucpfip_rapid_ha, 
+#                          lucpfip_slow_ha,
+#                          lucpfip_replace_pixelcount,
+#                          lucpfip_rapid_pixelcount, 
+#                          lucpfip_slow_pixelcount,
+#                          everything())
+
+
+saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/lucpfip_panel_dynamics_",PS/1000,"km_82km_UML_CR.rds")))
+
+rm(indo_df, df_list)
+
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 

@@ -556,6 +556,40 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
                                     "total.rds")))
     
     
+    
+  }
+  
+  ### Execute it
+  plant_typeS <- c("s", "m")
+  for(plant_type in plant_typeS){
+    
+    raster_to_df(plant_type = plant_type)
+    
+    removeTmpFiles(h=0)
+  }  
+  
+  
+  print(paste0("complete to_panel_within_CR ",island," ",parcel_size/1000,"km ",catchment_radius/1000,"CR"))
+  
+}
+
+
+
+# this one does not depend on catchment radius because we apply a unique 82km maximal CR.
+to_panel_within_UML_CR <- function(island, parcel_size){
+  
+  ### Function description
+  
+  # raster_to_df converts the raster bricks of annual layers of parcels to a panel dataframe.
+  # This is executed for each plant_type, iteratively and not in parallel (not necessary because quite fast)
+  # The tasks are:
+  # 1. masking the brick of parcels of a given size (parcel_size) on a given island with the maximal CA of mills on that island;
+  # 2. selecting only the parcels that are within a given catchment radius.
+  # 3. reshaping the values in these parcels to a long format panel dataframe
+  raster_to_df <- function(plant_type){
+    
+    years <- seq(from = 2001, to = 2018, by = 1)
+  
     ### UML 
     
     ## 1. Masking.
@@ -576,7 +610,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     mills_prj <- mills_prj[lengths(select_within)>0,]
     
     #define big catchment areas to have a large AOI.
-    mills_ca <- st_buffer(mills_prj, dist = 60000)
+    mills_ca <- st_buffer(mills_prj, dist = 82000) # 82km as in Heilmayr et al. 2020
     # work with squares rather than with circles
     for(i in 1:length(mills_ca)){
       mills_ca[i] <- st_as_sfc(st_bbox(mills_ca[i]))
@@ -620,11 +654,11 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     
     # Remove here parcels that are not within the catchment area of a given size (defined by catchment radius)
     # coordinates of all mills (crs is indonesian crs, unit is meter)
-    within <- st_is_within_distance(uml_msk_df, mills_prj, dist = catchment_radius)
-    uml_msk_df <- uml_msk_df %>% dplyr::filter(lengths(within) >0)
+    # within <- st_is_within_distance(uml_msk_df, mills_prj, dist = catchment_radius)
+    # uml_msk_df <- uml_msk_df %>% dplyr::filter(lengths(within) >0)
     uml_msk_df <- uml_msk_df %>% st_drop_geometry()
     
-    rm(within, parcels_brick)
+    rm(parcels_brick)
     
     
     ## 3. Reshaping to long format
@@ -656,7 +690,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
             file = file.path(paste0("temp_data/processed_parcels/lucpf",plant_type,"p_panel_",
                                     island,"_",
                                     parcel_size/1000,"km_",
-                                    catchment_radius/1000,"km_UML_CR_",
+                                    "82km_UML_CR_",
                                     "total.rds")))
   }
   
@@ -670,11 +704,10 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
   }  
   
   
-  print(paste0("complete to_panel_within_CR ",island," ",parcel_size/1000,"km ",catchment_radius/1000,"CR"))
+  print(paste0("complete to_panel_within_UML_CR ",island," ",parcel_size/1000,"km CR"))
+  
   
 }
-
-
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
@@ -685,7 +718,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
 # Only if their outputs have not been already computed
 
 ### Prepare a 30m pixel map of lucfp for each Island
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   if(!file.exists(file.path(paste0("temp_data/processed_lu/annual_maps/lucpfmp_",Island,"_total_2018.tif")))){
     
@@ -695,7 +728,7 @@ for(Island in IslandS){
 
 ### Aggregate this Island map to a chosen parcel size (3km, 6km and 9km for instance)
 PS <- 3000
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucpfmp_",Island,"_",PS/1000,"km_total.tif")))){
     
@@ -707,7 +740,7 @@ for(Island in IslandS){
 ### For that Island and for each aggregation factor, extract panels of parcels within different catchment area sizes 
 # (radius of 10km, 30km and 50km)
 PS <- 3000
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   CR <- 10000 # i.e. 10km radius
   while(CR < 60000){
@@ -720,55 +753,91 @@ for(Island in IslandS){
   }
 }
 
+### Transform to panel data but within the maximal 82km CR from UML 
+PS <- 3000
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
+for(Island in IslandS){
+  to_panel_within_UML_CR(island = Island,
+                         parcel_size = PS)
+} 
+
 
 
 #### Gather the lucfsmp variables for each parcel_size and catchment_radius combinations. ####
 PS <- 3000  
-sampleS <- c("IBS", "UML")
-for(sample in sampleS){
-  CR <- 10000 # i.e. 10km radius
-  while(CR < 60000){
-    
-    # For each Island, join columns of plantation type variable 
-    df_list <- list()
-    IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
-    for(Island in IslandS){
-      
-      df_small   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsp_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
-      df_medium <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfmp_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_",sample,"_CR_total.rds")))
 
-      df_medium <- dplyr::select(df_medium, -lon, -lat, -idncrs_lon, -idncrs_lat)
-      df_list[[match(Island, IslandS)]] <- inner_join(df_small, df_medium, by = c("lonlat", "year"))
-      
-      if(nrow(df_list[[match(Island, IslandS)]]) != nrow(df_medium)){stop("data frames do not all have the same set of grid cells")}
-      rm(df_small, df_medium)
-    }
+### IBS
+CR <- 10000 # i.e. 10km radius
+while(CR < 60000){
+  
+  # For each Island, join columns of plantation type variable 
+  df_list <- list()
+  IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
+  for(Island in IslandS){
     
-    # stack the three Islands together
-    indo_df <- bind_rows(df_list)
+    df_small   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsp_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
+    df_medium <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfmp_panel_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
+
+    df_medium <- dplyr::select(df_medium, -lon, -lat, -idncrs_lon, -idncrs_lat)
+    df_list[[match(Island, IslandS)]] <- inner_join(df_small, df_medium, by = c("lonlat", "year"))
     
-    
-    ### Add columns of converted pixel counts to hectares.
-    # pixel_area <- (27.8*27.6)/(1e4)
-    # # small-sized plantations
-    # indo_df <- mutate(indo_df, lucpfsp_ha_total = lucpfsp_pixelcount_total*pixel_area) 
-    # # medium-sized plantations
-    # indo_df <- mutate(indo_df, lucpfmp_ha_total = lucpfmp_pixelcount_total*pixel_area) 
-    # 
-    # indo_df <- dplyr::select(indo_df, lonlat, year, 
-    #                          lucpfsp_ha_total,
-    #                          lucpfmp_ha_total, 
-    #                          lucpfsp_pixelcount_total,
-    #                          lucpfmp_pixelcount_total,
-    #                          everything())
-    
-    
-    saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",PS/1000,"km_",CR/1000,"km_",sample,"_CR.rds")))
-    
-    rm(indo_df, df_list)
-    CR <- CR + 20000
+    if(nrow(df_list[[match(Island, IslandS)]]) != nrow(df_medium)){stop("data frames do not all have the same set of grid cells")}
+    rm(df_small, df_medium)
   }
+  
+  # stack the three Islands together
+  indo_df <- bind_rows(df_list)
+  
+  
+  ### Add columns of converted pixel counts to hectares.
+  # pixel_area <- (27.8*27.6)/(1e4)
+  # # small-sized plantations
+  # indo_df <- mutate(indo_df, lucpfsp_ha_total = lucpfsp_pixelcount_total*pixel_area) 
+  # # medium-sized plantations
+  # indo_df <- mutate(indo_df, lucpfmp_ha_total = lucpfmp_pixelcount_total*pixel_area) 
+  # 
+  # indo_df <- dplyr::select(indo_df, lonlat, year, 
+  #                          lucpfsp_ha_total,
+  #                          lucpfmp_ha_total, 
+  #                          lucpfsp_pixelcount_total,
+  #                          lucpfmp_pixelcount_total,
+  #                          everything())
+  
+  
+  saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",PS/1000,"km_",CR/1000,"km_IBS_CR.rds")))
+  
+  rm(indo_df, df_list)
+  CR <- CR + 20000
 }
+
+
+### UML
+# For each Island, join columns of plantation type variable 
+df_list <- list()
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
+for(Island in IslandS){
+  
+  df_small   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsp_panel_",Island,"_",PS/1000,"km_82km_UML_CR_total.rds")))
+  df_medium <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfmp_panel_",Island,"_",PS/1000,"km_82km_UML_CR_total.rds")))
+  
+  df_medium <- dplyr::select(df_medium, -lon, -lat, -idncrs_lon, -idncrs_lat)
+  df_list[[match(Island, IslandS)]] <- inner_join(df_small, df_medium, by = c("lonlat", "year"))
+  
+  if(nrow(df_list[[match(Island, IslandS)]]) != nrow(df_medium)){stop("data frames do not all have the same set of grid cells")}
+  rm(df_small, df_medium)
+}
+
+# stack the three Islands together
+indo_df <- bind_rows(df_list)
+
+
+
+saveRDS(indo_df, file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",PS/1000,"km_82km_UML_CR.rds")))
+
+rm(indo_df, df_list)
+
+rm(sop_sp, mop_sp)
+
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 

@@ -673,7 +673,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
 # Only if their outputs have not been already computed
 
 ### Prepare a 30m pixel map of lucfp for each Island
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   if(!file.exists(file.path(paste0("temp_data/processed_lu/annual_maps/lucfmp_",Island,"_30th_2018.tif")))){
     
@@ -683,7 +683,7 @@ for(Island in IslandS){
 
 ### Aggregate this Island map to a chosen parcel size (3km, 6km and 9km for instance)
 PS <- 3000
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucfmp_",Island,"_",PS/1000,"km_30th.tif")))){
     
@@ -695,7 +695,7 @@ for(Island in IslandS){
 ### For that Island and for each aggregation factor, extract panels of parcels within different catchment area sizes 
 # (radius of 10km, 30km and 50km)
 PS <- 3000
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   CR <- 10000 # i.e. 10km radius
   while(CR < 60000){

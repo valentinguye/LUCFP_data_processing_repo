@@ -138,7 +138,7 @@ prepare_pixel_lucfip <- function(island){
   ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
   #### Define area of interest (AOI) ####
   
-  aoi <- island_sf[island_sf$island_name == island,]
+  aoi <- island_sf[island_sf$shape_des == island,]
   aoi <- st_as_sfc(st_bbox(aoi))
   aoi_sp <- as(aoi, "Spatial")
   rm(aoi)
@@ -150,119 +150,119 @@ prepare_pixel_lucfip <- function(island){
   th <- 30
   while(th < 100){
     # Import gfc data prepare (Downloaded, extracted, thresholded with gfcanalysis package in prepare_gfc.R)
-    thed_gfc_data <- brick(file.path(paste0("temp_data/processed_lu/gfc_data_Indonesia_",th,"th.tif"))) 
-    
-    
-    ### Select the loss layer (15 ad 40 are arbitrary, the max value of loss layer is an integer corresponding 
-    # to the latest year after 2000 when loss is observed. We need a GFC version with this year being at least 2015. 
-    # and we do not want to select a layer with percentage and values up to 100. 
-    
+    thed_gfc_data <- brick(file.path(paste0("temp_data/processed_lu/gfc_data_Indonesia_",th,"th.tif")))
+
+
+    ### Select the loss layer (15 ad 40 are arbitrary, the max value of loss layer is an integer corresponding
+    # to the latest year after 2000 when loss is observed. We need a GFC version with this year being at least 2015.
+    # and we do not want to select a layer with percentage and values up to 100.
+
     loss <- thed_gfc_data[[which(thed_gfc_data@data@max > 15 & thed_gfc_data@data@max < 40)]]
-    
+
     rm(thed_gfc_data)
-    
-    ### Crop to extent of island 
-    crop(loss, aoi_sp, 
+
+    ### Crop to extent of island
+    crop(loss, aoi_sp,
          filename = file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_",th,"th.tif")),
          datatype = "INT1U",
          overwrite = TRUE)
-    
-    
+
+
     ### Project loss layer
-    
+
     # This is necessary because we will need to make computations on this map within mills' catchment *areas*.
     # If one does not project maps, then catchment areas all have different areas while being defined with a common buffer.
-    
+
     loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_",th,"th.tif")))
-    
-    beginCluster() # this uses by default detectCores() - 1 
-    
+
+    beginCluster() # this uses by default detectCores() - 1
+
     projectRaster(loss,
                   method = "ngb",
-                  crs = indonesian_crs, 
-                  filename = file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_",th,"th_prj.tif")), 
+                  crs = indonesian_crs,
+                  filename = file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_",th,"th_prj.tif")),
                   datatype = "INT1U",
                   overwrite = TRUE)
-    
+
     endCluster()
-    
-    rm(loss) 
+
+    rm(loss)
     removeTmpFiles(h=0)
-    
+
     print(paste0("complete ", "temp_data/processed_lu/gfc_loss_",island,"_",th,"th_prj.tif"))
-    
+
     th <- th + 30
   }
-  
-  ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+
+  ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
   #### Prepare plantation maps  (Austin et al. (2017))####
-  
-  ### Prepare 2000 industrial oil palm plantation maps, (2015 one has been prepared in prepare_lucpfip.R already). 
-  ioppm2000 <- raster(file.path("input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_2000_WGS1984.tif")) 
-  
+
+  ### Prepare 2000 industrial oil palm plantation maps, (2015 one has been prepared in prepare_lucpfip.R already).
+  ioppm2000 <- raster(file.path("input_data/austin_plantation_maps/IIASA_indo_oilpalm_map/oilpalm_2000_WGS1984.tif"))
+
   # As such, these raw data are lat-lon (WGS1984)
-  # extent is Indonesia  
+  # extent is Indonesia
   # resolution is 0.002277, 0.002277
   # while gfc_data resolution is 0.00030, 0.00025
-  # Cells have value 1 for oil palm plantation, NA else. 
-  
-  # first adjust ioppm2000 maps to the same extent as gfc_data, i.e. the island bounding box. 
+  # Cells have value 1 for oil palm plantation, NA else.
+
+  # first adjust ioppm2000 maps to the same extent as gfc_data, i.e. the island bounding box.
   # intermediary step to reclassify NA to 0 (not time consuming)
   # then projectRaster to match crs res - disaggregate before is not necessary (yields the same result)
-  
-  
-  ### Adjust to roughly the same extent as GFC loss, i.e. island bbox.  
+
+
+  ### Adjust to roughly the same extent as GFC loss, i.e. island bbox.
   # First, crop from Indonesia wide to island extent (in the longitude mainly)
-  # then, extend it (in the latitude mainly) because raw data do not cover northern part of Sumatra. 
-  
+  # then, extend it (in the latitude mainly) because raw data do not cover northern part of Sumatra.
+
   cropped_ioppm2000 <- raster::crop(ioppm2000, y = aoi_sp)
-  
+
   extended_ioppm2000 <- raster::extend(cropped_ioppm2000, y = aoi_sp, value = NA) # NA is the default
-  
+
   writeRaster(extended_ioppm2000,
               filename = file.path(paste0("temp_data/processed_lu/austin_ioppm_2000_",island,".tif")),
               datatype = "INT1U",
               overwrite = TRUE)
-  
-  
+
+
   rm(extended_ioppm2000, cropped_ioppm2000, ioppm2000)
-  
-  
-  ### Reclassify NA into 0 
+
+
+  ### Reclassify NA into 0
   ioppm2000 <- raster(file.path(paste0("temp_data/processed_lu/austin_ioppm_2000_",island,".tif")))
-  
-  raster::reclassify(ioppm2000, 
-                     rcl = cbind(NA,0), 
-                     filename = file.path(paste0("temp_data/processed_lu/austin_ioppm_2000_",island,"_reclassified.tif")), 
-                     overwrite=TRUE, 
+
+  raster::reclassify(ioppm2000,
+                     rcl = cbind(NA,0),
+                     filename = file.path(paste0("temp_data/processed_lu/austin_ioppm_2000_",island,"_reclassified.tif")),
+                     overwrite=TRUE,
                      datatype = "INT1U")
-  
-  
-  ### Align to GFC loss crs, resolution and exact extent.  
-  
-  # read the ioppm2000 map (with roughly the island extent and reclassified) 
+
+
+  ### Align to GFC loss crs, resolution and exact extent.
+
+  # read the ioppm2000 map (with roughly the island extent and reclassified)
   ioppm2000 <- raster(file.path(paste0("temp_data/processed_lu/austin_ioppm_2000_",island,"_reclassified.tif")))
-  
+
   # Read the target GFC loss layer
   loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
-  
+
   beginCluster() # this uses by default detectCores() - 1
-  
+
   projectRaster(from = ioppm2000, to = loss,
                 method = "ngb",
                 filename = file.path(paste0("temp_data/processed_lu/austin_ioppm_2000_",island,"_aligned.tif")),
                 datatype = "INT1U",
                 overwrite = TRUE )
   endCluster()
-  # ~4200s. 
-  
+  # ~4200s.
+
   rm(ioppm2000, loss)
-  removeTmpFiles(h=0)  
-  
+  removeTmpFiles(h=0)
+
   print(paste0("complete ", "temp_data/processed_lu/austin_ioppm_2000_",island,"_aligned.tif"))
-  
-  
-  ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+
+
+  ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
   #### Overlay forest loss and oil palm plantation maps ####
   
   # We want to keep forest loss pixels only within 2015 plantations in order to induce forest conversion to plantation,
@@ -343,7 +343,7 @@ prepare_pixel_lucfip <- function(island){
       # split it into annual binary layers
       calc(lucfip_prj,
            fun = function(x){if_else(x == time, true = 1, false = 0)},
-           filename = file.path(paste0("temp_data/processed_lu//annual_maps/lucfip_",island,"_",th,"th_", years[time],".tif")),
+           filename = file.path(paste0("temp_data/processed_lu/annual_maps/lucfip_",island,"_",th,"th_", years[time],".tif")),
            datatype = "INT1U",
            overwrite = TRUE )
       # remove process temporary files
@@ -724,9 +724,9 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
 # Only if their outputs have not been already computed
 
 ### Prepare a 30m pixel map of lucfip for each Island
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
-  if(!file.exists(file.path(paste0("temp_data/processed_lu/annual_maps/lucfip_",Island,"_total_2018.tif")))){
+  if(!file.exists(file.path(paste0("temp_data/processed_lu/annual_maps/lucfip_",Island,"_90th_2018.tif")))){
     
     prepare_pixel_lucfip(Island)
   }
@@ -734,9 +734,9 @@ for(Island in IslandS){
 
 ### Aggregate this Island map to a chosen parcel size (3km, 6km and 9km for instance)
 PS <- 3000
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
-  if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucfip_",Island,"_",PS/1000,"km_total.tif")))){
+  if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucfip_",Island,"_",PS/1000,"km_90th.tif")))){
     
     aggregate_lucfip(island = Island,
                       parcel_size = PS)
@@ -746,12 +746,12 @@ for(Island in IslandS){
 ### For that Island and for each aggregation factor, extract panels of parcels within different catchment area sizes 
 # (radius of 10km, 30km and 50km)
 PS <- 3000
-IslandS <- c("Sumatra", "Kalimantan", "Papua")
+IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   CR <- 10000 # i.e. 10km radius
   while(CR < 60000){
     # on ne fait pas confiance à celui qui existe pour Sumatra car il vient d'une erreur dans aggregate_lucfip
-    #if(!file.exists(file.path(paste0("temp_data/processed_parcels/lucfip_panel_",Island,"_",PS/1000,"km_",CR/1000,"CR_total.rds")))){
+    #if(!file.exists(file.path(paste0("temp_data/processed_parcels/lucfip_panel_",Island,"_",PS/1000,"km_",CR/1000,"CR_90th.rds")))){
     
     to_panel_within_CR(island = Island,
                        parcel_size = PS,
@@ -815,7 +815,7 @@ for(sample in sampleS){
     # ### Add categoric variable to distinguish parcels that experienced at least one lucpfip pixel event 
     # indo_df <- merge(indo_df,
     #                  ddply(indo_df, "lonlat", summarize, 
-    #                        any_lucfip = sum(lucfip_ha_total, na.rm = TRUE) >0 ), 
+    #                        any_lucfip = sum(lucfip_ha, na.rm = TRUE) >0 ), 
     #                  by = "lonlat")
     
     
