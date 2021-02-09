@@ -17,11 +17,8 @@
 #           --> input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp
 #
 #           district polygons and names (prepare in prepare_crosswalks.do)
-#           --> input_data/indonesia_spatial/district_shapefiles/district_2015_base2000.shp
-#           --> temp_data/processed_indonesia_spatial/province_district_code_names_93_2016.dta
 # 
 #           baseline forest extents variables in cross-section (prepare in prepare_2000_forest_extents.R)
-#           --> pattern: temp_data/processed_parcels/baseline_fc_cs_", for each parcel_size and IBS catchment_radius combination 
 #
 #
 #   Outputs: parcel panel with new columns: the parcel and time varying numbers of UML mills reachable within 10, 30 and 50km. 

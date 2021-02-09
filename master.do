@@ -14,7 +14,8 @@ global Rterm_path "C:\Program Files\R\R-3.6.1\bin\R.exe"
 global Rterm_options "--vanilla"
 
 
-******* NOTHING IS USER SPECIFIC BELOW THIS LINE ********
+******* NOTHING IS USER SPECIFIC BELOW THIS LINE *************************************************************************************************************************************************
+
 
 *** THE PROJECT WORKING DIRECTORY DOES NOT NEED TO BE MANUALLY SPECIFIED, AS IT IS HOME OF THE PRESENT master.do, i.e. ~/LUCFP/data_processing/    
 /* 
@@ -223,7 +224,7 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_indonesia_spatial/district2000_sf
 
 
-**** Build outcome variables at the parcel level
+**** Build outcome variables at the parcel level /!\ ALL THE SCRIPTS IN THIS SECTION TAKE SEVERAL DAYS TO RUN *EACH* on a laptop. /!\
 
 	*** prepare gfc data in a separate script to isolate use of gfcanalysis package. 
 		rsource using "code/outcome_variables/prepare_gfc.R"
@@ -248,8 +249,8 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_lu/annual_maps/parcel_lucpfip_ISLAND_PS_TYPE.tif for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, TYPE = (intact, degraded, total) and YEAR = (2001-2018)
 		
 		*		Dataframe outputs 
-		*			temp_data/processed_parcels/lucpfip_panel_ISLAND_PS_CR_TYPE.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TYPE = (intact, degraded, total) and YEAR = (2001-2018)
-		*			temp_data/processed_parcels/lucpfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
+		*			temp_data/processed_parcels/lucpfip_panel_ISLAND_PS_CR_TYPE.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 82km_UML_CR) TYPE = (intact, degraded, total) and YEAR = (2001-2018)
+		*			temp_data/processed_parcels/lucpfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 82km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
 
 	*** prepare parcel maps of annual LUC from 30, 60 and 90% tree cover forest outside 2000 industrial oil palm plantations (LUCFIP)
 		rsource using "code/outcome_variables/prepare_lucfip" 
@@ -270,8 +271,8 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_lu/annual_maps/parcel_lucfip_ISLAND_PS_TH.tif for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, TH = (30th, 60th, 90th) and YEAR = (2001-2018)
 		
 		*		Dataframe outputs 
-		*			temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
-		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
+		*			temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 82km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
+		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 82km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
 
 	*** prepare parcel maps of annual LUC from primary forest to small and medium size plantations (LUCPFSMP) 
 		rsource using "code/outcome_variables/prepare_lucpfsmp"
@@ -281,8 +282,8 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_lu/margono_primary_forest_ISLAND_aligned.tif
 		*			temp_data/IBS_UML_panel_final.dta
 
-		* output:	temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
-		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
+		* output:	temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 82km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
+		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 82km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
 
 	*** prepare parcel maps of annual LUC from primary forest to small and medium size plantations (LUCPFSMP) 
 		rsource using "code/outcome_variables/prepare_lucfsmp"
@@ -292,8 +293,8 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_lu/austin_ioppm_2000_",island,"_aligned.tif
 		*			temp_data/IBS_UML_panel_final.dta
 
-		* output:	temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
-		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
+		* output:	temp_data/processed_parcels/lucfip_panel_ISLAND_PS_CR_TH.rds for ISLAND = ("Sumatra, Kalimantan, Papua), PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 82km_UML_CR) TH = (30, 60, 90) and YEAR = (2001-2018)
+		*			temp_data/processed_parcels/lucfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 82km_UML_CR) : each one has rows from three islands and columns for three forest definitions.  
 
 
 	*** prepare parcel maps of annual LUC from primary forest to industrial plantations, WITH DISTINCTIONS OF DYNAMICS
@@ -313,12 +314,12 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_lu/lucpfip_DYNA_ISLAND_total.tif for ISLAND = (Sumatra, Kalimantan); DYNA = (replace,rapid, slow)
 		*			temp_data/processed_lu/annual_maps/lucpfip_DYNA_ISLAND_total_YEARS.tif for ISLAND = (Sumatra, Kalimantan); DYNA = (replace,rapid, slow); YEARS = 2001:2018
 		*			temp_data/processed_lu/annual_maps/parcel_lucpfip_DYNA_ISLAND_PS_total_YEARS.tif for ISLAND = (Sumatra, Kalimantan); DYNA = (replace,rapid, slow); PS = 3km; YEARS = 2001:2018
-		*			temp_data/processed_lu/annual_maps/parcel_lucpfip_DYNA_ISLAND_PS_total.tif for ISLAND = (Sumatra, Kalimantan); DYNA = (replace,rapid, slow); PS = 3km
-
-
+		*			temp_data/processed_lu/annual_maps/parcel_lucpfip_DYNA_ISLAND_PS_CR_total.tif for ISLAND = (Sumatra, Kalimantan); DYNA = (replace,rapid, slow); PS = 3km; CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 82km_UML_CR)
+		* main: 
+		*			temp_data/processed_parcels/lucpfip_panel_dynamics_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 82km_UML_CR)
 
 	*** prepare driving travel time between every pairs of parcels and mills. 
-	capture "code/programs/make_osrm_durations"
+	* "code/programs/make_osrm_durations"
 	/*  
 	It is not sourced here, because it requires a local instance of OSRM to be set up. See within the script for more details. 
 	For this reason, the output being not easily reproducible, it is saved in input_data, and not temp_data. 
@@ -372,13 +373,11 @@ rsource using "install_R_project_packages.R"
 	*			temp_data/processed_parcels/baseline_fc_cs_PS_CR.rds for PS = 3km and CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR, 10km_UML_CR, 30km_UML_CR, 50km_UML_CR)
 	*			temp_data/processed_parcels/baseline_fc_cs_PS_CA.rds for PS = 3km and CA = (2h_IBS_CA, 4h_IBS_CA, 6h_IBS_CA, 2h_UML_CA, 4h_UML_CA, 6h_UML_CA)
 
-	*** prepare emissions from LUCPFIP 
-		rsource using "code/outcome_variables/prepare_emissions.R"
 
 
 
 
-**** build explicative variables at the parcel level
+**** build explicative variables at the parcel level /!\ ALL THE SCRIPTS IN THIS SECTION TAKE SEVERAL DAYS TO RUN *EACH* on a laptop. /!\
 
 	/* Distribute geolocalized IBS mill variables to square parcels with distance-weighted averages.  
 	 Parcels are grouped in dataframes according to their size (3x3km only currently - i.e. PS = 3000 (meters)) and 
@@ -424,20 +423,24 @@ rsource using "install_R_project_packages.R"
 	  AND add time series of international and domestic prices and export tax and spreads. 
 	  /!\ ~1h */
 	rsource using "code/explicative_variables/add_CR_parcel_variables.R"	
-		* input:	temp_data/processed_UML/UML_valentin_imputed_est_year.dta
-		*			temp_data/processed_parcels/wa_panel_parcels_PS_CR.rds  	 for PS = 3km, CR = (10CR, 30CR, 50CR)
+		* input:	temp_data/IBS_UML_panel_final.dta
+		*			temp_data/processed_UML/UML_valentin_imputed_est_year.dta
+		*			temp_data/processed_parcels/lucpfip_panel_PS_CR.rds  	 for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
 		*			temp_data/processed_indonesia_spatial/island_sf
 		*			input_data/indonesia_spatial/province_shapefiles/IDN_adm1.shp
-		*			input_data/indonesia_spatial/district_shapefiles/district_2015_base2000.shp
-		*			temp_data/processed_indonesia_spatial/province_district_code_names_93_2016.dta
-		*			temp_data/processed_parcels/baseline_fc_cs_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
+		*			temp_data/processed_indonesia_spatial/district2000_sf
+		*			input_data/indonesia_spatial/podes_bps2014
+		*			temp_data/processed_parcels/wa_panel_parcels_PS_CR.rds  	 for PS = 3km, CR = (10CR, 30CR, 50CR)
+		*			temp_data/processed_parcels/nm_panel_parcels_PS_CR.rds  	 for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			input_data/RSPO_supply_bases/RSPO-certified_oil_palm_supply_bases_in_Indonesia.shp
 		*			input_data/oil_palm_concessions
 		*			input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp
 
 		*output: 	temp_data/processed_parcels/parcels_panel_reachable_uml_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/parcels_panel_geovars_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
+		*			temp_data/processed_parcels/parcels_panel_extmar_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/parcels_panel_w_dyn_PS_CR.rds   for PS = 3km, CR = (10CR, 30CR, 50CR)
+		*			temp_data/processed_parcels/parcels_panel_land_des_PS_CR.rds   for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/parcels_panel_final_PS_CR.rds   for PS = 3km, CR = (10CR, 30CR, 50CR)
 
 	/* Same as above, but on the duration-based CA parcels. 
@@ -462,11 +465,11 @@ rsource using "install_R_project_packages.R"
 **** Merge LHS and RHS (!)
 	* Add also baseline forest extents variables computed in prepare_2000_forest_extents.R
 		rsource using "code/merge_lhs_rhs_CR_parcels.R"
-		* input: 	temp_data/processed_parcels/OV_panel_PS_CR.rds 		for OV = (lucpfip, lucfip, ... ); PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
+		* input: 	temp_data/processed_parcels/OV_panel_PS_CR.rds 		for OV = (lucpfip, lucfip, lucpfsmp, lufsmp, lucpfip_panel_dynamics); PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
 		*			temp_data/processed_parcels/parcels_panel_final_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/baseline_fc_cs_PS_CR.rds for PS = 3km and CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
 
-
+		*			temp_data/processed_parcels/remaining_forest_panel_PS_CR.rds for PS = 3km and CR = (10CR, 30CR, 50CR)
 		* output: 	temp_data/panel_parcels_ip_final_PS_CR.rds  for PS = 3km, CR = (10CR, 30CR, 50CR)
 
 	* And same as above, but for duration-based CA parcels. 
@@ -479,7 +482,7 @@ rsource using "install_R_project_packages.R"
 
 
 
-***** ANALYSIS *****
+***** ANALYSIS  *****
 * note: we do the conversion from pixel counts to areas in here, 
 * depending on what we need. This is not done in earlier stages, so it will have to be done before analysis in further scripts too. 
 **** Descriptive statistics
