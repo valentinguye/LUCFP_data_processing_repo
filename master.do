@@ -483,10 +483,44 @@ rsource using "install_R_project_packages.R"
 
 
 ***** ANALYSIS  *****
+	* This script produces all the tables and figures present in the paper and its appendix. 
+		rsource using "code/analysis/regressions_CR.R"
+		* input: 	temp_data/panel_parcels_ip_final_PS_CR.rds for PS = 3km; CR = (30CR, 50CR)
+		*			temp_data/panel_parcels_ip_final_PS_2h_CA.rds for PS = 3km
+		*			temp_data/processed_indonesia_spatial/island_sf
+		*			temp_data/IBS_UML_panel_final.dta
+		*			temp_data/processed_parcels/lucpfip_panel_PS_82km_UML_CR.rds for PS = 3km
+		* 			temp_data/processed_parcels/lucpfsmp_panel_PS_82km_UML_CR.rds for PS = 3km
+		* 			temp_data/processed_parcels/lucpfip_panel_dynamics_PS_82km_UML_CR.rds for PS = 3km
+		*			temp_data/processed_UML/UML_valentin_imputed_est_year.dta
+		*			input_data/RSPO_supply_bases/RSPO-certified_oil_palm_supply_bases_in_Indonesia.shp
+		*			input_data/oil_palm_concessions
+		*			input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* OLD STUFF NOT USED
 * note: we do the conversion from pixel counts to areas in here, 
 * depending on what we need. This is not done in earlier stages, so it will have to be done before analysis in further scripts too. 
-**** Descriptive statistics
-
+ **** Descriptive statistics
 	*** Outcome variables
 	rsource using "code/descriptive_statistics/lucfp_des_stats.R"
 		* input 	temp_data/processed_mill_geolocalization/IBS_UML_panel.dta
@@ -525,6 +559,7 @@ rsource using "install_R_project_packages.R"
 	* output 	outputs/figures/ 		(for exemple accu_lucpfip, tm_n_reachable_uml, tm_cpo_price_imp1 ... ) 
 
 
+*/
 
 
 
