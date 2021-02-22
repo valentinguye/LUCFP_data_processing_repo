@@ -412,7 +412,13 @@ rsource using "install_R_project_packages.R"
 	*			temp_data/processed_parcels/wa_panel_parcels_ISLAND_PS_CA.rds for ISLAND = (Sumatra, Kalimantan); PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA)
 	*			temp_data/processed_parcels/wa_panel_parcels_PS_CA.rds for PS = 3km, CA = (2h_CA, 4h_CA, 6h_CA) 
 
+	/* Compute the explicative variables alternatively not as inverse-distance weighted averages, but as the value at the nearest mill.	*/
+	rsource using "code/explicative_variables/nearest_mill_at_parcels_distances.R"
+	* input 	temp_data/IBS_UML_panel_final.dta
+	*			temp_data/processed_UML/UML_valentin_imputed_est_year.dta
+	*			temp_data/processed_parcels/lucpfip_panel_PS_CR.rds for PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
 
+	* output 	temp_data/processed_parcels/nm_panel_parcels_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
 
 
 
