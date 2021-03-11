@@ -56,141 +56,10 @@ lapply(neededPackages, library, character.only = TRUE)
 # catchment_radius <- 3e4
 
 merge_lhs_rhs <- function(parcel_size, catchment_radius){
-  
-  # merge lucpfip and lucfip outcome variables data sets together
-  lucpfip <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
-                                  parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
-  
-  lucfip <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfip_panel_",
-                                      parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
-  
-  lucpfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",
-                                       parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
-  
-  lucfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucfsmp_panel_",
-                                       parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
-  
-  lucpfip_dyn <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_dynamics_",
-                                          parcel_size/1000,"km_",catchment_radius/1000,"km_IBS_CR.rds")))
-
-  
-  # keep only year before 2015 (after they mean nothing since we plantation data are from 2015)
-  lucpfip <- lucpfip[lucpfip$year<=2015,] # now runs from 2001-1998
-  lucfip <- lucfip[lucfip$year<=2015,] # now runs from 2001-1998
-  lucpfsmp <- lucpfsmp[lucpfsmp$year<=2015,] # now runs from 2001-1998
-  lucfsmp <- lucfsmp[lucfsmp$year<=2015,] # now runs from 2001-1998
-  lucpfip_dyn <- lucpfip_dyn[lucpfip_dyn$year<=2015,]
-  
-  # # remove coordinates, except in one data frame
-  lucfip <- dplyr::select(lucfip, -lat, -lon, -idncrs_lat, -idncrs_lon)
-  lucpfsmp <- dplyr::select(lucpfsmp, -lat, -lon, -idncrs_lat, -idncrs_lon)
-  lucfsmp <- dplyr::select(lucfsmp, -lat, -lon, -idncrs_lat, -idncrs_lon)
-  lucpfip_dyn <- dplyr::select(lucpfip_dyn, -lat, -lon, -idncrs_lat, -idncrs_lon)
-  
-  # this is necessary because in lucpfip_dyn, coordinates got extracted slightly differently, after the 10th decimal or so, and we want them all equal 
-  # to merge based on them.
-  # lucpfip$lon <- round(lucpfip$lon, 6)
-  # lucpfip$lat <- round(lucpfip$lat, 6)
-  # lucfip$lon <- round(lucfip$lon, 6)
-  # lucfip$lat <- round(lucfip$lat, 6)
-  # lucpfsmp$lon <- round(lucpfsmp$lon, 6)
-  # lucpfsmp$lat <- round(lucpfsmp$lat, 6)
-  # lucpfip_dyn$lon <- round(lucpfip_dyn$lon, 6)
-  # lucpfip_dyn$lat <- round(lucpfip_dyn$lat, 6)
-  
-  # if(nrow(lucpfip)!=nrow(lucfip) |
-  # # nrow(lucpfsmp)!=nrow(lucfsmp) |
-  # # nrow(lucpfip)!=nrow(lucfsmp) |
-  # nrow(lucpfip)!=nrow(lucpfip_dyn)){print("LHS datasets don't all have the same number of rows, which is a known fact, see notes in script")} 
-  # # lucfip has 3 more parcels (45 obs.)
-  
-  LHS <- inner_join(lucpfip, lucfip, by = c("lonlat", "year")) 
-  LHS <- inner_join(LHS, lucpfsmp, by = c("lonlat", "year")) 
-  LHS <- inner_join(LHS, lucfsmp, by = c("lonlat", "year"))   
-  LHS <- inner_join(LHS, lucpfip_dyn, by = c("lonlat", "year"))# 
-  if(nrow(LHS) != nrow(lucpfip)){stop("LHS datasets don't all have the same sets of parcels")}
-  
-  #   (nrow(lucpfip) - nrow(LHS))/15
-
-  ## make a variable that counts rapid and slow lucfp events (this is only computed for primary forest as of now)
-  # THIS IS GOING TO BE THE MAIN OUTCOME VARIABLE INSTEAD OF lucpfip_pixelcount_total
-  LHS$lucpfip_pixelcount <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount
-  LHS$lucfip_pixelcount <- LHS$lucfip_pixelcount_30th# pour l'instant on met lucfip_pixelcount_total dans "all producers" et pas rapid + slow, car on n'a 
-  # pas calculé rapid et slow pour ce type de forêt encore
-  
-  # make variable that counts lucfp events on both small and medium sized plantations 
-  LHS$lucpfsmp_pixelcount <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
-  LHS$lucfsmp_pixelcount <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
-  
-#-------------------------
-  # MAKE A UNIQUE DEPENDENT VARIABLE, WITH DUMMIES FOR ONLY INDUSTRIAL, ONLY SMALLHOLDERS, AND OVERLAPS
-  
-  # # This is true for obs. with positive lucpfip and lucpfsmp.
-  # # It could be that both are positive while not overlapping (i.e. at the same place in the parcel), but we do not try to disentangle that here (would need to be done at the pixel level)
-  # LHS$lucp_i_and_sm_bar <- (LHS$lucpfip_pixelcount == 0 | LHS$lucpfsmp_pixelcount == 0)
-  # LHS$luc_i_and_sm_bar <- (LHS$lucfip_pixelcount == 0 | LHS$lucfsmp_pixelcount == 0)
-  # 
-  # ## make a variable that counts lucfp events on all types of plantations
-  # LHS <- mutate(LHS, lucpfap_pixelcount = (lucpfip_pixelcount + lucpfsmp_pixelcount)*lucp_i_and_sm_bar) 
-  # LHS <- mutate(LHS, lucfap_pixelcount = (lucfip_pixelcount + lucfsmp_pixelcount)*luc_i_and_sm_bar) 
-  
-  # overlap <- LHS[LHS$lucpfip_pixelcount > 0 & LHS$lucpfsmp_pixelcount > 0,]
-  # overlap[overlap$lucpfip_pixelcount == overlap$lucpfsmp_pixelcount ,"lucpfip_pixelcount"] %>% length()
-# ---------------------------  
-  ## make a variable that counts lucfp events on all types of plantations
-  LHS$lucpfap_pixelcount <- LHS$lucpfip_pixelcount + LHS$lucpfsmp_pixelcount
-  LHS$lucfap_pixelcount <- LHS$lucfip_pixelcount + LHS$lucfsmp_pixelcount
-
-  
-  
-  
-  
-#   # check that rapid + slow = total ? 
-#   LHS$lucpfip_rapidslowreplace_pixelcount <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount + LHS$lucpfip_replace_pixelcount
-# 
-#   LHS$diff_0expct <- LHS$lucpfip_pixelcount_total - LHS$lucpfip_rapidslow_pixelcount
-#   
-#   LHS$diff_negexpct <- LHS$lucpfip_pixelcount_total - LHS$lucpfip_rapidslowreplace_pixelcount
-#   
-#   # investigate within cells that have at least one thing happening
-#   lhs <- LHS[LHS$lucpfip_pixelcount_total!=0 | 
-#                               LHS$lucpfip_rapid_pixelcount!=0 |
-#                               LHS$lucpfip_slow_pixelcount!=0 |
-#                               LHS$lucpfip_replace_pixelcount!=0 ,]
-# 
-#   Hmisc::describe(lhs$diff_negexpct)
-#   summary(lhs$diff_negexpct)
-# # this is never positif. Meaning that total is never greater than all three dynamic measures. 
-#   Hmisc::describe(lhs$diff_0expct)
-#   summary(lhs$diff_0expct)
-#   
-# # But some replace seems to be counted in total. This is when total is positive. This is 10% of the cases. 
-#   sum(lhs$diff_0expct>0)/nrow(lhs)
-#   sum(lhs$diff_0expct==0)/nrow(lhs)
-#   sum(lhs$diff_0expct<0)/nrow(lhs)
-#   
-#   View(lhs[lhs$diff_0expct<0,c("lonlat","year","diff_0expct", "lucpfip_pixelcount_total", "lucpfip_rapid_pixelcount",  "lucpfip_slow_pixelcount",  "lucpfip_replace_pixelcount" )])
-#   
-#   unique(no_0expct$year) # no special pattern in time
-#   
-#   # check pattern in space
-#   no_0expct <- st_as_sf(no_0expct, coords = c("lon", "lat"), crs = 4326)
-#   plot(st_geometry(no_0expct)) # no special pattern in space neither
-
-#   length(unique(LHS$diff_0expct))
-#   # 23442 obs. have a different lucpfip_pixelcount_total than rapid + slow, 
-#   # identify them   
-#   no_0expct <- LHS[LHS$diff_0expct != 0,]
-#   
-#   Hmisc::describe(LHS$diff_negexpct)
-#   
-#   
-#   LHS[LHS$diff ==0 &LHS$lucpfip_pixelcount_total!=0,c("lucpfip_rapid_pixelcount", "lucpfip_slow_pixelcount","lucpfip_pixelcount_total" )] %>% nrow()
-# 
-#   rm(lucpfip, lucfip, lucpfsmp, 
-#      #lucfsmp, 
-#      lucpfip_dyn)
-  
+ 
+  ### Left hand side 
+  LHS <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_lhs_panel_final_",
+                                  parcel_size/1000,"km_",catchment_radius/1000,"CR.rds")))
   
   ### EXPLICATIVE VARIABLES (runs from 1998-2015)
   RHS <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
@@ -406,7 +275,7 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
 }
 
 PS <- 3000 
-catchment_radiuseS <- c(1e4, 3e4, 5e4) # (in meters)
+catchment_radiuseS <- c(3e4, 5e4) # (in meters)1e4, 
 for(CR in catchment_radiuseS){
   merge_lhs_rhs(parcel_size = PS, 
                 catchment_radius = CR)

@@ -109,7 +109,7 @@ if(FALSE){
   library(kableExtra)
   library(knitr)
   library(leaflet)
-  library("htmltools")
+  library(htmltools)
   #library(velox)
   #library(ExPanDaR)
   library(DataCombine)

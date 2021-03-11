@@ -441,6 +441,7 @@ rsource using "install_R_project_packages.R"
 		*			input_data/RSPO_supply_bases/RSPO-certified_oil_palm_supply_bases_in_Indonesia.shp
 		*			input_data/oil_palm_concessions
 		*			input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp
+		*			temp_data/processed_parcels/OV_panel_PS_CR.rds 		for OV = (lucpfip, lucfip, lucpfsmp, lufsmp, lucpfip_panel_dynamics); PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
 
 		*output: 	temp_data/processed_parcels/parcels_panel_reachable_uml_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/parcels_panel_geovars_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
@@ -448,6 +449,7 @@ rsource using "install_R_project_packages.R"
 		*			temp_data/processed_parcels/parcels_panel_w_dyn_PS_CR.rds   for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/parcels_panel_land_des_PS_CR.rds   for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/parcels_panel_final_PS_CR.rds   for PS = 3km, CR = (10CR, 30CR, 50CR)
+		*			temp_data/processed_parcels/parcels_lhs_panel_final_PS_CR.rds   for PS = 3km, CR = (10CR, 30CR, 50CR)
 
 	/* Same as above, but on the duration-based CA parcels. 
 	In particular, this differs from the CR counterpart because this one does not compute n_reachable_uml nor sample_coverage variables.
@@ -471,7 +473,7 @@ rsource using "install_R_project_packages.R"
 **** Merge LHS and RHS (!)
 	* Add also baseline forest extents variables computed in prepare_2000_forest_extents.R
 		rsource using "code/merge_lhs_rhs_CR_parcels.R"
-		* input: 	temp_data/processed_parcels/OV_panel_PS_CR.rds 		for OV = (lucpfip, lucfip, lucpfsmp, lufsmp, lucpfip_panel_dynamics); PS = 3km, CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
+		* input: 	temp_data/processed_parcels/parcels_lhs_panel_final_PS_CR.rds   for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/parcels_panel_final_PS_CR.rds for PS = 3km, CR = (10CR, 30CR, 50CR)
 		*			temp_data/processed_parcels/baseline_fc_cs_PS_CR.rds for PS = 3km and CR = (10km_IBS_CR, 30km_IBS_CR, 50km_IBS_CR)
 

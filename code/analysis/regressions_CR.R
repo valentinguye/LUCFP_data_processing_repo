@@ -311,12 +311,11 @@ rm(d_30, d_50)
 # fe = "parcel_id + district_year"#
 # offset = FALSE
 # lag_or_not = "_lag1"
-# controls = c("lucpfap_pixelcount_lag1", "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
+# controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
 # remaining_forest = FALSE
 # interaction_terms = NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
 # interact_regressors = TRUE
 # interacted = "regressors"
-# spatial_control = FALSE
 # pya_ov = FALSE
 # illegal = "all"# "ill2" #
 # weights = FALSE
@@ -324,7 +323,7 @@ rm(d_30, d_50)
 # min_coverage = 0
 # output_full = FALSE
 # 
-# rm(catchment,outcome_variable,island,alt_cr,commo,x_pya,dynamics,log_prices,yoyg,short_run,imp,distribution,fe,remaining_forest,offset,lag_or_not,controls,interaction_terms ,interacted,spatial_control,pya_ov,illegal, nearest_mill, weights)
+# rm(catchment,outcome_variable,island,alt_cr,commo,x_pya,dynamics,log_prices,yoyg,short_run,imp,distribution,fe,remaining_forest,offset,lag_or_not,controls,interaction_terms ,interacted,pya_ov,illegal, nearest_mill, weights)
 
 make_base_reg <- function(island,
                           start_year = 2002, 
@@ -352,7 +351,6 @@ make_base_reg <- function(island,
                             interaction_terms = NULL, # c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
                             interacted = "regressors",
                             interact_regressors = TRUE, # if there are two regressors (e.g. ffb and cpo), should their interaction be included in the model? 
-                            spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
                             pya_ov = FALSE, # logical, whether the lagged (by one year) outcome_variable should be added in controls
                             illegal = "all", # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
                           min_forest_2000 = 0, 
@@ -532,9 +530,6 @@ make_base_reg <- function(island,
     controls[select_ibs_controls] <- sapply(controls[select_ibs_controls], FUN = paste0, lag_or_not)
   }
   
-  # add spatial control or not
-  if(spatial_control){controls <- c(controls, "ngb_ov_lag4")}
-  
   # add remaining forest or not
   if("remaining_forest" %in% controls){
     if(grepl("lucpf", outcome_variable)){
@@ -662,51 +657,6 @@ make_base_reg <- function(island,
       # d <- d[d$extensive == TRUE,]
     }
   }
-  
-  
-  # should be applied to d_clean rather no ? or at least d_nona...
-  # to speed up computation, and also because we do not want to control for values in neighboring cells that are not entering the regressions
-  # these values are not bringing any bias by definition as they are excluded
-  if(spatial_control){
-    
-    # restrict the data set to years where the paste outcome is available
-    d <- d[d$year > 2004,]
-    
-    # d is a balanced panel so far so we can take any first record of a parcel to 
-    # keep the most general cross section
-    nrow(d) == length(unique(d$parcel_id))*length(unique(d$year))
-    d_cs <- d[!duplicated(d$parcel_id),c("parcel_id", "year", "lat", "lon", "island",outcome_variable)]
-    
-    # spatial
-    d_cs <- st_as_sf(d_cs, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
-    
-    # identify neighbors
-    # this definition of neighbors includes the 8 closest, surounding, grid cells. 
-    d_buf <- st_buffer(d_cs, dist = parcel_size - 10)
-    row.names(d_buf) <- d_buf$parcel_id
-    sgbp <- st_intersects(d_buf)
-    
-    
-    # iterate on parcel ~30 minutes
-    d[,"ngb_ov_lag4"] <- rep(NA, nrow(d))
-    for(p_i in 1:length(sgbp)){
-      # remove own index
-      p_i_neighbors <- sgbp[[p_i]][sgbp[[p_i]] != p_i]
-      # get the parcel_id corresponding to the sgbp index
-      p_i_neighbors <- as.numeric(attr(sgbp,"region.id")[p_i_neighbors])
-      # compute mean of outcome variable lags in the PANEL dataset
-      for(y in unique(d$year)){
-        d[d$parcel_id == as.numeric(attr(sgbp,"region.id")[p_i]) & d$year == y, "ngb_ov_lag4"]  <- mean(d[d$parcel_id %in% p_i_neighbors & d$year == y, paste0(outcome_variable,"_lag4")],na.rm = TRUE)
-      }
-    } 
-    
-    # empty neighbor sets (those that have no neighbors but themselves) and  end up with NaN as mean(integer(0)) 
-    # turn them into NA
-    d[is.nan(d$ngb_ov_lag3),"ngb_ov_lag3"] <- NA
-    d[is.nan(d$ngb_ov_lag4),"ngb_ov_lag4"] <- NA
-    
-  }
-  
   
   # - have a minimum reachable mill sample coverage (and a positive amount of reachable mills)
   d <- dplyr::filter(d, n_reachable_ibs > 0 &
@@ -2728,7 +2678,6 @@ make_spec_chart_df <- function(island,
                                interaction_terms = NULL, # c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
                                interacted = "regressors",
                                interact_regressors = TRUE, # if there are two regressors (e.g. ffb and cpo), should their interaction be included in the model? 
-                               spatial_control = FALSE, # logical, if TRUE, adds ~30min computation. Should the average of neighbors' outcome variable be added in the RHS. 
                                pya_ov = FALSE, # logical, whether the pya (defined by x_pya) of the outcome_variable should be added in controls
                                illegal = "all", # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
                                min_forest_2000 = 0, 
@@ -2766,7 +2715,6 @@ make_spec_chart_df <- function(island,
                                interaction_terms = interaction_terms, # c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
                                interacted = interacted,
                                interact_regressors = interact_regressors, # if there are two regressors (e.g. ffb and cpo), should their interaction be included in the model? 
-                               spatial_control = spatial_control, 
                                pya_ov = pya_ov, 
                                illegal = illegal, # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
                                min_forest_2000 = min_forest_2000, 
@@ -2811,10 +2759,10 @@ make_spec_chart_df <- function(island,
     "control_own" = FALSE,
     "n_reachable_uml_control" = FALSE, 
     "lagged_ov" = FALSE,
+    "ngb_ov_lag4" = FALSE,
     "prex_cpo_control" = FALSE,
     "baseline_forest_trend" = FALSE,
     #"remaining_forest" = FALSE,
-    #"ngb_ov_lag4" = FALSE,
     # interactions
     # "own_interact" = FALSE,
     # "n_reachable_uml_interact" = FALSE,
@@ -2889,15 +2837,15 @@ make_spec_chart_df <- function(island,
   if(any(grepl("n_reachable_uml", controls))){ind_var[,"n_reachable_uml_control"] <- TRUE}
   # lagged outcome variable
   if(any(grepl(outcome_variable, controls))){ind_var[,"lagged_ov"] <- TRUE}
+  # spatial lag deforestation
+  if(any(grepl("ngb_ov_lag4", controls))){ind_var[,"ngb_ov_lag4"] <- TRUE}
   # prex_cpo
   if(any(grepl("prex_cpo", controls))){ind_var[,"prex_cpo_control"] <- TRUE}
   # baseline forest trend
   if("baseline_forest_trend" %in% controls){ind_var[,"baseline_forest_trend"] <- TRUE}
   # remaining forest
   if("remain_pf_pixelcount" %in% controls){ind_var[,"remaining_forest"] <- TRUE}
-  # pya outcome spatial
-  if(spatial_control){ind_var[,"ngb_ov_lag4"] <- TRUE}
-  
+
   ## interactions
   # if(any(grepl("own_nat_priv",interaction_terms)) | any(grepl("own_for",interaction_terms))){ind_var[,"own_interact"] <- TRUE}
   # if(any(grepl("n_reachable_uml",interaction_terms))){ind_var[,"n_reachable_uml_interact"] <- TRUE}
@@ -3148,6 +3096,16 @@ for(ctrl in control_sets_list){
   c <- c + 1
 }
 
+
+## Add the control set with the lagged deforestation in the neighbor grid cells
+reg_stats_indvar_list[[paste0("ctrl_",c)]] <- make_spec_chart_df(island = ISL,
+                                                                 outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                                 controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml",
+                                                                              "ngb_ov_lag4"))
+c <- c + 1
+
+
+
 # # two basic + wa_prex_cpo_imp1 and remain_pf_pixelcount
 # ctrl <- c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml",
 #           "wa_prex_cpo_imp1", "remain_pf_pixelcount")
@@ -3172,12 +3130,7 @@ for(ctrl in control_sets_list){
 #                                                  controls = ctrl)
 # i <- i+1
 
-## Spatial control on top of two basic ones
-# reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-#                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-#                                                  controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml"),
-#                                                  spatial_control = TRUE)
-# i <- i+1
+
 
 ## Now with less interactions
 # # With all controls, but no interaction
@@ -3230,29 +3183,13 @@ for(ctrl in control_sets_list){
 # i <- i+1
 
 
-# Additional controls
-# long_to_compute <- file.path(paste0("temp_data/reg_results/spec_chart_df_spatialcontrol_",ISL,"_",SIZE))
-# if(file.exists(long_to_compute)){
-#   reg_stats_indvar_list[[i]] <- readRDS(long_to_compute)
-# }else{
-#   reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-#                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-#                                                    spatial_control = TRUE) # TAKES A WHILE  /!\
-#   i <- i+1
-# }
-# reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
-#                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-#                                                  controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1", "remain_pf_pixelcount"), 
-#                                                  interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "wa_prex_cpo_imp1", "remain_pf_pixelcount"))
-# i <- i+1
-
 # convert to dataframe to be able to chart
 reg_stats_indvar <- bind_rows(reg_stats_indvar_list)
 #reg_stats_indvar <- reg_stats_indvar[,-c(ncol(reg_stats_indvar))]
 
 # save it 
 if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_indvar)+1 == i
-  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_19022021")))
+  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_08032021")))
 } else{print(paste0("SOMETHING WENT WRONG in spec_chart_df_",ISL,"_",SIZE))}
 
 #}else{reg_stats_indvar <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",ISL)))}
@@ -3271,14 +3208,20 @@ if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_
   
 ### PLOTTING 
 ### GIVE HERE THE ISLAND, THE OUTCOME AND THE DATE FOR WHICH YOU WANT THE SPEC CHART TO BE PLOTTED
-scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a_19022021")))
+scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a_08032021")))
 
 # some modifications for now because scdf run with some "mistakes"
 # scdf <- dplyr::select(scdf, -weights)
 # scdf <- dplyr::mutate(scdf, own_interact = (own_for_interact | own_nat_priv_interact))
 # scdf <- dplyr::select(scdf, -own_for_interact, -own_nat_priv_interact)
 # scdf <- scdf[,c(1:23,29,24:28)]
-
+# 
+# scdf$ngb_ov_lag4 <- FALSE
+# scdf <- cbind(scdf[,1:19], scdf[,ncol(scdf)], scdf[,20:31])
+# names(scdf)[20] <- "ngb_ov_lag4"
+# 
+# colnames(scdf) %>% all.equal(colnames(reg_stats_indvar))
+# scdf <- rbind(scdf, reg_stats_indvar)
 
 # make labels for the chart
 schart_labels <- list(#"Dependent variable:" = c("Larger forest definition"),
@@ -3307,6 +3250,7 @@ schart_labels <- list(#"Dependent variable:" = c("Larger forest definition"),
                                       "Ownership",
                                       "# reachable mills", 
                                       "Lagged deforestation",
+                                      "Past neighbors' deforestation",
                                       "% CPO exported", 
                                       "Baseline forest trend"),#"Remaining forest""Neighbors' outcomes, 4-year lagged"
                       # "Interaction with:" = c(#paste0(toupper(c("ffb", "cpo")[!grepl(VAR, c("ffb", "cpo"))]), " price signal"), 
@@ -3361,6 +3305,7 @@ a <- a[#a$larger_forest_def==FALSE &
          a$control_own & 
          a$n_reachable_uml_control  &
          a$lagged_ov == FALSE &
+        a$ngb_ov_lag4 == FALSE & 
          a$prex_cpo_control == FALSE &
          a$baseline_forest_trend == FALSE &
          # a$remaining_forest == FALSE & 
