@@ -68,7 +68,8 @@ renv::restore()
 #   see in particular https://rstudio.github.io/renv/articles/renv.html 
 
 
-
+### LOAD ALL PROJECT PACKAGES ### 
+lapply(neededPackages, library, character.only = TRUE)
 
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
