@@ -603,7 +603,7 @@ leaflet() %>%
   addLegend(pal = cb_sm,  
             values = d_clean_cs_ls[[2]]$md_lucpfsmp_ha_total, 
             bins = 2, opacity = 0.4,
-            title = "LUCFP 2008 MD<br/>smallholders",
+            title = "Deforestation <br/>smallholders (2008)",
             position = "bottomright") %>% 
   
   addPolygons(data = d_clean_cs_ls[[1]], 
@@ -613,7 +613,7 @@ leaflet() %>%
   addLegend(pal = cb_ind,  
             values = d_clean_cs_ls[[1]]$md_lucpfip_ha_total, 
             bins = 2, opacity = 0.7,
-            title = "LUCFP 2008 MD<br/>industrial",
+            title = "Deforestation <br/>industrial (2008)",
             position = "bottomright")       %>% 
   ### DISTRICTS
   addPolygons(data = district_sf_intersect, 
