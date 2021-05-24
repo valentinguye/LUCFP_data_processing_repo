@@ -112,7 +112,7 @@ rm(d_30, d_50)
 # short_run = "full"
 # imp = 1
 # distribution = "quasipoisson"
-# fe = "parcel_id + district_year"#
+# fe = "lonlat + district_year"#
 # offset = FALSE
 # lag_or_not = "_lag1"
 # controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
@@ -148,7 +148,7 @@ make_base_reg <- function(island,
                           short_run = "full", # either "full", or "dev". Used only if dynamics = TRUE and yoyg = FALSE. Should the short run (SR) measure of regressors be the price signal as such ("full") or be the deviation to past year average price signal ("dev"). 
                           imp = 1, # either 1 or 2. 1 selects the data cleaned with the stronger imputations. 
                           distribution = "quasipoisson", # either "poisson", "quasipoisson", or "negbin"
-                          fe = "parcel_id + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
+                          fe = "lonlat + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
                           offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                           lag_or_not = "_lag1", # either "_lag1", or  "", should the 
                           controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # , "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
@@ -201,15 +201,15 @@ make_base_reg <- function(island,
     
   }
   
-  ### MAKE THE PARCEL_ID 
-  d$parcel_id <- d$lonlat
+  ### MAKE THE lonlat 
+  d$lonlat <- d$lonlat
   
   # This would also be possible if done here, once we have stacked/merged all datasets to the final one. 
   # But changes nothing and is more intricate... 
   # d <- dplyr::arrange(d, lonlat, year)
   # uni_lonlat <- unique(d$lonlat)
   # d <- mutate(d,
-  #             parcel_id = match(lonlat, uni_lonlat))
+  #             lonlat = match(lonlat, uni_lonlat))
   # rm(uni_lonlat)
 
   
@@ -329,27 +329,27 @@ make_base_reg <- function(island,
   #if(pya_ov){controls <- c(controls, paste0(outcome_variable,"_",x_pya,"pya"))}
   # for 1 year lag
   if(any(grepl(pattern = paste0(outcome_variable,"_lag1"), x = controls))){
-    d <- dplyr::arrange(d, parcel_id, year)
+    d <- dplyr::arrange(d, lonlat, year)
     d <- DataCombine::slide(d,
                             Var = outcome_variable,
                             TimeVar = "year",
-                            GroupVar = "parcel_id",
+                            GroupVar = "lonlat",
                             NewVar = paste0(outcome_variable,"_lag1"), # the name passed in controls should correspond. 
                             slideBy = -1,
                             keepInvalid = TRUE)
-    d <- dplyr::arrange(d, parcel_id, year)
+    d <- dplyr::arrange(d, lonlat, year)
   }
   # for 4 year lag
   if(any(grepl(pattern = paste0(outcome_variable,"_lag4"), x = controls))){
-    d <- dplyr::arrange(d, parcel_id, year)
+    d <- dplyr::arrange(d, lonlat, year)
     d <- DataCombine::slide(d,
                             Var = outcome_variable,
                             TimeVar = "year",
-                            GroupVar = "parcel_id",
+                            GroupVar = "lonlat",
                             NewVar = paste0(outcome_variable,"_lag4"), # the name passed in controls should correspond. 
                             slideBy = -4,
                             keepInvalid = TRUE)
-    d <- dplyr::arrange(d, parcel_id, year)
+    d <- dplyr::arrange(d, lonlat, year)
   }
   
   
@@ -399,7 +399,7 @@ make_base_reg <- function(island,
   # important to do that after outcome_variable, regressors controls etc. have been (re)defined. 
   # (interactions do not need to be in there as they are fully built from the used_vars)
   used_vars <- c(outcome_variable, regressors, controls,
-                 "parcel_id",  "year", "lat", "lon", 
+                 "lonlat",  "year", "lat", "lon", 
                  "village", "subdistrict", "district", "province", "island", #"illegal2",
                  "village_year", "subdistrict_year", "district_year", "province_year")#,"reachable", "reachable_year"
   #"n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
@@ -1270,7 +1270,7 @@ kable(des_table, booktabs = T, align = "c",
                    strikeout = F) %>% 
   add_header_above(c(" " = 1, 
                      "# grid cells = 4757 \n # grid cell-year = 31721" = 3,
-                     "# grid cells = 8368 \n # grid cell-year = 91620" = 3, 
+                     "# grid cells = 8309 \n # grid cell-year = 87004" = 3, 
                      " " = 2),
                    align = "c",
                    strikeout = F) %>% 
@@ -1472,7 +1472,7 @@ res_data <- make_base_reg(island = "both",
                           outcome_variable = paste0("lucpfap_pixelcount"))
 
 d_clean <- res_data[[2]]
-d_clean_cs <- d_clean[!duplicated(d_clean$parcel_id),]
+d_clean_cs <- d_clean[!duplicated(d_clean$lonlat),]
 
 d_cs <- st_as_sf(d_clean_cs, coords = c("lon", "lat"), crs = 4326)
 d_cs <- st_transform(d_cs, crs = indonesian_crs)
@@ -1483,10 +1483,10 @@ d_geo <- st_union(st_geometry(d_cs))
 d_geo <- st_transform(d_geo, crs = 4326)
 
 
-# d_cs <- ddply(d_clean, "parcel_id", summarise, 
+# d_cs <- ddply(d_clean, "lonlat", summarise, 
 #               accu_lucfp = sum(lucpfap_pixelcount))
 # 
-# d_cs <- left_join(d_cs, d_clean_cs[,c("parcel_id", "lon", "lat")], by = "parcel_id")
+# d_cs <- left_join(d_cs, d_clean_cs[,c("lonlat", "lon", "lat")], by = "lonlat")
 
 
 
@@ -1631,7 +1631,7 @@ kable(ape_mat, booktabs = T, align = "r",
             italic = TRUE, bold = TRUE)  %>%
   pack_rows("# reachable mills", 7, 8,
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "1em", hline_before = TRUE) %>% 
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "1em", hline_before = TRUE) %>% 
   column_spec(column = 1,
               width = "7em",
               latex_valign = "b") %>% 
@@ -1724,9 +1724,7 @@ kable(stacked_ape_mat, booktabs = T, align = "r",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(stacked_ape_mat))),
               width = "7em",
-              latex_valign = "b") %>% 
-  column_spec(column = ncol(stacked_ape_mat)+1,
-              bold = TRUE)
+              latex_valign = "b") 
 
 
 
@@ -1948,7 +1946,7 @@ ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
 
 for(SIZE in size_list){
   for(ILL in ill_status){
-    res_data_list_interact[[elm]] <- make_base_reg(island = ISL,
+    res_data_list_interact[[elm]] <- make_base_reg(island = "both",
                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
                                                    interaction_terms = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"),
                                                    illegal = ILL,
@@ -1998,7 +1996,7 @@ kable(ape_mat, booktabs = T, align = "r",
             italic = TRUE, bold = TRUE)  %>%
   pack_rows("# reachable mills", 7, 8, 
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.1em", hline_before = TRUE) %>% 
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.1em", hline_before = TRUE) %>% 
   column_spec(column = 1,
               width = "8em",
               latex_valign = "b") %>% 
@@ -2007,7 +2005,6 @@ kable(ape_mat, booktabs = T, align = "r",
               latex_valign = "b")
 
 rm(res_data_list_interact)
-#### MECHANISM ANALYSIS ###
 
 ### LUC DYNAMICS --------------------------------------------------------------------------------------
 
@@ -2016,16 +2013,15 @@ rm(res_data_list_interact)
 res_data_list_dyn <- list()
 elm <- 1
 
-isl_list <- list("both")#"Sumatra", "Kalimantan", 
 dyn_list <- list("rapid", "slow")
 
 for(DYN in dyn_list){
   for(ILL in ill_status){
-    res_data_list_dyn[[elm]] <- make_base_reg(island = ISL, 
+    res_data_list_dyn[[elm]] <- make_base_reg(island = "both", 
                                               outcome_variable = paste0("lucpfip_",DYN,"_pixelcount"),
                                               illegal = ILL,
                                               offset = FALSE)
-    names(res_data_list_dyn)[elm] <- paste0(ISL,"_",DYN,"_",ILL)
+    names(res_data_list_dyn)[elm] <- paste0("both_",DYN,"_",ILL)
     elm <- elm + 1
   }
 }
@@ -2056,15 +2052,13 @@ kable(ape_mat, booktabs = T, align = "r",
                      "Transitional conversion" = 3),
                    align = "c",
                    strikeout = F) %>%
-  pack_rows("Price elasticity", 1, 3, 
-            italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n # of reachable mills", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
   #           italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n foreign ownership", 7, 9,
   #           italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Interaction with \n # of reachable mills", 10, 12,
   #           italic = TRUE, bold = TRUE)  %>%
-  pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.2em", hline_before = TRUE) %>% 
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.2em", hline_before = TRUE) %>% 
   column_spec(column = 1,
               width = "7em",
               latex_valign = "b") %>% 
@@ -2094,21 +2088,21 @@ size_list <- list("i", "sm", "a")
 ## With SR only 
 for(SIZE in size_list){
   #for(ILL in ill_status){
-  res_data_list_prdyn[[elm]] <- make_base_reg(island = ISL,
+  res_data_list_prdyn[[elm]] <- make_base_reg(island = "both",
                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
                                               only_sr = TRUE,
                                               offset = FALSE)
-  names(res_data_list_prdyn)[elm] <- paste0(ISL,"_",SIZE,"_onlySR")
+  names(res_data_list_prdyn)[elm] <- paste0("both_",SIZE,"_onlySR")
   elm <- elm + 1
 }
 # With SR AND MDR
 for(SIZE in size_list){
-  res_data_list_prdyn[[elm]] <- make_base_reg(island = ISL,
+  res_data_list_prdyn[[elm]] <- make_base_reg(island = "both",
                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
                                               dynamics = TRUE,
                                               interact_regressors = TRUE,
                                               offset = FALSE)
-  names(res_data_list_prdyn)[elm] <- paste0(ISL,"_",SIZE,"_prdyn")
+  names(res_data_list_prdyn)[elm] <- paste0("both_",SIZE,"_prdyn")
   elm <- elm + 1
   
 }
@@ -2130,7 +2124,7 @@ ape_mat[6, "both_a_prdyn"] <- "[0.003; 0.05]" # to check: rerun make_APEs functi
 ape_mat[6, "both_sm_prdyn"] <- "[0.003; 0.08]"
 row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
 
-
+ape_mat
 colnames(ape_mat) <- NULL
 
 options(knitr.table.format = "latex")
@@ -2150,7 +2144,7 @@ kable(ape_mat, booktabs = T, align = "r",
             italic = TRUE, bold = TRUE)  %>%
   pack_rows("Interaction", 5, 6, 
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.1em", hline_before = TRUE) %>% 
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.1em", hline_before = TRUE) %>% 
   column_spec(column = 1,
               width = "13em",
               latex_valign = "b") %>% 
@@ -2172,21 +2166,21 @@ size_list <- list("i", "sm", "a")
 ## With FFB only 
 for(SIZE in size_list){
   #for(ILL in ill_status){
-  res_data_list_commo[[elm]] <- make_base_reg(island = ISL,
+  res_data_list_commo[[elm]] <- make_base_reg(island = "both",
                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
                                               commo = "ffb",
                                               offset = FALSE)
-  names(res_data_list_commo)[elm] <- paste0(ISL,"_",SIZE,"_ffb")
+  names(res_data_list_commo)[elm] <- paste0("both_",SIZE,"_ffb")
   elm <- elm + 1
 }
 ## With FFB *and* CPO prices  
 for(SIZE in size_list){
-  res_data_list_commo[[elm]] <- make_base_reg(island = ISL,
+  res_data_list_commo[[elm]] <- make_base_reg(island = "both",
                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
                                               commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
                                               interact_regressors = TRUE,
                                               offset = FALSE)
-  names(res_data_list_commo)[elm] <- paste0(ISL,"_",SIZE,"_ffbcpo")
+  names(res_data_list_commo)[elm] <- paste0("both_",SIZE,"_ffbcpo")
   elm <- elm + 1
 }
 
@@ -2205,7 +2199,7 @@ ape_mat <- ape_mat[,c(1,4,2,5,3,6)]
 
 row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
 
-
+ape_mat
 colnames(ape_mat) <- NULL
 
 options(knitr.table.format = "latex")
@@ -2225,7 +2219,7 @@ kable(ape_mat, booktabs = T, align = "r",
             italic = TRUE, bold = TRUE)  %>%
   pack_rows("Interaction", 5, 6, 
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.1em", hline_before = TRUE) %>% 
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.1em", hline_before = TRUE) %>% 
   column_spec(column = 1,
               width = "9em",
               latex_valign = "b") %>% 
@@ -2478,7 +2472,7 @@ make_spec_chart_df <- function(island,
                                short_run = "full", # either "full", or "dev". Used only if dynamics = TRUE and yoyg = FALSE. Should the short run (SR) measure of regressors be the price signal as such ("full") or be the deviation to past year average price signal ("dev"). 
                                imp = 1, # either 1 or 2. 1 selects the data cleaned with the stronger imputations. 
                                distribution = "quasipoisson", # either "poisson", "quasipoisson", or "negbin"
-                               fe = "parcel_id + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
+                               fe = "lonlat + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
                                offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                                lag_or_not = "_lag1", # either "_lag1", or  "", should the 
                                controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # , "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
@@ -2629,12 +2623,12 @@ make_spec_chart_df <- function(island,
   ind_var[,distribution] <- TRUE
   
   # set indicator variables for fixed effects
-  if(fe == "parcel_id"){ind_var[,"unit_fe"] <- TRUE}
-  if(fe == "parcel_id + year"){ind_var[,"tw_fe"] <- TRUE}
-  if(fe == "parcel_id + province_year"){ind_var[,"unit_provyear_fe"] <- TRUE}
-  if(fe == "parcel_id + district_year"){ind_var[,"unit_distryear_fe"] <- TRUE}
-  if(fe == "parcel_id + subdistrict_year"){ind_var[,"unit_subdistryear_fe"] <- TRUE}
-  if(fe == "parcel_id + village_year"){ind_var[,"unit_villageyear_fe"] <- TRUE}
+  if(fe == "lonlat"){ind_var[,"unit_fe"] <- TRUE}
+  if(fe == "lonlat + year"){ind_var[,"tw_fe"] <- TRUE}
+  if(fe == "lonlat + province_year"){ind_var[,"unit_provyear_fe"] <- TRUE}
+  if(fe == "lonlat + district_year"){ind_var[,"unit_distryear_fe"] <- TRUE}
+  if(fe == "lonlat + subdistrict_year"){ind_var[,"unit_subdistryear_fe"] <- TRUE}
+  if(fe == "lonlat + village_year"){ind_var[,"unit_villageyear_fe"] <- TRUE}
   
   ## set indicator variables for controls
   # second commo 
@@ -2669,7 +2663,7 @@ make_spec_chart_df <- function(island,
   #if(distribution == "negbin"){ind_var[,"weights"] <- FALSE} # turn it back to FALSE if negbin distribution
   
   # clustering
-  if(length(cluster) == 1 & cluster == "parcel_id"){ind_var[,"unit_cluster"] <- TRUE}
+  if(length(cluster) == 1 & cluster == "lonlat"){ind_var[,"unit_cluster"] <- TRUE}
   if(length(cluster) == 1 & cluster == "village"){ind_var[,"village_cluster"] <- TRUE}
   #if(length(cluster) == 1 & cluster == "reachable"){ind_var[,"reachable_cluster"] <- TRUE}
   if(length(cluster) == 1 & cluster == "district"){ind_var[,"district_cluster"] <- TRUE}
@@ -2816,7 +2810,7 @@ if(SIZE == "i"){
   # unit FE
   reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL,
                                                    outcome_variable = paste0("lucpfip_rapid_pixelcount"),
-                                                   fe = "parcel_id")
+                                                   fe = "lonlat")
   i <- i+1
 }
 
@@ -2830,8 +2824,8 @@ for(DISTR in c("poisson", "negbin")){#
 }
 
 ## For alternative fixed effects
-for(FE in c("parcel_id", "parcel_id + year", 
-            "parcel_id + province_year", "parcel_id + subdistrict_year")){#, "parcel_id + village_year"
+for(FE in c("lonlat", "lonlat + year", 
+            "lonlat + province_year", "lonlat + subdistrict_year")){#, "lonlat + village_year"
   reg_stats_indvar_list[[paste0(FE," fe")]] <- make_spec_chart_df(island = ISL,
                                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
                                                                   fe = FE)
@@ -2840,7 +2834,7 @@ for(FE in c("parcel_id", "parcel_id + year",
 i  
 ## For an alternative standard error computation (two-way clustering)
 c <- 1
-for(CLT in list("parcel_id", "village", "district", c("parcel_id","district_year"))){#"reachable" ,  
+for(CLT in list("lonlat", "village", "district", c("lonlat","district_year"))){#"reachable" ,  
   reg_stats_indvar_list[[paste0("cluster_", c)]] <- make_spec_chart_df(island = ISL,
                                                                        outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
                                                                        cluster = CLT)
@@ -3226,14 +3220,14 @@ d$lucpfsmp_pixelcount <- d$lucpfsp_pixelcount_total + d$lucpfmp_pixelcount_total
 d <- mutate(d, lucpfap_pixelcount = lucpfip_pixelcount + lucpfsmp_pixelcount) 
 
 
-## MAKE THE PARCEL_ID 
+## MAKE THE lonlat 
 uni_lonlat <- unique(d$lonlat)
 d <- mutate(d, 
-            parcel_id = match(lonlat, uni_lonlat)) 
+            lonlat = match(lonlat, uni_lonlat)) 
 rm(uni_lonlat)
 
 # some arrangements
-d <- dplyr::arrange(d, parcel_id, lonlat, year)
+d <- dplyr::arrange(d, lonlat, lonlat, year)
 row.names(d) <- seq(1,nrow(d))
 
 
@@ -3256,26 +3250,26 @@ uml <- st_union(uml)
 
 d <- st_as_sf(d, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs)
 
-d_cs <- d[!duplicated(d$parcel_id), ]
+d_cs <- d[!duplicated(d$lonlat), ]
 sgbp <- st_within(d_cs, uml)
 d_cs$CR <- rep(FALSE, nrow(d_cs))
 d_cs$CR[lengths(sgbp) > 0] <- TRUE
 sum(d_cs$CR)
 
 d_cs <- st_drop_geometry(d_cs)
-d <- left_join(d, d_cs[, c("parcel_id", "CR")], by = "parcel_id")
+d <- left_join(d, d_cs[, c("lonlat", "CR")], by = "lonlat")
 d_save <- d
 #d <- filter(d, d$CR)
 
 
 ## With some deforestation at least once 
 # If it's smallholders
-d$smallholders <- (d$parcel_id %in% d[-obs2remove(fml = as.formula(paste0("lucpfsmp_pixelcount ~ parcel_id")),
+d$smallholders <- (d$lonlat %in% d[-obs2remove(fml = as.formula(paste0("lucpfsmp_pixelcount ~ lonlat")),
                                                   data = d, 
-                                                  family = "poisson"),]$parcel_id )
+                                                  family = "poisson"),]$lonlat )
 
 
-d <- d[-obs2remove(fml = as.formula(paste0("lucpfap_pixelcount ~ parcel_id")),
+d <- d[-obs2remove(fml = as.formula(paste0("lucpfap_pixelcount ~ lonlat")),
                    data = d, 
                    family = "poisson"),]
 
@@ -3302,11 +3296,11 @@ rspo$year <- rspo$year +1
 d$rspo_cert <- rep(FALSE, nrow(d))
 
 n_with_rspo <- nrow(d)
-gc_with_rspo <- length(unique(d$parcel_id))
+gc_with_rspo <- length(unique(d$lonlat))
 
 for(y in min(rspo$year):max(d$year)){
   # select d from the given year
-  d_cs <- d[d$year == y, c("parcel_id", "year", "rspo_cert")]
+  d_cs <- d[d$year == y, c("lonlat", "year", "rspo_cert")]
   # select supply bases already certified this year
   rspo_cs <- rspo[rspo$year <= y,] %>% st_geometry()
   
@@ -3321,7 +3315,7 @@ d <- d[d$rspo_cert==FALSE,]
 # how many in RSPO ? It removes observations but no grid cell, because all RSPO grid cells have obs. 
 # before RSPO started
 n_with_rspo - nrow(d)
-gc_with_rspo - length(unique(d$parcel_id))
+gc_with_rspo - length(unique(d$lonlat))
 
 
 
@@ -3364,7 +3358,7 @@ d_cs$concession[lengths(sgbp) > 0] <- TRUE
 
 d_cs <- st_drop_geometry(d_cs)
 
-d <- left_join(d, d_cs[,c("parcel_id", "concession")], by = "parcel_id")
+d <- left_join(d, d_cs[,c("lonlat", "concession")], by = "lonlat")
 
 # note that some d fall within more than one concession record. There may be several reasons for concession overlaps 
 # like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
@@ -3381,13 +3375,13 @@ d_cs <- st_join(x = d_cs,
 
 # some grid cells seem to fall within overlapping llu shapes though. 
 # It's really marginal (12 instances). Just remove the duplicates it produces.
-d_cs <- d_cs[!duplicated(d_cs$parcel_id),]
+d_cs <- d_cs[!duplicated(d_cs$lonlat),]
 
 # merge back with panel 
 d <- st_drop_geometry(d)
 d_cs <- st_drop_geometry(d_cs)
 
-d <- left_join(d, d_cs[,c("parcel_id", "llu")], by = "parcel_id")
+d <- left_join(d, d_cs[,c("lonlat", "llu")], by = "lonlat")
 
 unique(d$llu)
 
@@ -3405,7 +3399,7 @@ d <- dplyr::mutate(d,
                                                 llu == "HL")))
 
 # yields many missing in illegal because many grid cells are within a mising land use legal classification
-# parcels[!duplicated(parcels$parcel_id) & !is.na(parcels$llu), c("parcel_id", "concession", "llu", "illegal1", "illegal2")]
+# parcels[!duplicated(parcels$lonlat) & !is.na(parcels$llu), c("lonlat", "concession", "llu", "illegal1", "illegal2")]
 
 # restrict the sample to the pre-defined legal status 
 
@@ -3416,13 +3410,13 @@ d <- dplyr::mutate(d,
 
 ### COUNT THE AVERAGE ANNUAL NUMBER OF GRID CELLS ###
 aggr_factor_all <- ddply(d, "year", summarise,
-                         annual_avg_n = length(unique(parcel_id)))[,"annual_avg_n"] %>% mean() %>% round(0)
+                         annual_avg_n = length(unique(lonlat)))[,"annual_avg_n"] %>% mean() %>% round(0)
 
 aggr_factor_sm <- ddply(d[d$smallholders, ], "year", summarise,
-                        annual_avg_n = length(unique(parcel_id)))[,"annual_avg_n"] %>% mean() %>% round(0)
+                        annual_avg_n = length(unique(lonlat)))[,"annual_avg_n"] %>% mean() %>% round(0)
 
 aggr_factor_ill <- ddply(d[!is.na(d$illegal2) & d$illegal2 == TRUE, ], "year", summarise,
-                         annual_avg_n = length(unique(parcel_id)))[,"annual_avg_n"] %>% mean() %>% round(0)
+                         annual_avg_n = length(unique(lonlat)))[,"annual_avg_n"] %>% mean() %>% round(0)
 # because of the many NAs in illegal variables, we do not know the legal status for a large proportion of griod cells. 
 # therefore we cannot say that "of the total aggregated effect, a given amount comes from illegal deforestation". 
 
