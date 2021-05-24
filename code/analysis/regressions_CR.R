@@ -510,7 +510,8 @@ make_base_reg <- function(island,
   ## CONTROLS
   # add lagged outcome variable 
   #if(pya_ov){controls <- c(controls, paste0(outcome_variable,"_",x_pya,"pya"))}
-  if(any(grepl(outcome_variable, controls))){
+  # for 1 year lag
+  if(any(grepl(pattern = paste0(outcome_variable,"_lag1"), x = controls))){
     d <- dplyr::arrange(d, parcel_id, year)
     d <- DataCombine::slide(d,
                             Var = outcome_variable,
@@ -518,6 +519,18 @@ make_base_reg <- function(island,
                             GroupVar = "parcel_id",
                             NewVar = paste0(outcome_variable,"_lag1"), # the name passed in controls should correspond. 
                             slideBy = -1,
+                            keepInvalid = TRUE)
+    d <- dplyr::arrange(d, parcel_id, year)
+  }
+  # for 4 year lag
+  if(any(grepl(pattern = paste0(outcome_variable,"_lag4"), x = controls))){
+    d <- dplyr::arrange(d, parcel_id, year)
+    d <- DataCombine::slide(d,
+                            Var = outcome_variable,
+                            TimeVar = "year",
+                            GroupVar = "parcel_id",
+                            NewVar = paste0(outcome_variable,"_lag4"), # the name passed in controls should correspond. 
+                            slideBy = -4,
                             keepInvalid = TRUE)
     d <- dplyr::arrange(d, parcel_id, year)
   }
@@ -1215,9 +1228,9 @@ make_APEs_1regr <- function(res_data,
   
   # the final formula is different depending on the regressor of interest being in the log scale or not. 
   if(grepl("ln_",coeff_names[1])){
-    ape_fml_roi <- paste0("((",1+rel_price_change,")^(",linear_ape_fml,") - 1)")#*fv_bar*",pixel_area_ha)
+    ape_fml_roi <- paste0("((",1+rel_price_change,")^(",linear_ape_fml,") - 1)*100")#*fv_bar*",pixel_area_ha)
   } else{
-    ape_fml_roi <- paste0("(exp(",linear_ape_fml,"*",abs_price_change,") - 1)")#*fv_bar*",pixel_area_ha)
+    ape_fml_roi <- paste0("(exp(",linear_ape_fml,"*",abs_price_change,") - 1)*100")#*fv_bar*",pixel_area_ha)
   }   
   
   dM_ape_roi <- deltaMethod(object = coef(reg_res), 
@@ -2758,7 +2771,8 @@ make_spec_chart_df <- function(island,
     # "price_dynamics" = FALSE,
     "control_own" = FALSE,
     "n_reachable_uml_control" = FALSE, 
-    "lagged_ov" = FALSE,
+    "ov_lag1" = FALSE,
+    "ov_lag4" = FALSE,
     "ngb_ov_lag4" = FALSE,
     "prex_cpo_control" = FALSE,
     "baseline_forest_trend" = FALSE,
@@ -2835,8 +2849,10 @@ make_spec_chart_df <- function(island,
   if(any(grepl("pct_own", controls))){ind_var[,"control_own"] <- TRUE}
   # n_reachable_uml
   if(any(grepl("n_reachable_uml", controls))){ind_var[,"n_reachable_uml_control"] <- TRUE}
-  # lagged outcome variable
-  if(any(grepl(outcome_variable, controls))){ind_var[,"lagged_ov"] <- TRUE}
+  # 1-year lagged outcome variable
+  if(any(grepl(paste0(outcome_variable, "_lag1"), controls))){ind_var[,"ov_lag1"] <- TRUE}
+  # 4-year lagged outcome variable
+  if(any(grepl(paste0(outcome_variable, "_lag4"), controls))){ind_var[,"ov_lag4"] <- TRUE}
   # spatial lag deforestation
   if(any(grepl("ngb_ov_lag4", controls))){ind_var[,"ngb_ov_lag4"] <- TRUE}
   # prex_cpo
@@ -3045,19 +3061,20 @@ i # 22
 #                                                  controls = c(), 
 #                                                  interaction_terms = NULL)
 
-lagged_ov <- paste0("lucpf",SIZE,"p_pixelcount_lag1")
+ov_lag1 <- paste0("lucpf",SIZE,"p_pixelcount_lag1")
+ov_lag4 <- paste0("lucpf",SIZE,"p_pixelcount_lag4")
 
 control_sets_list <- list(c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp"), # Ownership control only
                           c("n_reachable_uml"), # remoteness control only
-                          c(lagged_ov), # lagged outcome variable
+                          c(ov_lag1), # lagged outcome variable
                           c("wa_prex_cpo_imp1"), # prex cpo control only
                           c("baseline_forest_trend"), # baseline forest trend only
                           # c("remain_pf_pixelcount"), # remaining forest only
                           
                           c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", 
-                            lagged_ov), # Ownership and lagged ov control
+                            ov_lag1), # Ownership and lagged ov control
                           c("n_reachable_uml", 
-                            lagged_ov), # remoteness and lagged ov control                          
+                            ov_lag1), # remoteness and lagged ov control                          
                           c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", 
                             "wa_prex_cpo_imp1"), # Ownership and wa_prex_cpo_imp1 control
                           c("n_reachable_uml", 
@@ -3072,7 +3089,7 @@ control_sets_list <- list(c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp"), # O
                           #   "remain_pf_pixelcount"), # remoteness and remain_pf_pixelcount control
                           
                           c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml",
-                            lagged_ov), # Ownership, remoteness, and lagged ov control   
+                            ov_lag1), # Ownership, remoteness, and lagged ov control   
                           c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml",
                             "wa_prex_cpo_imp1"), # Ownership, remoteness, and wa_prex_cpo_imp1 control
                           c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml",
@@ -3081,9 +3098,9 @@ control_sets_list <- list(c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp"), # O
                           #   "remain_pf_pixelcount"), # Ownership, remoteness, and remain_pf_pixelcount control
                           
                           c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml",
-                            lagged_ov, "wa_prex_cpo_imp1"), # two basic + lagged ov + wa_prex_cpo_imp1 
+                            ov_lag1, "wa_prex_cpo_imp1"), # two basic + lagged ov + wa_prex_cpo_imp1 
                           c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml",
-                            lagged_ov, "baseline_forest_trend"), # two basic + lagged ov + baseline_forest_trend
+                            ov_lag1, "baseline_forest_trend"), # two basic + lagged ov + baseline_forest_trend
                           c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml",
                             "wa_prex_cpo_imp1", "baseline_forest_trend") # two basic + wa_prex_cpo_imp1 + baseline_forest_trend 
                         )
@@ -3096,8 +3113,14 @@ for(ctrl in control_sets_list){
   c <- c + 1
 }
 
+## Add the control set with the 4-year lagged deforestation 
+reg_stats_indvar_list[[paste0("ctrl_",c)]] <- make_spec_chart_df(island = ISL,
+                                                                 outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                                 controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml",
+                                                                              ov_lag4))
+c <- c + 1
 
-## Add the control set with the lagged deforestation in the neighbor grid cells
+## Add the control set with the 4-lagged deforestation in the neighbor grid cells
 reg_stats_indvar_list[[paste0("ctrl_",c)]] <- make_spec_chart_df(island = ISL,
                                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
                                                                  controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml",
@@ -3189,7 +3212,7 @@ reg_stats_indvar <- bind_rows(reg_stats_indvar_list)
 
 # save it 
 if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_indvar)+1 == i
-  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_08032021")))
+  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_20052021")))
 } else{print(paste0("SOMETHING WENT WRONG in spec_chart_df_",ISL,"_",SIZE))}
 
 #}else{reg_stats_indvar <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",ISL)))}
@@ -3208,7 +3231,7 @@ if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_
   
 ### PLOTTING 
 ### GIVE HERE THE ISLAND, THE OUTCOME AND THE DATE FOR WHICH YOU WANT THE SPEC CHART TO BE PLOTTED
-scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a_08032021")))
+scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a_20052021")))
 
 # some modifications for now because scdf run with some "mistakes"
 # scdf <- dplyr::select(scdf, -weights)
@@ -3249,8 +3272,9 @@ schart_labels <- list(#"Dependent variable:" = c("Larger forest definition"),
                       "Controls:" = c(#paste0(toupper(c("ffb", "cpo")[!grepl(VAR, c("ffb", "cpo"))]), " price signal"), 
                                       "Ownership",
                                       "# reachable mills", 
-                                      "Lagged deforestation",
-                                      "Past neighbors' deforestation",
+                                      "1-y lag deforestation",
+                                      "4-y lag deforestation",
+                                      "4-y neighbors' deforestation",
                                       "% CPO exported", 
                                       "Baseline forest trend"),#"Remaining forest""Neighbors' outcomes, 4-year lagged"
                       # "Interaction with:" = c(#paste0(toupper(c("ffb", "cpo")[!grepl(VAR, c("ffb", "cpo"))]), " price signal"), 
@@ -3304,8 +3328,9 @@ a <- a[#a$larger_forest_def==FALSE &
          #a$two_commo == FALSE & 
          a$control_own & 
          a$n_reachable_uml_control  &
-         a$lagged_ov == FALSE &
-        a$ngb_ov_lag4 == FALSE & 
+         a$ov_lag1 == FALSE &
+         a$ov_lag4 == FALSE &
+         a$ngb_ov_lag4 == FALSE & 
          a$prex_cpo_control == FALSE &
          a$baseline_forest_trend == FALSE &
          # a$remaining_forest == FALSE & 

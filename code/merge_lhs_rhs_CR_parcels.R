@@ -59,7 +59,7 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
  
   ### Left hand side 
   LHS <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_lhs_panel_final_",
-                                  parcel_size/1000,"km_",catchment_radius/1000,"CR.rds")))
+                                  parcel_size/1000,"km_",catchment_radius/1000,"CR_ori.rds")))
   
   ### EXPLICATIVE VARIABLES (runs from 1998-2015)
   RHS <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
@@ -249,14 +249,6 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   
   
   
-  ### MAKE THE PARCEL_ID 
-  uni_lonlat <- unique(parcels$lonlat)
-  parcels <- mutate(parcels, 
-                    parcel_id = match(lonlat, uni_lonlat)) 
-  rm(uni_lonlat)
-  
-  ## some arrangements
-  parcels <- dplyr::arrange(parcels, parcel_id, lonlat, year)
   row.names(parcels) <- seq(1,nrow(parcels))
   
   

@@ -1084,6 +1084,7 @@ make_spatial_ov_lags <- function(catchment_radius){
   LHS$lucpfsmp_pixelcount <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
   LHS$lucfsmp_pixelcount <- LHS$lucfsp_pixelcount_30th + LHS$lucfmp_pixelcount_30th
   
+  # The paragraph below is commented out because now the overlap of industrial and smallholders is handled in prepare_lucpfsmp.R
   #-------------------------
   # MAKE A UNIQUE DEPENDENT VARIABLE, WITH DUMMIES FOR ONLY INDUSTRIAL, ONLY SMALLHOLDERS, AND OVERLAPS
   
@@ -1099,9 +1100,10 @@ make_spatial_ov_lags <- function(catchment_radius){
   # overlap <- LHS[LHS$lucpfip_pixelcount > 0 & LHS$lucpfsmp_pixelcount > 0,]
   # overlap[overlap$lucpfip_pixelcount == overlap$lucpfsmp_pixelcount ,"lucpfip_pixelcount"] %>% length()
   # ---------------------------  
+
   ## make a variable that counts lucfp events on all types of plantations
-  LHS$lucpfap_pixelcount <- LHS$lucpfip_pixelcount + LHS$lucpfsmp_pixelcount
-  LHS$lucfap_pixelcount <- LHS$lucfip_pixelcount + LHS$lucfsmp_pixelcount
+  LHS <- mutate(LHS, lucpfap_pixelcount = (lucpfip_pixelcount + lucpfsmp_pixelcount))
+  LHS <- mutate(LHS, lucfap_pixelcount = (lucfip_pixelcount + lucfsmp_pixelcount))
   
   
   #   # check that rapid + slow = total ? 
@@ -1151,45 +1153,45 @@ make_spatial_ov_lags <- function(catchment_radius){
   #      lucpfip_dyn)
   
   
-  ## Compute the 4-year lagged total deforestation in neighboring cells. 
+  ## Compute the 4-year lagged total deforestation in neighboring cells.
   # (it does make sense only for the total deforestation to be spatially lagged, even when it's another type that is studied).
-  
+
   # lag the outcome variable
   LHS <- dplyr::arrange(LHS, lonlat, year)
   LHS <- DataCombine::slide(LHS,
                             Var = "lucpfap_pixelcount",
                             TimeVar = "year",
                             GroupVar = "lonlat",
-                            NewVar = "lucpfap_pixelcount_lag4", 
+                            NewVar = "lucpfap_pixelcount_lag4",
                             slideBy = -4,
                             keepInvalid = TRUE)
   LHS <- dplyr::arrange(LHS, lonlat, year)
-  
+
   # keep the most general cross section
   LHS_cs <- LHS[!duplicated(LHS$lonlat),c("lonlat", "year", "idncrs_lat", "idncrs_lon", "lucpfap_pixelcount")]
-  
+
   # spatial
   LHS_cs <- st_as_sf(LHS_cs, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
-  
+
   # identify neighbors
-  nn <- st_nn(st_geometry(LHS_cs), st_geometry(LHS_cs), sparse = TRUE, k = 9, maxdist = 10000) 
+  nn <- st_nn(st_geometry(LHS_cs), st_geometry(LHS_cs), sparse = TRUE, k = 9, maxdist = 10000)
   # remove self index
   nn <- lapply(nn, FUN = function(x){x[-1]})
-  
+
   LHS_cs <- st_drop_geometry(LHS_cs)
-  
+
   # get the parcel_id corresponding to the sgbp index
-  lonlat_list <-  lapply(nn, function(ngbid){LHS_cs[ngbid, "lonlat"]})    
-  
+  lonlat_list <-  lapply(nn, function(ngbid){LHS_cs[ngbid, "lonlat"]})
+
   LHS[,"ngb_ov_lag4"] <- rep(NA, nrow(LHS))
-  
+
   for(y in unique(LHS[LHS$year>2004,"year"])){
-    LHS[LHS$year == y, "ngb_ov_lag4"] <- sapply(lonlat_list, 
+    LHS[LHS$year == y, "ngb_ov_lag4"] <- sapply(lonlat_list,
                                                 FUN = function(lonlat_id){mean(LHS[LHS$lonlat %in% lonlat_id[[3]] & LHS$year == y, "lucpfap_pixelcount_lag4"],
                                                                                na.rm = TRUE)})
   }
-  
-  # empty neighbor sets (those that have no neighbors but themselves) and  end up with NaN as mean(integer(0)) 
+
+  # empty neighbor sets (those that have no neighbors but themselves) and  end up with NaN as mean(integer(0))
   # turn them into NA
   LHS[is.nan(LHS$ngb_ov_lag4),"ngb_ov_lag4"] <- NA
   
