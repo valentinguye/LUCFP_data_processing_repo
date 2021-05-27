@@ -199,6 +199,9 @@ make_base_reg <- function(island,
       d <- d[d$island == "Kalimantan",]
     }
     
+    # this is just for convenience, because this variable was not created for the CA stream, but is required to exist below 
+    # (although wont be effectively used, see in specification charts). 
+    d$reachable <- rep(1, nrow(d))
   }
   
   ### MAKE THE lonlat 
@@ -400,7 +403,7 @@ make_base_reg <- function(island,
   # (interactions do not need to be in there as they are fully built from the used_vars)
   used_vars <- c(outcome_variable, regressors, controls,
                  "lonlat",  "year", "lat", "lon", 
-                 "village", "subdistrict", "district", "province", "island", #"illegal2",
+                 "village", "subdistrict", "district", "province", "island", "reachable", #"illegal2",
                  "village_year", "subdistrict_year", "district_year", "province_year")#,"reachable", "reachable_year"
   #"n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
   #"remain_f30th_pixelcount","remain_pf_pixelcount"
@@ -711,7 +714,7 @@ make_base_reg <- function(island,
 make_APEs <- function(res_data, K=1, 
                       controls_pe = FALSE, 
                       #SE = "cluster", 
-                      CLUSTER = "subdistrict",
+                      CLUSTER = "reachable",#"subdistrict",
                       stddev = FALSE, # if TRUE, the PEs are computed for a one standard deviation (after removing variation in the fixed-effect dimensions)
                       rel_price_change = 0.01, 
                       abs_price_change = 1, 
@@ -969,14 +972,15 @@ make_APEs <- function(res_data, K=1,
   return(mat)
 }
 
-# note that this function yields a warning that is not important. 
-
+# note that this function yields a warning that is not important: 
+# In rm(coeff_names, interaction_effects, others, interaction_terms,  :
+# objet 'ape_fml_it' introuvable
 
 # this is a simpler version of make_APEs function above, that does not handle interaction terms. 
 make_APEs_1regr <- function(res_data, 
                             #SE = "cluster", 
                             stddev = TRUE,
-                            CLUSTER = "subdistrict", 
+                            CLUSTER = "reachable",# "subdistrict", 
                             rel_price_change = 0.01, 
                             abs_price_change = 1){
   # get estimation results and data 
@@ -1467,6 +1471,203 @@ kable(accu_lucpfp, booktabs = T, align = "c",
 #            escape = TRUE) 
 
 
+### Descriptive IBS ###
+
+# all IBS oil palm related establishments. 
+ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
+
+length(unique(ibs$firm_id))
+length(unique(ibs$firm_id[ibs$uml_matched_sample==1])) 
+length(unique(ibs$firm_id[ibs$is_mill==1])) 
+length(unique(ibs$firm_id[ibs$analysis_sample==1]))
+# ibs[ibs$geo_sample & !ibs$is_mill,1:40]
+# out of 1473 establishments initially extracted from IBS,
+# 1004 are involved at least one year in some FFB processing or CPO or PKO producing, but 930 are not in Java nor Bali 
+# out of which 468 have been geolocalized (and 2 more are in Java)
+# 2 additional IBS firms have been matched with UML and geolocalized but have no sign of FFB, PKO or CPO activity. 
+# (firm_id 2036 and 55630)
+
+
+# Now we also remove those that have some FFB-CPO-PKO activity but have been identified as refineries. 
+# But why would we remove refineries? They may be different but if they input FFB, they have an impact on proximate LUC. 
+# Because we excluded refineries from geo_sample, and here the purpose is to compare this sample to the population of mills. 
+# let's first see the comparative stat des without removing refineries. 
+
+
+
+# We want to produce, for a set of ibs variables, the mean, median, std.dev. min and max statistics, 
+# for the geo_sample that we are going to use, and the is_mill sample. 
+
+make_des_table_ibs <- function(ibs_isl){
+  
+  variables <- c("min_year", 
+                 "ffb_price_imp1", "in_ton_ffb_imp1",
+                 "cpo_price_imp1", "out_ton_cpo_imp1",
+                 "pko_price_imp1", "out_ton_pko_imp1",
+                 "prex_cpo_imp1", 
+                 "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp")
+  
+  statistics <- c("mean", "std.dev", "median", "min", "max")
+  
+  
+  ## Matrix for analysis_sample
+  rhs_des_sample <- matrix(NA, nrow = length(variables), ncol = length(statistics))
+  row.names(rhs_des_sample) <- variables
+  colnames(rhs_des_sample) <- c(statistics)
+  
+  for(var in variables){
+    rhs_des_sample[var,statistics] <- summarise(dplyr::filter(ibs_isl, analysis_sample == TRUE),
+                                                mean = mean(get(var), na.rm=T),
+                                                std.dev = sd(get(var), na.rm= TRUE),
+                                                median = median(get(var), na.rm= TRUE), 
+                                                min = min(get(var), na.rm= TRUE),
+                                                max = max(get(var), na.rm= TRUE)) %>% 
+      as.matrix()  %>% 
+      round(digits = 2) %>% 
+      formatC(drop0trailing = TRUE, 
+              format = "fg", flag = "-", zero.print = TRUE)
+    
+    # group median min and max in one single string, for displying issues
+    rhs_des_sample[var, "median"] <- paste0(rhs_des_sample[var,"median"]," [",rhs_des_sample[var, "min"],"; ",rhs_des_sample[var,"max"],"]")
+  }
+  
+  rhs_des_sample <- rhs_des_sample[,c("mean", "std.dev", "median")]
+  
+  # number of establishments in sub-group
+  # N_sample_row <- c(length(unique(ibs_isl[ibs_isl$analysis_sample==TRUE, "firm_id"])), 
+  #                           rep("", length(statistics))) 
+  # rhs_des_sample <- rbind(N_sample_row, rhs_des_sample)
+  
+  ## Matrix for all ibs mills
+  rhs_des_pop <- matrix(NA, nrow = length(variables), ncol = length(statistics))
+  row.names(rhs_des_pop) <- variables
+  colnames(rhs_des_pop) <- c(statistics)
+  
+  for(var in variables){
+    rhs_des_pop[var,statistics] <- summarise(dplyr::filter(ibs_isl, is_mill == TRUE),
+                                             mean = mean(get(var), na.rm=T),
+                                             std.dev = sd(get(var), na.rm= TRUE),
+                                             median = median(get(var), na.rm= TRUE), 
+                                             min = min(get(var), na.rm= TRUE),
+                                             max = max(get(var), na.rm= TRUE)) %>% 
+      as.matrix()  %>% 
+      round(digits = 2) %>% 
+      formatC(drop0trailing = TRUE, 
+              format = "fg", flag = "-", zero.print = TRUE)
+    
+    # group median min and max in one single string, for displying issues
+    rhs_des_pop[var, "median"] <- paste0(rhs_des_pop[var,"median"]," [",rhs_des_pop[var, "min"],"; ",rhs_des_pop[var,"max"],"]")
+  }
+  
+  rhs_des_pop <- rhs_des_pop[,c("mean", "std.dev", "median")]
+  # # number of establishments in sub-group
+  # N_pop_row <- c(length(unique(ibs_isl[ibs_isl$is_mill==TRUE, "firm_id"])), 
+  #                   rep("", length(statistics))) 
+  # rhs_des_pop <- rbind(N_pop_row, rhs_des_pop)
+  
+  # bind two groups together
+  rhs_des <- cbind(rhs_des_sample, rhs_des_pop)    
+  
+  # add the t-test column
+  t_test <- matrix(NA, nrow = length(variables), ncol = 1)
+  row.names(t_test) <- variables
+  colnames(t_test) <- "t test"
+  
+  for(var in variables){
+    test <- t.test(x = ibs_isl[ibs_isl$analysis_sample==TRUE,var],
+                   y = ibs_isl[ibs_isl$is_mill==TRUE,var], 
+                   alternative = "two.sided", 
+                   mu = 0, 
+                   paired = F, 
+                   var.equal = FALSE)
+    
+    t_test[var,] <- test$p.value %>% formatC(digits = 3, format = "f")
+  }
+  # interpretation: if the 95% CI includes 0, then the difference in means between two samples 
+  # is not statistically different from 0. Hence, the two samples are "similar" in means 
+  # with respect to the variable tested. 
+  # (In other words, we cannot reject the null hypothesis that the difference is null
+  # -i.e. the two samples are alike - with 95% confidence) 
+  
+  # add the Smirnov test
+  ks_test <- matrix(NA, nrow = length(variables), ncol = 1)
+  row.names(ks_test) <- variables
+  colnames(ks_test) <- "KS test"
+  
+  for(var in variables){
+    test <- ks.test(x = ibs_isl[ibs_isl$analysis_sample==TRUE,var],
+                    y = ibs_isl[ibs_isl$is_mill==TRUE,var], 
+                    alternative = "two.sided", 
+                    exact = FALSE)
+    
+    ks_test[var,] <- test$p.value %>% formatC(digits = 3, format = "f")
+  }
+  
+  # intepretation: if p-value < 0.05 we cannot reject with 95% confidence that 
+  # two distributions are equal, implying that they are different. 
+  
+  rhs_des <- cbind(rhs_des, t_test, ks_test)
+  
+  
+  
+  # row names
+  row.names(rhs_des) <- c("First year in IBS", "FFB muv (USD/ton)", "FFB input (ton)", 
+                          "CPO muv (USD/ton", "CPO output (ton)", 
+                          "PKO muv (USD/ton)", "PKO output (ton)", 
+                          "CPO export share (%)", 
+                          "Central government ownership (%)", 
+                          "Local government ownership (%)", 
+                          "National private ownership (%)", 
+                          "Foreign ownership (%)")
+  
+  return(rhs_des)
+}
+
+#### Print the LateX table code ALL #### 
+des_table <- make_des_table_ibs(ibs) 
+# we cannot automate headers, with a paste0, it does not work, hence n mills manually specified...  
+length(unique(ibs_isl[ibs_isl$analysis_sample==TRUE, "firm_id"]))
+length(unique(ibs_isl[ibs_isl$is_mill==TRUE, "firm_id"]))
+
+colnames(des_table) <- NULL
+
+options(knitr.table.format = "latex") 
+kable(des_table, booktabs = T, align = "c", 
+      caption = "IBS descriptive statistics, all islands") %>% 
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>% 
+  add_header_above(c(" " = 1, 
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1, 
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1, 
+                     "p-value" = 1,
+                     "p-value" = 1), 
+                   align = "c", 
+                   strikeout = F) %>% 
+  add_header_above(c(" " = 1,
+                     "Geo-localized IBS palm oil mills \n n = 587 mills" = 3,
+                     "All IBS palm oil mills \n n = 930 mills" = 3, 
+                     "t-test" = 1,
+                     "KS test" = 1),
+                   bold = T,
+                   align = "c") %>%
+  column_spec(column = c(2,3,5,6,8,9),
+              width = "4em") %>% 
+  column_spec(column = c(4,7),
+              width = "9em") %>% 
+  footnote(general = c("Note"),
+           threeparttable = TRUE, 
+           escape = TRUE) 
+
+
+#### VARIATIONS IN PRICES WITHIN DISTRICT YEAR #### 
+# Restrict to analysis sample 
+as <- ibs[ibs$analysis_sample==TRUE,]
+# remove district-year variations 
+rm_fevar <- fixest::feols(fml = as.formula("cpo_price_imp1 ~ 1 | district^year"),
+                        data = as)
+
+# and take the standard deviation of remaining variation
+sd(rm_fevar$residuals)
+
 #### DESCRIPTIVE MAP #####
 res_data <- make_base_reg(island = "both",
                           outcome_variable = paste0("lucpfap_pixelcount"))
@@ -1494,7 +1695,7 @@ d_geo <- st_transform(d_geo, crs = 4326)
 
 ### MILLs
 ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
-# keep only those that are matched with UML. 
+# keep only those that are used in analysis. 
 ibs <- ibs[ibs$analysis_sample ==1,]
 # make it a cross section
 ibs <- ibs[!duplicated(ibs$firm_id),]
@@ -2487,7 +2688,7 @@ make_spec_chart_df <- function(island,
                                weights = FALSE, # logical, should obs. be weighted by the share of our sample reachable mills in all (UML) reachable mills. 
                                # additional argument to this function: 
                                variable = "cpo",
-                               cluster = "subdistrict"
+                               cluster = "reachable" # "subdistrict"
 ){
   ### Get coefficient and SE for a given specification passed to make_base_reg.
   # call make_base_reg
@@ -2582,8 +2783,8 @@ make_spec_chart_df <- function(island,
     # "unit_villageyear_fe" = FALSE,
     # standard errors
     "unit_cluster" = FALSE, 
+    "reachable_cluster" = FALSE,
     "village_cluster" = FALSE,
-    #"reachable_cluster" = FALSE,
     "subdistrict_cluster" = FALSE,
     "district_cluster" = FALSE,
     "twoway_cluster" = FALSE
@@ -2664,8 +2865,8 @@ make_spec_chart_df <- function(island,
   
   # clustering
   if(length(cluster) == 1 & cluster == "lonlat"){ind_var[,"unit_cluster"] <- TRUE}
+  if(length(cluster) == 1 & cluster == "reachable"){ind_var[,"reachable_cluster"] <- TRUE}
   if(length(cluster) == 1 & cluster == "village"){ind_var[,"village_cluster"] <- TRUE}
-  #if(length(cluster) == 1 & cluster == "reachable"){ind_var[,"reachable_cluster"] <- TRUE}
   if(length(cluster) == 1 & cluster == "district"){ind_var[,"district_cluster"] <- TRUE}
   if(length(cluster) == 1 & cluster == "subdistrict"){ind_var[,"subdistrict_cluster"] <- TRUE}
   if(length(cluster) == 2){ind_var[,"twoway_cluster"] <- TRUE}
@@ -2766,6 +2967,7 @@ i <- i+1
 # For catchment area
 reg_stats_indvar_list[["catchment"]] <- make_spec_chart_df(island = ISL,
                                                            outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                           cluster = "subdistrict", # variable reachable is not computed in the CA stream. 
                                                            catchment = "CA") 
 i <- i+1
 
@@ -2834,7 +3036,7 @@ for(FE in c("lonlat", "lonlat + year",
 i  
 ## For an alternative standard error computation (two-way clustering)
 c <- 1
-for(CLT in list("lonlat", "village", "district", c("lonlat","district_year"))){#"reachable" ,  
+for(CLT in list("lonlat", "village", "subdistrict", "district", c("lonlat","district_year"))){#"reachable" ,  
   reg_stats_indvar_list[[paste0("cluster_", c)]] <- make_spec_chart_df(island = ISL,
                                                                        outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
                                                                        cluster = CLT)
@@ -3001,7 +3203,7 @@ reg_stats_indvar <- bind_rows(reg_stats_indvar_list)
 
 # save it 
 if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_indvar)+1 == i
-  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_20052021")))
+  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_27052021")))
 } else{print(paste0("SOMETHING WENT WRONG in spec_chart_df_",ISL,"_",SIZE))}
 
 #}else{reg_stats_indvar <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",ISL)))}
@@ -3020,7 +3222,7 @@ if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_
 
 ### PLOTTING 
 ### GIVE HERE THE ISLAND, THE OUTCOME AND THE DATE FOR WHICH YOU WANT THE SPEC CHART TO BE PLOTTED
-scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a_20052021")))
+scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a_27052021")))
 
 # some modifications for now because scdf run with some "mistakes"
 # scdf <- dplyr::select(scdf, -weights)
@@ -3079,11 +3281,12 @@ schart_labels <- list(#"Dependent variable:" = c("Larger forest definition"),
                        "Plantation and district-year", 
                        "Plantation and subdistrict-year"),
   
-  "Level of SE clustering:" = c("Plantation cluster", 
-                                "Village cluster", 
-                                "Subdistrict cluster", 
-                                "District cluster",
-                                "Plantation and district-year clusters")
+  "Level of SE clustering:" = c("Plantation", 
+                                "Set of reachable mills",
+                                "Village", 
+                                "Subdistrict", 
+                                "District",
+                                "Plantation and district-year")
 ) 
 
 # # remove rows where SEs could not be computed
@@ -3129,7 +3332,7 @@ a <- a[#a$larger_forest_def==FALSE &
     # a$prex_cpo_interact & 
     # a$remaining_forest_interact == FALSE & 
     #a$weights == FALSE & 
-    a$subdistrict_cluster, ] 
+    a$reachable_cluster, ] 
 
 model_idx <- row.names(a)
 # this is our baseline model(s)
@@ -3162,7 +3365,7 @@ schart(scdf,
        #pch.est=20
 )
 
-# Should be saved in .pdf portrait A4 for correct vizualization under Latex.  
+# Should be saved in .pdf landscape A4 for correct vizualization under Latex.  
 
 
 
