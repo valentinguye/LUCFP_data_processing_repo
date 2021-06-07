@@ -59,7 +59,7 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
  
   ### Left hand side 
   LHS <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_lhs_panel_final_",
-                                  parcel_size/1000,"km_",catchment_radius/1000,"CR_ori.rds")))
+                                  parcel_size/1000,"km_",catchment_radius/1000,"CR.rds")))
   
   ### EXPLICATIVE VARIABLES (runs from 1998-2015)
   RHS <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",

@@ -549,7 +549,7 @@ for(catchment_radius in catchment_radiuseS){
                                   NewVar = paste0(voi,"_lag1"),
                                   slideBy = -1, 
                                   keepInvalid = TRUE)
-    parcels <- dplyr::arrange(parcels, lonlat, year)
+    # parcels <- dplyr::arrange(parcels, lonlat, year)
   }
   
   #parcels1 <- parcels
@@ -573,7 +573,7 @@ for(catchment_radius in catchment_radiuseS){
                                     NewVar = paste0(voi,"_lag",lag),
                                     slideBy = -lag, 
                                     keepInvalid = TRUE)
-      parcels <- dplyr::arrange(parcels, lonlat, year)
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
       
     }
     # ## leads                               
@@ -605,7 +605,7 @@ for(catchment_radius in catchment_radiuseS){
                                     NewVar = paste0(voi,"_",py,"pya_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, lonlat, year)
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
       
       
       # ## and absolute deviation - SHORT RUN MEASURE -
@@ -650,7 +650,30 @@ for(catchment_radius in catchment_radiuseS){
                                     NewVar = paste0(voi,"_",py+1,"ya_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
+      
+      
+      ## Repeat for standard deviation
+      # need have input parcels as a rowwise dataframe here (see https://dplyr.tidyverse.org/articles/rowwise.html)
+      newv <- rowwise(parcels, c("lonlat", "year")) %>% 
+                      summarise(newv = sd(c_across(contains(paste0(voi,"_lag",c(1:py)))), na.rm = FALSE)) %>% 
+                      as.data.frame()
+      parcels <- left_join(parcels, newv, by = c("lonlat", "year"))
+      parcels[is.nan(parcels$newv),"newv"] <- NA
+      
+      # note y*v* for variation in the new name
+      colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_",py+1,"yv")    
+      
+      # and lag it
       parcels <- dplyr::arrange(parcels, lonlat, year)
+      parcels <- DataCombine::slide(parcels,
+                                    Var = paste0(voi,"_",py+1,"yv"), 
+                                    TimeVar = "year",
+                                    GroupVar = "lonlat",
+                                    NewVar = paste0(voi,"_",py+1,"yv_lag1"),
+                                    slideBy = -1, 
+                                    keepInvalid = TRUE)  
+     parcels <- dplyr::arrange(parcels, lonlat, year)
       
       
     }
@@ -678,7 +701,7 @@ for(catchment_radius in catchment_radiuseS){
                                     NewVar = paste0(voi,"_yoyg_lag",lag),
                                     slideBy = -lag, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, lonlat, year)
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
     }
     
     
@@ -699,7 +722,7 @@ for(catchment_radius in catchment_radiuseS){
                                     NewVar = paste0(voi,"_yoyg_",py,"pya_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, lonlat, year)
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
       
       
       ## contemporaneous AND pya yoyg mean - OVERALLMEASURE -   
@@ -724,7 +747,7 @@ for(catchment_radius in catchment_radiuseS){
                                     NewVar = paste0(voi,"_yoyg_",py+1,"ya_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
-      parcels <- dplyr::arrange(parcels, lonlat, year)
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
       
     }
   }# closes the loop on variables  
@@ -775,7 +798,7 @@ for(catchment_radius in catchment_radiuseS){
                                   NewVar = paste0(IV,"_lag1"),
                                   slideBy = -1, 
                                   keepInvalid = TRUE)  
-    parcels <- dplyr::arrange(parcels, lonlat, year)
+    # parcels <- dplyr::arrange(parcels, lonlat, year)
   }
   
   # View(parcels[!is.na(parcels$wa_prex_cpo_imp1_lag1) &

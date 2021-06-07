@@ -142,6 +142,7 @@ make_base_reg <- function(island,
                           commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo"), commodities the price signals of which should be included in the RHS
                           x_pya = 3, # either 2, 3, or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
                           dynamics = FALSE, # Logical, should the total price signal(s) be split into current year and x_pya past year average. 
+                          price_variation = TRUE, # should the regressors be price variation over the past years, or average (the default)
                           yoyg = FALSE, # logical, should the price variables be computed in year-on-year growth rate instead of level.
                           only_sr = FALSE,
                           log_prices = TRUE, # Logical, should the price variables be included as their logarithms instead of levels. No effect if yoyg is TRUE.    
@@ -313,6 +314,18 @@ make_base_reg <- function(island,
       }
     }
   }
+  
+  if(price_variation){
+    if(length(commo) == 1){
+      regressors <- paste0(commo,"_price_imp",imp,"_",x_pya+1,"yv",lag_or_not)
+    }
+    if(length(commo) == 2){
+      regressors <- c(paste0(commo[[1]],"_price_imp",imp,"_",x_pya+1,"yv",lag_or_not), 
+                      paste0(commo[[2]],"_price_imp",imp,"_",x_pya+1,"yv",lag_or_not))
+    }
+  }
+  
+  
   
   if(nearest_mill==FALSE){
     regressors <- paste0("wa_",regressors)

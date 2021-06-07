@@ -106,7 +106,7 @@ yoyg = FALSE
 short_run = "full"
 imp = 1
 distribution = "quasipoisson"
-fe = "parcel_id + district_year"
+fe = "lonlat + district_year"
 remaining_forest = FALSE
 offset = FALSE
 lag_or_not = ""
@@ -310,7 +310,7 @@ if(baseline_forest_trend){
 # important to do that after outcome_variable, regressors controls etc. have been (re)defined. 
 # (interactions do not need to be in there as they are fully built from the used_vars)
 used_vars <- c(outcome_variable, regressors, controls,
-               "parcel_id", "year", "lat", "lon", "idncrs_lat", "idncrs_lon", "district", "province", "island", "district_year", "province_year", "lucpfsmp_pixelcount")
+               "lonlat", "year", "lat", "lon", "idncrs_lat", "idncrs_lon", "district", "province", "island", "district_year", "province_year", "lucpfsmp_pixelcount")
 #"n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
 #"remain_f30th_pixelcount","remain_pf_pixelcount"
 
@@ -356,8 +356,8 @@ if(spatial_control){
   
   # d is a balanced panel so far so we can take any first record of a parcel to 
   # keep the most general cross section
-  nrow(d) == length(unique(d$parcel_id))*length(unique(d$year))
-  d_cs <- d[!duplicated(d$parcel_id),c("parcel_id", "year", "lat", "lon", "island",outcome_variable)]
+  nrow(d) == length(unique(d$lonlat))*length(unique(d$year))
+  d_cs <- d[!duplicated(d$lonlat),c("lonlat", "year", "lat", "lon", "island",outcome_variable)]
   
   # spatial
   d_cs <- st_as_sf(d_cs, coords = c("lon", "lat"), remove = FALSE, crs = indonesian_crs)
@@ -365,7 +365,7 @@ if(spatial_control){
   # identify neighbors
   # this definition of neighbors includes the 8 closest, surounding, grid cells. 
   d_buf <- st_buffer(d_cs, dist = parcel_size - 10)
-  row.names(d_buf) <- d_buf$parcel_id
+  row.names(d_buf) <- d_buf$lonlat
   sgbp <- st_intersects(d_buf)
   
   
@@ -374,11 +374,11 @@ if(spatial_control){
   for(p_i in 1:length(sgbp)){
     # remove own index
     p_i_neighbors <- sgbp[[p_i]][sgbp[[p_i]] != p_i]
-    # get the parcel_id corresponding to the sgbp index
+    # get the lonlat corresponding to the sgbp index
     p_i_neighbors <- as.numeric(attr(sgbp,"region.id")[p_i_neighbors])
     # compute mean of outcome variable lags in the PANEL dataset
     for(y in unique(d$year)){
-      d[d$parcel_id == as.numeric(attr(sgbp,"region.id")[p_i]) & d$year == y, "ngb_ov_lag4"]  <- mean(d[d$parcel_id %in% p_i_neighbors & d$year == y, paste0(outcome_variable,"_lag4")],na.rm = TRUE)
+      d[d$lonlat == as.numeric(attr(sgbp,"region.id")[p_i]) & d$year == y, "ngb_ov_lag4"]  <- mean(d[d$lonlat %in% p_i_neighbors & d$year == y, paste0(outcome_variable,"_lag4")],na.rm = TRUE)
     }
   } 
   
@@ -442,7 +442,7 @@ d_clean_ls <- list(d_clean_ind, d_clean_sm)
 
 prepare_d_clean <- function(d_clean){
   
-  parcel_avg <- ddply(d_clean, "parcel_id", summarise,
+  parcel_avg <- ddply(d_clean, "lonlat", summarise,
                       avg_lucpfip_ha_total = mean(lucpfip_ha_total),
                       avg_lucpfsmp_ha_total = mean(lucpfsmp_ha_total),
                       # avg_wa_ffb_price_imp1_4ya = mean(wa_ffb_price_imp1_4ya),
@@ -451,7 +451,7 @@ prepare_d_clean <- function(d_clean){
                       avg_wa_cpo_price_imp1 = mean(wa_cpo_price_imp1)
                       )
   
-  d_clean <- merge(d_clean, parcel_avg, by = "parcel_id")
+  d_clean <- merge(d_clean, parcel_avg, by = "lonlat")
   # rather displaying parcel averages over time, let's display a particular year (say 2008)
   # or even, the mean deviation
   d_clean$md_lucpfip_ha_total <- (d_clean$avg_lucpfip_ha_total - d_clean$lucpfip_ha_total) %>% round(1)
@@ -461,7 +461,7 @@ prepare_d_clean <- function(d_clean){
   d_clean$md_wa_ffb_price_imp1 <- (d_clean$avg_wa_ffb_price_imp1 - d_clean$wa_ffb_price_imp1) %>% round(1)
   d_clean$md_wa_cpo_price_imp1 <- (d_clean$avg_wa_cpo_price_imp1 - d_clean$wa_cpo_price_imp1) %>% round(1)
   
-  # d_clean_cs <- d_clean[!duplicated(d_clean$parcel_id),]
+  # d_clean_cs <- d_clean[!duplicated(d_clean$lonlat),]
   
   # industrial or smallholders? 
   # d_clean[d_clean$lucpfip_ha_total>0,] %>% nrow()
@@ -481,7 +481,7 @@ prepare_d_clean <- function(d_clean){
 d_clean_cs_ls <- lapply(d_clean_ls, FUN = prepare_d_clean)
 save_d_clean_cs_ls <- d_clean_cs_ls
 
-# both <- d_clean_cs_ls[[1]][d_clean_cs_ls[[1]]$parcel_id%in%d_clean_cs_ls[[2]]$parcel_id,]# in 2008, 189 parcels are in both groups (have a positive lucpfIp and lucpfSMp over all period)
+# both <- d_clean_cs_ls[[1]][d_clean_cs_ls[[1]]$lonlat%in%d_clean_cs_ls[[2]]$lonlat,]# in 2008, 189 parcels are in both groups (have a positive lucpfIp and lucpfSMp over all period)
 # both[both$avg_lucpfip_ha_total==both$avg_lucpfsmp_ha_total,] %>% nrow() # only 3 have the same average over the period. 
 # # let's just plot d_clean_cs_ls[[1]] and d_clean_cs_ls[[2]] without respect for this overlap. 
 
@@ -623,8 +623,8 @@ leaflet() %>%
 
 
 #--------------------------------
-rowid <- m.df_wide_lonlat$parcel_id[m.df_wide_lonlat$parcel_id == 25000]
-head(m.df$parcel_id)
+rowid <- m.df_wide_lonlat$lonlat[m.df_wide_lonlat$lonlat == 25000]
+head(m.df$lonlat)
 mills$timetop1 <- dur_mat[rowid,]/60
 mills <- st_transform(mills, crs = indonesian_crs)
 mills <- st_buffer(mills, dist = 50000)
