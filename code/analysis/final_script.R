@@ -17,7 +17,7 @@ neededPackages = c("tibble", "plyr", "dplyr", "data.table",
                    "DataCombine",
                    "knitr", "kableExtra",
                    "msm", "car", "fixest", "sandwich", "lmtest", "boot", "multcomp",
-                   "ggplot2", "leaflet", "htmltools")
+                   "ggplot2")#,"leaflet", "htmltools"
 # "pglm", "multiwayvcov", "clusterSEs", "alpaca", "clubSandwich",
 
 # Install them in their project-specific versions
@@ -66,6 +66,10 @@ parcel_size <- 3000
 # to rescale the average partial effects and the predictions from pixel counts to hectares
 pixel_area_ha <- (27.8*27.6)/(1e4)
 
+### Prepare polygons of three Indonesian islands of interest 
+island_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/island_sf"))
+names(island_sf)[names(island_sf)=="island"] <- "shape_des"
+island_sf_prj <- st_transform(island_sf, crs = indonesian_crs)
 
 ### READ ALL POSSIBLE DATASETS HERE
 # They are outputs of merge_lhs_rhs_parcels.R
@@ -142,7 +146,7 @@ make_base_reg <- function(island,
                           commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo"), commodities the price signals of which should be included in the RHS
                           x_pya = 3, # either 2, 3, or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
                           dynamics = FALSE, # Logical, should the total price signal(s) be split into current year and x_pya past year average. 
-                          price_variation = TRUE, # should the regressors be price variation over the past years, or average (the default)
+                          price_variation = FALSE, # should the regressors be price variation over the past years, or average (the default)
                           yoyg = FALSE, # logical, should the price variables be computed in year-on-year growth rate instead of level.
                           only_sr = FALSE,
                           log_prices = TRUE, # Logical, should the price variables be included as their logarithms instead of levels. No effect if yoyg is TRUE.    
@@ -1318,10 +1322,6 @@ accu_lucpfp <- matrix(ncol = length(cols), nrow = length(rows)) # 4 cols for sam
 row.names(accu_lucpfp) <- rows
 colnames(accu_lucpfp) <- cols
 
-## Prepare polygons of three Indonesian islands of interest 
-island_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/island_sf"))
-names(island_sf)[names(island_sf)=="island"] <- "shape_des"
-island_sf_prj <- st_transform(island_sf, crs = indonesian_crs)
 
 
 #island <- "Sumatra"
@@ -1722,17 +1722,37 @@ ibs <- st_as_sf(ibs, coords = c("lon", "lat"), remove = FALSE, crs = 4326)
 # # remove those matched with ibs
 # uml <- uml[!(uml$trase_code %in% ibs$trase_code),]
 
+# prepare backgroud layers with other countries
+countries <- st_read(file.path("input_data/Global_LSIB_Polygons_Detailed"))
+countries <- countries[countries$COUNTRY_NA == "Indonesia" | 
+                       countries$COUNTRY_NA == "Malaysia" | 
+                       countries$COUNTRY_NA == "Brunei", "geometry"]
+# these two lines to speed up mapping
+countries <- st_transform(countries, crs = indonesian_crs) %>% st_simplify(dTolerance = 1000)
+countries <- st_transform(countries, crs = 4326)
 
-leaflet() %>% 
-  addTiles()%>%
-  addProviderTiles(providers$CartoDB.DarkMatterNoLabels) %>% # CartoDB.PositronNoLabels  
-  setView(lat = -0.493, 
-          lng = 107.367, 
-          zoom = 4.5) %>% 
-  addPolygons(data = island_sf, stroke = FALSE, fill = TRUE, fillColor = "grey", fillOpacity = 0.5) %>% 
-  addPolygons(data = st_geometry(d_geo), 
-              stroke = TRUE, opacity = 2,  weight = 2, color = "green") %>%   #~cb_ind(d_cs$accu_lucfp)
-  addCircleMarkers(data = ibs, radius = 0.001, fillOpacity = 1, fillColor = "red", stroke = FALSE, weight = 0) 
+ggplot() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank()) +
+  geom_sf(data = countries, fill = FALSE) +
+  geom_sf(data = ibs, color = "black", size = 0.05) + 
+  geom_sf(data=st_geometry(d_geo), color=alpha("grey",0.2))+
+  coord_sf(xlim = c(90, 120), ylim = c(-7, 7), expand = FALSE) 
+
+# leaflet() %>% 
+#   # we do not add these tiles if the figure is purposed for print in white and black. 
+#   # addTiles()%>%
+#   # addProviderTiles(providers$Esri.WorldGrayCanvas) %>% # CartoDB.PositronNoLabels 
+#   addPolygons(data = countries, stroke = TRUE, color = "black", weight = 1,
+#               fill = FALSE) %>%
+#   setView(lat = -0.493, 
+#           lng = 107.367, 
+#           zoom = 4.5) %>% 
+#   #addPolygons(data = island_sf, stroke = FALSE, fill = FALSE, fillColor = "grey", fillOpacity = 0) %>% 
+#   addPolygons(data = st_geometry(d_geo), 
+#               stroke = TRUE, opacity = 0.25,  weight = 2, color = "green") %>%   #~cb_ind(d_cs$accu_lucfp)
+#   addCircleMarkers(data = ibs, radius = 0.001, fillOpacity = 1, fillColor = "black", stroke = FALSE, weight = 0) 
+# # exported in width = 1150 and height = 560 and zoom once 
 
 
 rm(d_clean_cs, d_cs, d_geo, ibs)
@@ -2757,7 +2777,7 @@ make_spec_chart_df <- function(island,
     "min_coverage" = FALSE,
     ## Catchment model
     #"nearest_mill" = FALSE,
-    "intensive_only" = FALSE,
+    #"intensive_only" = FALSE,
     "alt_cr" = FALSE,
     "CA" = FALSE,
     # Price signal past year average
@@ -2822,7 +2842,7 @@ make_spec_chart_df <- function(island,
   # nearest mill rather than inverse-distance weighted average
   if(nearest_mill){ind_var[,"nearest_mill"] <- TRUE}
   # margin
-  if(margin == "intensive"){ind_var[,"intensive_only"] <- TRUE}
+  #if(margin == "intensive"){ind_var[,"intensive_only"] <- TRUE}
   # Catchment 
   if(alt_cr){ind_var[,"alt_cr"] <- TRUE} 
   if(catchment == "CA"){ind_var[,"CA"] <- TRUE} 
@@ -2966,10 +2986,10 @@ for(XPYA in c(2, 4)){
 # i <- i+1
 
 # For intensive margin only
-reg_stats_indvar_list[["margin"]] <- make_spec_chart_df(island = ISL,
-                                                        outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                        margin = "intensive") 
-i <- i+1
+# reg_stats_indvar_list[["margin"]] <- make_spec_chart_df(island = ISL,
+#                                                         outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+#                                                         margin = "intensive") 
+# i <- i+1
 
 # For alternative catchment radius
 reg_stats_indvar_list[["alt_cr"]] <- make_spec_chart_df(island = ISL,
@@ -3216,7 +3236,7 @@ reg_stats_indvar <- bind_rows(reg_stats_indvar_list)
 
 # save it 
 if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_indvar)+1 == i
-  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_27052021")))
+  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_02072021")))
 } else{print(paste0("SOMETHING WENT WRONG in spec_chart_df_",ISL,"_",SIZE))}
 
 #}else{reg_stats_indvar <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",ISL)))}
@@ -3259,7 +3279,7 @@ schart_labels <- list(#"Dependent variable:" = c("Larger forest definition"),
                   "Minimum IBS to UML mill ratio"),
   
   "Catchment model" = c(#"Nearest mill",
-    "Intensive margin expansion only",
+    #"Intensive margin expansion only",
     "Alternative catchment radius",
     "2-hour driving catchment area"), 
   
@@ -3319,7 +3339,7 @@ a <- a[#a$larger_forest_def==FALSE &
     a$min_coverage == FALSE & 
     
     #a$nearest_mill == FALSE & 
-    a$intensive_only == FALSE & 
+    #a$intensive_only == FALSE & 
     a$alt_cr == FALSE &
     a$CA == FALSE &
     
