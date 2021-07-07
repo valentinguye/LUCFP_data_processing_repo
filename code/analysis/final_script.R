@@ -1083,7 +1083,7 @@ make_APEs_1regr <- function(res_data,
   return(mat)
 }
 
-#### DESCRIPTIVE STATISTICS #### 
+#### PLANTATION DESCRIPTIVE STATISTICS WITH AND WITHOUT NAs #### 
 make_desstats <- function(sample_1, sample_2){
   
   # get estimation results and data 
@@ -1757,9 +1757,9 @@ ggplot() +
 
 rm(d_clean_cs, d_cs, d_geo, ibs)
 
-#### MAIN : INDUS SM LEGAL AND ILLEGAL and EQUALITY TESTS ####
+#### MAIN : REGRESSIONS DES STATS AND EQUALITY TESTS OVER INDUS, SM, LEGAL AND ILLEGAL,  ####
 
-## REGRESSIONS
+### REGRESSIONS ### 
 # infrastructure to store results
 res_data_list_full <- list()
 elm <- 1
@@ -1876,6 +1876,110 @@ kable(ape_mat, booktabs = T, align = "r",
               bold = TRUE)
 
 
+### DESCRIPTIVE STATISTICS ACROSS PLANTATION TYPES ---------------------------------
+
+# We make three tables, for readability purpose; one for industrial, one for smallholder, and one for all plantations. 
+# Each one has the legal/illegal/all breakdown. Each features same quantities as feature in the main des stat table above. 
+make_desstats_simple <- function(sample_1){
+  
+  # add variables that were not used in the regressions
+  d_all <- rbind(d_30_suma, d_50_kali)
+  # determine dependent variable
+  dep_var_1 <- names(sample_1)[grepl("pixelcount",names(sample_1))]
+  
+  # group public ownership
+  #d_all$wa_pct_own_gov_imp_lag1 <- d_all$wa_pct_own_loc_gov_imp_lag1 + d_all$wa_pct_own_cent_gov_imp_lag1
+  d_all$wa_pct_own_gov_imp_lag1 <- d_all$wa_pct_own_loc_gov_imp_lag1 + d_all$wa_pct_own_cent_gov_imp_lag1
+  
+  variables_1 <- c(dep_var_1,
+                   "wa_cpo_price_imp1_4ya_lag1",
+                   "wa_pct_own_gov_imp_lag1", "wa_pct_own_nat_priv_imp_lag1", "wa_pct_own_for_imp_lag1",
+                   "n_reachable_uml") 
+  sample_1 <- left_join(sample_1[,c("lonlat","year")], d_all[,c("lonlat","year",variables_1)], by = c("lonlat","year"))#
+  
+  # pixelcount to hectares
+  sample_1[,dep_var_1] <- sample_1[,dep_var_1]*pixel_area_ha
+  
+  statistics <- c("mean", "std.dev", "median", "min", "max")
+  
+  ## Des. stats. for sample_1
+  des_sample_1 <- matrix(NA, nrow = length(variables_1), ncol = length(statistics))
+  row.names(des_sample_1) <- variables_1
+  colnames(des_sample_1) <- c(statistics)
+  
+  for(var in variables_1){
+    des_sample_1[var,statistics] <- summarise(sample_1,
+                                              mean = mean(get(var), na.rm=TRUE),
+                                              std.dev = sd(get(var), na.rm= TRUE),
+                                              median = median(get(var), na.rm= TRUE), 
+                                              min = min(get(var), na.rm= TRUE),
+                                              max = max(get(var), na.rm= TRUE)) %>% 
+      as.matrix()  %>% 
+      round(digits = 2) %>% 
+      formatC(drop0trailing = TRUE, 
+              format = "fg", flag = "-", zero.print = TRUE)
+    
+    # group median min and max in one single string, for displying issues
+    des_sample_1[var, "median"] <- paste0(des_sample_1[var,"median"]," [",des_sample_1[var, "min"],"; ",des_sample_1[var,"max"],"]")
+  }
+  
+  des_sample_1 <- des_sample_1[,c("mean", "std.dev", "median")]
+  
+  length(unique(sample_1$lonlat)) %>% paste0(" number of grid cells in sample") %>%  print()
+  nrow(sample_1) %>% paste0(" number of observations in sample") %>%  print()
+  
+  
+  
+  
+  return(des_sample_1)
+}
+
+
+## Descriptive statistics across legal/illegal, for all plantation types
+# template to store 
+list_desstat_all <- list()
+i <- 1
+for(ILL in ill_status){
+  list_desstat_all[[i]] <- make_desstats_simple(sample_1 = res_data_list_full[[paste0("both_a_",ILL)]][[2]])
+  i <- i +1
+}
+
+des_table <- bind_cols(list_desstat_all) %>% as.matrix()
+# row names
+row.names(des_table) <- c("Deforestation (ha)",
+                             "Price signal ($/tCPO)", 
+                             "Public ownership (%)", 
+                             "Domestic private ownership (%)", 
+                             "Foreign ownership (%)", 
+                             #"Competition", 
+                             "# reachable mills")
+colnames(des_table) <- NULL
+des_table
+
+options(knitr.table.format = "latex") 
+kable(des_table, booktabs = T, align = "c", 
+      caption = "Estimation sample of all plantation types - descriptive statistics") %>% 
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>% 
+  add_header_above(c(" " = 1, 
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1),
+                   align = "c", 
+                   strikeout = F) %>% 
+  add_header_above(c(" " = 1, 
+                     "# grid cells = 2245 \n # grid cell-year = 15139" = 3,
+                     "# grid cells = 1216 \n # grid cell-year = 7848" = 3, 
+                     "# grid cells = 4747 \n # grid cell-year = 31650" = 3, 
+                     " " = 2),
+                   align = "c",
+                   strikeout = F) %>% 
+  add_header_above(c(" " = 1,
+                     "Legal" = 3,
+                     "Illegal" = 3, 
+                     "All" = 3), 
+                   bold = FALSE,
+                   align = "c",
+                   strikeout = F) 
 ### SPATIAL BREAKDOWN ----------------------------------------------------
 ape_mat_list <- list()
 ape_elm <- 1
@@ -2060,6 +2164,9 @@ kable(stacked_ape_mat, booktabs = T, align = "r",
 #               bold = TRUE)
 
 # rm(ape_mat)
+
+
+
 
 
 ### COMPARE GROUPS --------------------------------------------------------------------------------
@@ -3255,7 +3362,7 @@ if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_
 
 ### PLOTTING 
 ### GIVE HERE THE ISLAND, THE OUTCOME AND THE DATE FOR WHICH YOU WANT THE SPEC CHART TO BE PLOTTED
-scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a_27052021")))
+scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a_02072021")))
 
 # some modifications for now because scdf run with some "mistakes"
 # scdf <- dplyr::select(scdf, -weights)
