@@ -1953,12 +1953,12 @@ row.names(des_table) <- c("Deforestation (ha)",
                              "Foreign ownership (%)", 
                              #"Competition", 
                              "# reachable mills")
-colnames(des_table) <- NULL
 des_table
+colnames(des_table) <- NULL
 
 options(knitr.table.format = "latex") 
 kable(des_table, booktabs = T, align = "c", 
-      caption = "Estimation sample of all plantation types - descriptive statistics") %>% 
+      caption = "Estimation sample for all plantation types - descriptive statistics") %>% 
   kable_styling(latex_options = c("scale_down", "hold_position")) %>% 
   add_header_above(c(" " = 1, 
                      "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
@@ -1980,6 +1980,100 @@ kable(des_table, booktabs = T, align = "c",
                    bold = FALSE,
                    align = "c",
                    strikeout = F) 
+
+## Descriptive statistics across legal/illegal, for industrial plantations
+# template to store 
+list_desstat_all <- list()
+i <- 1
+for(ILL in ill_status){
+  list_desstat_all[[i]] <- make_desstats_simple(sample_1 = res_data_list_full[[paste0("both_i_",ILL)]][[2]])
+  i <- i +1
+}
+
+des_table <- bind_cols(list_desstat_all) %>% as.matrix()
+# row names
+row.names(des_table) <- c("Deforestation (ha)",
+                          "Price signal ($/tCPO)", 
+                          "Public ownership (%)", 
+                          "Domestic private ownership (%)", 
+                          "Foreign ownership (%)", 
+                          #"Competition", 
+                          "# reachable mills")
+des_table
+colnames(des_table) <- NULL
+
+options(knitr.table.format = "latex") 
+kable(des_table, booktabs = T, align = "c", 
+      caption = "Estimation sample for industrial plantations - descriptive statistics") %>% 
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>% 
+  add_header_above(c(" " = 1, 
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1),
+                   align = "c", 
+                   strikeout = F) %>% 
+  add_header_above(c(" " = 1, 
+                     "# grid cells = 1979 \n # grid cell-year = 13081" = 3,
+                     "# grid cells = 781 \n # grid cell-year = 4951" = 3, 
+                     "# grid cells = 3853 \n # grid cell-year = 25249" = 3, 
+                     " " = 2),
+                   align = "c",
+                   strikeout = F) %>% 
+  add_header_above(c(" " = 1,
+                     "Legal" = 3,
+                     "Illegal" = 3, 
+                     "All" = 3), 
+                   bold = FALSE,
+                   align = "c",
+                   strikeout = F) 
+
+## Descriptive statistics across legal/illegal, for smallholder plantations
+# template to store 
+list_desstat_all <- list()
+i <- 1
+for(ILL in ill_status){
+  list_desstat_all[[i]] <- make_desstats_simple(sample_1 = res_data_list_full[[paste0("both_sm_",ILL)]][[2]])
+  i <- i +1
+}
+
+des_table <- bind_cols(list_desstat_all) %>% as.matrix()
+# row names
+row.names(des_table) <- c("Deforestation (ha)",
+                          "Price signal ($/tCPO)", 
+                          "Public ownership (%)", 
+                          "Domestic private ownership (%)", 
+                          "Foreign ownership (%)", 
+                          #"Competition", 
+                          "# reachable mills")
+des_table
+colnames(des_table) <- NULL
+
+options(knitr.table.format = "latex") 
+kable(des_table, booktabs = T, align = "c", 
+      caption = "Estimation sample for smallholder plantations - descriptive statistics") %>% 
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>% 
+  add_header_above(c(" " = 1, 
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
+                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1),
+                   align = "c", 
+                   strikeout = F) %>% 
+  add_header_above(c(" " = 1, 
+                     "# grid cells = 385 \n # grid cell-year = 2971" = 3,
+                     "# grid cells = 522 \n # grid cell-year = 3412" = 3, 
+                     "# grid cells = 1189 \n # grid cell-year = 8611" = 3, 
+                     " " = 2),
+                   align = "c",
+                   strikeout = F) %>% 
+  add_header_above(c(" " = 1,
+                     "Legal" = 3,
+                     "Illegal" = 3, 
+                     "All" = 3), 
+                   bold = FALSE,
+                   align = "c",
+                   strikeout = F) 
+
+
 ### SPATIAL BREAKDOWN ----------------------------------------------------
 ape_mat_list <- list()
 ape_elm <- 1
