@@ -1,8 +1,6 @@
 # Save the default user library paths before renv is activated
 default_libraries <- .libPaths()
 
-options(repos = c(CRAN = "https://cran.rstudio.com/"))
-
 # # Install renv if not available (activate.R fails to do that if package is not already installed)
 # if(!("renv" %in% utils::installed.packages()[,"Package"])){
 #   if (!requireNamespace("remotes")){
