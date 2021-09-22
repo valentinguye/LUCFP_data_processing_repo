@@ -1935,51 +1935,51 @@ make_desstats_simple <- function(sample_1){
 }
 
 
-## Descriptive statistics across legal/illegal, for all plantation types
-# template to store 
-list_desstat_all <- list()
-i <- 1
-for(ILL in ill_status){
-  list_desstat_all[[i]] <- make_desstats_simple(sample_1 = res_data_list_full[[paste0("both_a_",ILL)]][[2]])
-  i <- i +1
-}
-
-des_table <- bind_cols(list_desstat_all) %>% as.matrix()
-# row names
-row.names(des_table) <- c("Deforestation (ha)",
-                             "Price signal ($/tCPO)", 
-                             "Public ownership (%)", 
-                             "Domestic private ownership (%)", 
-                             "Foreign ownership (%)", 
-                             #"Competition", 
-                             "# reachable mills")
-des_table
-colnames(des_table) <- NULL
-
-options(knitr.table.format = "latex") 
-kable(des_table, booktabs = T, align = "c", 
-      caption = "Estimation sample for all plantation types - descriptive statistics") %>% 
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>% 
-  add_header_above(c(" " = 1, 
-                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
-                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
-                     "mean" = 1, "std.dev." = 1, "median [min; max]" = 1),
-                   align = "c", 
-                   strikeout = F) %>% 
-  add_header_above(c(" " = 1, 
-                     "# grid cells = 2245 \n # grid cell-year = 15139" = 3,
-                     "# grid cells = 1216 \n # grid cell-year = 7848" = 3, 
-                     "# grid cells = 4747 \n # grid cell-year = 31650" = 3, 
-                     " " = 2),
-                   align = "c",
-                   strikeout = F) %>% 
-  add_header_above(c(" " = 1,
-                     "Legal" = 3,
-                     "Illegal" = 3, 
-                     "All" = 3), 
-                   bold = FALSE,
-                   align = "c",
-                   strikeout = F) 
+# ## Descriptive statistics across legal/illegal, for all plantation types
+# # template to store 
+# list_desstat_all <- list()
+# i <- 1
+# for(ILL in ill_status){
+#   list_desstat_all[[i]] <- make_desstats_simple(sample_1 = res_data_list_full[[paste0("both_a_",ILL)]][[2]])
+#   i <- i +1
+# }
+# 
+# des_table <- bind_cols(list_desstat_all) %>% as.matrix()
+# # row names
+# row.names(des_table) <- c("Deforestation (ha)",
+#                              "Price signal ($/tCPO)", 
+#                              "Public ownership (%)", 
+#                              "Domestic private ownership (%)", 
+#                              "Foreign ownership (%)", 
+#                              #"Competition", 
+#                              "# reachable mills")
+# des_table
+# colnames(des_table) <- NULL
+# 
+# options(knitr.table.format = "latex") 
+# kable(des_table, booktabs = T, align = "c", 
+#       caption = "Estimation sample for all plantation types - descriptive statistics") %>% 
+#   kable_styling(latex_options = c("scale_down", "hold_position")) %>% 
+#   add_header_above(c(" " = 1, 
+#                      "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
+#                      "mean" = 1, "std.dev." = 1, "median [min; max]" = 1,
+#                      "mean" = 1, "std.dev." = 1, "median [min; max]" = 1),
+#                    align = "c", 
+#                    strikeout = F) %>% 
+#   add_header_above(c(" " = 1, 
+#                      "# grid cells = 2245 \n # grid cell-year = 15139" = 3,
+#                      "# grid cells = 1216 \n # grid cell-year = 7848" = 3, 
+#                      "# grid cells = 4747 \n # grid cell-year = 31650" = 3, 
+#                      " " = 2),
+#                    align = "c",
+#                    strikeout = F) %>% 
+#   add_header_above(c(" " = 1,
+#                      "Legal" = 3,
+#                      "Illegal" = 3, 
+#                      "All" = 3), 
+#                    bold = FALSE,
+#                    align = "c",
+#                    strikeout = F) 
 
 ## Descriptive statistics across legal/illegal, for industrial plantations
 # template to store 

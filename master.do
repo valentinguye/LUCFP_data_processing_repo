@@ -492,7 +492,7 @@ rsource using "install_R_project_packages.R"
 
 ***** ANALYSIS  *****
 	* This script produces all the tables and figures present in the paper and its appendix. 
-		rsource using "code/analysis/regressions_CR.R"
+		rsource using "code/analysis/final_script.R"
 		* input: 	temp_data/panel_parcels_ip_final_PS_CR.rds for PS = 3km; CR = (30CR, 50CR)
 		*			temp_data/panel_parcels_ip_final_PS_2h_CA.rds for PS = 3km
 		*			temp_data/processed_indonesia_spatial/island_sf
