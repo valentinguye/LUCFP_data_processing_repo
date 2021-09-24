@@ -2259,8 +2259,72 @@ kable(stacked_ape_mat, booktabs = T, align = "r",
 
 # rm(ape_mat)
 
+### SECONDARY FORESTS -----------------------
+
+# infrastructure to store results
+res_data_list_full_2ndry <- list()
+elm <- 1
+
+isl_list <- list("both")#"Sumatra", "Kalimantan", 
+ISL <- "both"
+
+size_list <- list("i","sm", "a")
+
+# legality definition
+ill_def <- 2
+ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
 
 
+for(SIZE in size_list){
+  for(ILL in ill_status){
+    res_data_list_full_2ndry[[elm]] <- make_base_reg(island = ISL,
+                                               outcome_variable = paste0("lucf",SIZE,"p_pixelcount"), # note the absence of "p": it is not primary forest data. 
+                                               illegal = ILL,
+                                               offset = FALSE)
+    names(res_data_list_full_2ndry)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    elm <- elm + 1
+  }
+}
+
+## PARTIAL EFFECTS
+rm(ape_mat)
+ape_mat <- bind_cols(lapply(res_data_list_full_2ndry, FUN = make_APEs)) %>% as.matrix()
+
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "r",
+      caption = "Price elasticities of deforestation, in secondary forest, across the Indonesian oil palm sector") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 3, 
+                     "All" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  column_spec(column = 1,
+              width = "7em",
+              latex_valign = "b") %>% 
+  column_spec(column = c(2:(ncol(ape_mat))),
+              width = "7em",
+              latex_valign = "b") 
+
+rm(ape_mat)
 
 
 ### COMPARE GROUPS --------------------------------------------------------------------------------
