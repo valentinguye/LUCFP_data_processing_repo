@@ -174,10 +174,10 @@ prepare_pixel_lucfsmp <- function(island){
   # We do this only for 30th forest type: 
   # Thus, we define only one overlay function.
   # overlay function
-  overlay_maps <- function(rs){rs[[1]]*(1 - rs[[2]])*(1 - rs[[3]])*is.na(rs[[4]])}
+  overlay_maps <- function(rs){rs[[1]]*(1 - rs[[2]])*(1 - rs[[3]])*(rs[[4]]==0)}
   # multiplies a cell of forest loss (rs[[1]]) by 0 (i.e. "removes" it) if it is a plantation in 2000 (rs[[2]])
   # or if it is an industrial plantation in 2015 (rs[[3]])
-  # or if it is within primary forest (i.e. if pf is NA)
+  # or if it is within primary forest (i.e. if rs[[4]] is either 1 or 2)
   
   ## Read necessary layers and stack them 
   

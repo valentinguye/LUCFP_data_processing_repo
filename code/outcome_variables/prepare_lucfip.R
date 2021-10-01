@@ -277,10 +277,10 @@ prepare_pixel_lucfip <- function(island){
   pf <- raster(file.path(paste0("temp_data/processed_lu/margono_primary_forest_",island,"_aligned.tif")))
   
   # overlay function
-  overlay_maps <- function(rs){rs[[1]]*(1-rs[[2]])*rs[[3]]*is.na(rs[[4]])}
+  overlay_maps <- function(rs){rs[[1]]*(1-rs[[2]])*rs[[3]]*(rs[[4]]==0)}
   # multiplies a cell of forest loss (rs[[1]]) by 0 (i.e. "removes" it) if it it is a plantation in 2000 (rs[[2]]) 
   # or if is not a plantation in 2015 (rs[[3]])
-  # or if it is within primary forest (i.e. if pf is NA)
+  # or if it is within primary forest (i.e. if rs[[4]] 1 or 2)
   
   ### For each threshold, overlay forest loss map with plantations maps in a clusterR setting 
   th <- 30

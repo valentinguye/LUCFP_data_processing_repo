@@ -105,7 +105,7 @@ island_sf_prj <- st_transform(island_sf, crs = indonesian_crs)
 
 
 
-##### 1. FORET COVER IN 2000 ##### 
+##### 1. SECONDARY FORET COVER IN 2000 ##### 
 
 ### Prepare 30, 60, 90% forest cover outside industrial plantations in 2000
 prepare_fc2000 <- function(island){
@@ -165,9 +165,13 @@ prepare_fc2000 <- function(island){
   
   ioppm2000 <- raster(file.path(paste0("temp_data/processed_lu/austin_ioppm_2000_",island,"_aligned.tif")))
   
+  # primary forest
+  pf <- raster(file.path(paste0("temp_data/processed_lu/margono_primary_forest_",island,"_aligned.tif")))
+  
   # overlay function
-  overlay_maps <- function(rs){rs[[1]]*(1-rs[[2]])}
-  # multiplies a cell of 2000 forest cover (rs[[1]]) by 0 (i.e. "removes" it) if it it is a plantation in 2000 (rs[[2]]) or if is not a plantation in 2015 (rs[[3]])
+  overlay_maps <- function(rs){rs[[1]]*(1-rs[[2]])*(rs[[3]]==0)}
+  # multiplies a cell of 2000 forest cover (rs[[1]]) by 0 (i.e. "removes" it) if it it is a plantation in 2000 (rs[[2]]) 
+  # or if it is within primary forest (i.e. if rs[[3]] is either 1 or 2)
   
   ## For each threshold, overlay forest fc2000 map with 2000 industrial plantation maps in a clusterR setting 
   th <- 30
@@ -176,7 +180,7 @@ prepare_fc2000 <- function(island){
     fc2000 <- raster(file.path(paste0("temp_data/processed_lu/gfc_fc2000_",island,"_",th,"th_prj.tif")))
     
     # stack fc2000 with plantation maps (necessary for clusterR)
-    rs <- stack(fc2000, ioppm2000)
+    rs <- stack(fc2000, ioppm2000, pf)
     
     # run the computation in parallel with clusterR, as cells are processed one by one independently.
     beginCluster() # uses by default detectedCores() - 1
