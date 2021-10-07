@@ -138,8 +138,13 @@ if(FALSE){
   
 }
 
+# necessary currently because renv changes the downloaded method at every new session to curl... 
+if(renv:::renv_download_method() != getOption("download.file.method")){
+  Sys.setenv(RENV_DOWNLOAD_METHOD = getOption("download.file.method"))
+}
+
 # If new packages are needed along the project data processing workflow, one should: 
-new_pck <- c("spdep")
+new_pck <- c("FitAR")
 # 1. install the packages in the project library (the default if you are within the project)
 install.packages(new_pck)
 # devtools::install_github("julianhinz/R_glmhdfe")

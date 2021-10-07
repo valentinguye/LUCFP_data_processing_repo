@@ -16,7 +16,7 @@ neededPackages = c("tibble", "plyr", "dplyr", "data.table",
                    "raster", "rgdal",  "sp", "spdep", "sf",
                    "DataCombine",
                    "knitr", "kableExtra",
-                   "msm", "car", "fixest", "sandwich", "lmtest", "boot", "multcomp",
+                   "msm", "car", "fixest", "sandwich", "lmtest", "boot", "multcomp", "urca",
                    "ggplot2")#,"leaflet", "htmltools"
 # "pglm", "multiwayvcov", "clusterSEs", "alpaca", "clubSandwich",
 
@@ -1756,6 +1756,44 @@ ggplot() +
 
 
 rm(d_clean_cs, d_cs, d_geo, ibs)
+
+#### DESCRIPTIVE PARTIAL AUTOCORRELATION FUNCTION OF PRICES #### 
+# read this panel, as it still features the annual price observations from 1998 (final data only from 2001)
+# 50km CR because it is the most general
+RHS_50 <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
+                                    parcel_size/1000,"km_",
+                                    "50CR.rds")))
+
+prices <- RHS_50[,c("lonlat", "year", "cpo_price_imp1")]
+
+nrow(prices)/length(unique(prices$year))
+
+# Apply descriptive statistics to a sample of plantations, because neighboring plantations can have spatially correlated price time series, 
+# that would conflate the inference performed here.
+sample_ids <- prices$lonlat %>% sample(size = 700) # 700 this is roughly 1% of the grid cells. 
+prices <- prices[prices$lonlat %in% sample_ids,]
+
+fp <- prices[,c("lonlat", "year")]
+
+# separate each time series (of each plantation) by an "empty" (NA) time series, to isolate them from each others. 
+length_panel <- length(unique(prices$year))
+fp <- mutate(fp, year = year + length_panel)
+fp$cpo_price_imp1 <- NA
+prices_extd <- rbind(prices, fp)
+prices_extd <- dplyr::arrange(prices_extd, lonlat, year)
+prices_ts <- prices_extd[,c("cpo_price_imp1")]
+prices_ts <- ts(prices_ts, frequency = length_panel*2)#
+
+ur.kpss(prices_ts) %>% summary() # --> data need to be differenced
+ur.kpss(diff(prices_ts, differences = 1)) %>% summary() # --> first differencing suffices
+
+arima(prices_ts, order = c(length_panel - 1,1,0)) 
+
+
+# this does not handle properly the specific structure of our time series (with NA sequences separating grid cells' respective time series)
+# pacf_14 <- pacf(diff(prices_ts, differences = 1), na.action = na.exclude, lag.max = length_panel - 1)
+
+rm(RHS_50)
 
 #### MAIN : REGRESSIONS DES STATS AND EQUALITY TESTS OVER INDUS, SM, LEGAL AND ILLEGAL,  ####
 

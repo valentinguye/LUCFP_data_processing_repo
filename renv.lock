@@ -398,20 +398,6 @@
       "Repository": "CRAN",
       "Hash": "fd2844b3a43ae2d27e70ece2df1b4e2a"
     },
-    "emmeans": {
-      "Package": "emmeans",
-      "Version": "1.5.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "f2562d182b89a501137c102099504181"
-    },
-    "estimability": {
-      "Package": "estimability",
-      "Version": "1.3",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "05901bd61be60fd3bfc5b7d7c3517d1d"
-    },
     "evaluate": {
       "Package": "evaluate",
       "Version": "0.14",
@@ -995,7 +981,8 @@
       "RemoteUsername": "rstudio",
       "RemoteRepo": "renv",
       "RemoteRef": "0.14.0-8",
-      "RemoteSha": "4642f5dc7058e067438966ef99a28c0b84fd87c8"
+      "RemoteSha": "4642f5dc7058e067438966ef99a28c0b84fd87c8",
+      "Hash": "a9111741eb18c560feef36aed96cb374"
     },
     "reshape2": {
       "Package": "reshape2",
@@ -1283,13 +1270,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "d4d71a75dd3ea9eb5fa28cc21f9585e2"
-    },
-    "xtable": {
-      "Package": "xtable",
-      "Version": "1.8-4",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "b8acdf8af494d9ec19ccb2481a9b11c2"
     },
     "yaml": {
       "Package": "yaml",
