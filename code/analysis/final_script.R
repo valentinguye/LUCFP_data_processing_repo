@@ -98,38 +98,38 @@ rm(d_30, d_50)
 ##### REGRESSION FUNCTION ##### 
 # Commented out below are the arguments of the regression making function. 
 # They may be useful to run parts of the operations within the function. 
-# catchment = "CR"
-# outcome_variable = "lucpfap_pixelcount"
-# island = "both"
-# start_year = 2002
-# end_year = 2014
-# alt_cr = FALSE
-# nearest_mill = FALSE
-# margin = "both"
-# restr_marg_def = TRUE
-# commo = c("cpo")
-# x_pya = 3
-# dynamics = FALSE
-# log_prices = TRUE
-# yoyg = FALSE
-# only_sr = FALSE
-# short_run = "full"
-# imp = 1
-# distribution = "quasipoisson"
-# fe = "lonlat + district_year"#
-# offset = FALSE
-# lag_or_not = "_lag1"
-# controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
-# remaining_forest = FALSE
-# interaction_terms = NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
-# interact_regressors = TRUE
-# interacted = "regressors"
-# pya_ov = FALSE
-# illegal = "all"# "ill2" #
-# weights = FALSE
-# min_forest_2000 = 0
-# min_coverage = 0
-# output_full = FALSE
+catchment = "CR"
+outcome_variable = "lucpfip_slow_pixelcount"
+island = "both"
+start_year = 2002
+end_year = 2014
+alt_cr = FALSE
+nearest_mill = FALSE
+margin = "both"
+restr_marg_def = TRUE
+commo = c("cpo")
+x_pya = 3
+dynamics = FALSE
+log_prices = TRUE
+yoyg = FALSE
+only_sr = FALSE
+short_run = "full"
+imp = 1
+distribution = "quasipoisson"
+fe = "lonlat + district_year"#
+offset = FALSE
+lag_or_not = "_lag1"
+controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
+remaining_forest = FALSE
+interaction_terms = NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
+interact_regressors = TRUE
+interacted = "regressors"
+pya_ov = FALSE
+illegal = "ill2"# "ill2" #
+weights = FALSE
+min_forest_2000 = 0
+min_coverage = 0
+output_full = FALSE
 # 
 # rm(catchment,outcome_variable,island,alt_cr,commo,x_pya,dynamics,log_prices,yoyg,short_run,imp,distribution,fe,remaining_forest,offset,lag_or_not,controls,interaction_terms ,interacted,pya_ov,illegal, nearest_mill, weights)
 
@@ -336,7 +336,7 @@ make_base_reg <- function(island,
   }
   
   # Logarithms
-  if(log_prices){
+  if(log_prices & !price_variation){
     for(reg in regressors){
       d[,paste0("ln_",reg)] <- log(d[,reg])
     }
@@ -475,10 +475,10 @@ make_base_reg <- function(island,
   
   
   # - are in years when the outcome can actually be observed
-  if(grepl("_slow_",outcome_variable)){
-    d <- dplyr::filter(d, year < 2011)
-    d <- d[d$year<2011,]
-  }
+  # if(grepl("_slow_",outcome_variable)){
+  #   d <- dplyr::filter(d, year < 2011)
+  #   d <- d[d$year<2011,]
+  # }
   
   # remove year 2015 as it is only available for industrial plantations
   # d <- dplyr::filter(d, year < 2015)
@@ -2776,6 +2776,73 @@ rm(res_data_list_commo)
 
 
 
+
+### PRICE VARIABILITY ----------------------------------------------------
+# infrastructure to store results
+res_data_list_variability <- list()
+elm <- 1
+
+isl_list <- list("both")#"Sumatra", "Kalimantan", 
+ISL <- "both"
+
+size_list <- list("i","sm", "a")
+
+# legality definition
+ill_def <- 2
+ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
+
+
+for(SIZE in size_list){
+  for(ILL in ill_status){
+    res_data_list_variability[[elm]] <- make_base_reg(island = ISL,
+                                                      outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                                      illegal = ILL,
+                                                      price_variation = TRUE,
+                                                      offset = FALSE)
+    names(res_data_list_variability)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    elm <- elm + 1
+  }
+}
+
+## PARTIAL EFFECTS
+rm(ape_mat)
+ape_mat <- bind_cols(lapply(res_data_list_variability, FUN = make_APEs)) %>% as.matrix()
+
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "r",
+      caption = "Effects of price variability on deforestation across the Indonesian oil palm sector") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 3, 
+                     "All" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  column_spec(column = 1,
+              width = "7em",
+              latex_valign = "b") %>% 
+  column_spec(column = c(2:(ncol(ape_mat))),
+              width = "7em",
+              latex_valign = "b") 
+
+rm(ape_mat)
 ##### SPECIFICATION CHARTS #####
 
 
