@@ -98,38 +98,39 @@ rm(d_30, d_50)
 ##### REGRESSION FUNCTION ##### 
 # Commented out below are the arguments of the regression making function. 
 # They may be useful to run parts of the operations within the function. 
-catchment = "CR"
-outcome_variable = "lucpfip_slow_pixelcount"
-island = "both"
-start_year = 2002
-end_year = 2014
-alt_cr = FALSE
-nearest_mill = FALSE
-margin = "both"
-restr_marg_def = TRUE
-commo = c("cpo")
-x_pya = 3
-dynamics = FALSE
-log_prices = TRUE
-yoyg = FALSE
-only_sr = FALSE
-short_run = "full"
-imp = 1
-distribution = "quasipoisson"
-fe = "lonlat + district_year"#
-offset = FALSE
-lag_or_not = "_lag1"
-controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
-remaining_forest = FALSE
-interaction_terms = NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
-interact_regressors = TRUE
-interacted = "regressors"
-pya_ov = FALSE
-illegal = "ill2"# "ill2" #
-weights = FALSE
-min_forest_2000 = 0
-min_coverage = 0
-output_full = FALSE
+# catchment = "CR"
+# outcome_variable = "lucpfap_pixelcount"
+# island = "both"
+# start_year = 2002
+# end_year = 2014
+# alt_cr = FALSE
+# nearest_mill = FALSE
+# margin = "both"
+# restr_marg_def = TRUE
+# commo = c("cpo")
+# x_pya = 3
+# dynamics = FALSE
+# price_variation = FALSE
+# log_prices = TRUE
+# yoyg = FALSE
+# only_sr = FALSE
+# short_run = "full"
+# imp = 1
+# distribution = "quasipoisson"
+# fe = "lonlat + district_year"#
+# offset = FALSE
+# lag_or_not = "_lag1"
+# controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "illegal2")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
+# remaining_forest = FALSE
+# interaction_terms = c("illegal2") # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
+# interact_regressors = TRUE
+# interacted = "regressors"
+# pya_ov = FALSE
+# illegal = "all"# "ill2" #
+# weights = FALSE
+# min_forest_2000 = 0
+# min_coverage = 0
+# output_full = FALSE
 # 
 # rm(catchment,outcome_variable,island,alt_cr,commo,x_pya,dynamics,log_prices,yoyg,short_run,imp,distribution,fe,remaining_forest,offset,lag_or_not,controls,interaction_terms ,interacted,pya_ov,illegal, nearest_mill, weights)
 
@@ -420,7 +421,7 @@ make_base_reg <- function(island,
   # (interactions do not need to be in there as they are fully built from the used_vars)
   used_vars <- c(outcome_variable, regressors, controls,
                  "lonlat",  "year", "lat", "lon", 
-                 "village", "subdistrict", "district", "province", "island", "reachable", #"illegal2",
+                 "village", "subdistrict", "district", "province", "island", "reachable", "illegal2",
                  "village_year", "subdistrict_year", "district_year", "province_year")#,"reachable", "reachable_year"
   #"n_reachable_ibsuml_lag1", "sample_coverage_lag1", #"pfc2000_total_ha", 
   #"remain_f30th_pixelcount","remain_pf_pixelcount"
@@ -1404,6 +1405,24 @@ row.names(accu_lucpfp)[3] <- "Both"
 
 accu_lucpfp_save <- accu_lucpfp
 
+# Look at how much land is concerned with immediate and transitional deforestation
+res_data_list  <- make_base_reg(island = "both",
+                                #end_year = 2010,
+                                outcome_variable = paste0("lucpfip_rapid_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                output_full = FALSE)
+
+d_clean <- res_data_list[[2]]
+sum(d_clean$lucpfip_rapid_pixelcount)*pixel_area_ha/1000 %>% round(digits = 2)
+
+res_data_list  <- make_base_reg(island = "both",
+                                end_year = 2010,
+                                outcome_variable = paste0("lucpfip_slow_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                output_full = FALSE)
+
+d_clean <- res_data_list[[2]]
+sum(d_clean$lucpfip_slow_pixelcount)*pixel_area_ha/1000 %>% round(digits = 2)
+rm(d_clean)
+
 # Finally, add figures from Austin et al. 2017 (SI) - no because not comparable enough because we add smallholders without breaking down here. 
 # austin <- matrix(nrow = 2, ncol = ncol(accu_lucpfp))
 # austin["Sumatra", 4] <- "(448)"
@@ -2224,7 +2243,7 @@ kable(stacked_ape_mat, booktabs = T, align = "r",
 # rm(ape_mat)
 # ape_mat <- bind_cols(lapply(res_data_list_bd, FUN = make_APEs)) %>% as.matrix()
 # 
-# row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+# row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters")
 # ape_mat
 # colnames(ape_mat) <- NULL
 # 
@@ -2237,7 +2256,7 @@ kable(stacked_ape_mat, booktabs = T, align = "r",
 # for(SIZE in size_list){
 #   for(ILL in ill_status){
 #     res_data_list_bd[[elm]] <- make_base_reg(island = ISL,
-#                                              start_year = 2009, 
+#                                              start_year = 2009,
 #                                              end_year = 2014,
 #                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
 #                                              illegal = ILL,
@@ -2250,7 +2269,7 @@ kable(stacked_ape_mat, booktabs = T, align = "r",
 # rm(ape_mat)
 # ape_mat <- bind_cols(lapply(res_data_list_bd, FUN = make_APEs)) %>% as.matrix()
 # 
-# row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+# row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters")
 # ape_mat
 # colnames(ape_mat) <- NULL
 # 
@@ -2278,20 +2297,20 @@ kable(stacked_ape_mat, booktabs = T, align = "r",
 #                    align = "c") %>%
 #   add_header_above(c(" " = 1,
 #                      "Industrial plantations" = 3,
-#                      "Smallholder plantations" = 3, 
+#                      "Smallholder plantations" = 3,
 #                      "All" = 3),
 #                    align = "c",
 #                    strikeout = F) %>%
 #   pack_rows("2002-2008", 1, 4,
-#             italic = TRUE, bold = TRUE) %>% 
+#             italic = TRUE, bold = TRUE) %>%
 #   pack_rows("2009-2014", 5, 8,
-#             italic = TRUE, bold = TRUE) %>% 
+#             italic = TRUE, bold = TRUE) %>%
 #   column_spec(column = 1,
 #               width = "7em",
-#               latex_valign = "b") %>% 
+#               latex_valign = "b") %>%
 #   column_spec(column = c(2:(ncol(stacked_ape_mat))),
 #               width = "7em",
-#               latex_valign = "b") %>% 
+#               latex_valign = "b") %>%
 #   column_spec(column = ncol(stacked_ape_mat)+1,
 #               bold = TRUE)
 
@@ -2552,11 +2571,23 @@ elm <- 1
 
 dyn_list <- list("rapid", "slow")
 
+# first estimate rapid over the whole period 
+for(ILL in ill_status){
+  res_data_list_dyn[[elm]] <- make_base_reg(island = "both", 
+                                            outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+                                            illegal = ILL,
+                                            offset = FALSE)
+  names(res_data_list_dyn)[elm] <- paste0("both_rapid_",ILL)
+  elm <- elm + 1
+}
+
+# then rapid and slow in comparable times: i.e. up to 2010
 for(DYN in dyn_list){
   for(ILL in ill_status){
     res_data_list_dyn[[elm]] <- make_base_reg(island = "both", 
                                               outcome_variable = paste0("lucpfip_",DYN,"_pixelcount"),
                                               illegal = ILL,
+                                              end_year = 2010,
                                               offset = FALSE)
     names(res_data_list_dyn)[elm] <- paste0("both_",DYN,"_",ILL)
     elm <- elm + 1
@@ -2581,12 +2612,21 @@ kable(ape_mat, booktabs = T, align = "r",
                      "All" = 1,
                      "Legal" = 1,
                      "Illegal" = 1,
+                     "All" = 1, 
+                     "Legal" = 1,
+                     "Illegal" = 1,
                      "All" = 1),
                    align = "c",
                    strikeout = F) %>%
   add_header_above(c(" " = 1,
                      "Immediate conversion" = 3,
+                     "Immediate conversion" = 3,
                      "Transitional conversion" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "2002 - 2010" = 3,
+                     "2002 - 2014" = 6),
                    align = "c",
                    strikeout = F) %>%
   # pack_rows("Interaction with \n # of reachable mills", 4, 6, # domestic private ownership  "Interaction with \n domestic private ownership"
