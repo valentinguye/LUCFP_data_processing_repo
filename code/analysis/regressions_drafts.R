@@ -22,7 +22,6 @@ neededPackages = c("tibble", "plyr", "dplyr", "data.table",
 # Install them in their project-specific versions
 renv::restore(packages = neededPackages)
 
-# Load them 
 lapply(neededPackages, library, character.only = TRUE)
 
 # /!\/!\ IF renv::restore(neededPackages) FAILS TO INSTALL SOME PACKAGES /!\/!\ 
