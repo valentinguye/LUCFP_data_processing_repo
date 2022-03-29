@@ -102,7 +102,7 @@ ibs <- ibs[, c("firm_id", "year", "trase_code", "uml_id", "mill_name", "parent_c
                "min_year","est_year", "est_year_imp", "max_year", 
                "ffb_price_imp1", "ffb_price_imp2", "in_ton_ffb_imp1", "in_ton_ffb_imp2", "in_val_ffb_imp1", "in_val_ffb_imp2",
                "cpo_price_imp1","cpo_price_imp2", "out_ton_cpo_imp1", "out_ton_cpo_imp2", "out_val_cpo_imp1", "out_val_cpo_imp2",
-               "prex_cpo_imp1", "prex_cpo_imp2",
+               "prex_cpo_imp1", "prex_cpo_imp2", "lag1_prex_cpo_imp1", "lag1_prex_cpo_imp2", "avg_prex_cpo_imp1", "avg_prex_cpo_imp2", 
                "pko_price_imp1","pko_price_imp2", "out_ton_pko_imp1", "out_ton_pko_imp2", "out_val_pko_imp1", "out_val_pko_imp2",
                "prex_pko_imp1", "prex_pko_imp2",
                "export_pct_imp", "revenue_total", "workers_total_imp3",
@@ -229,9 +229,9 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
       variables <- c("est_year_imp", # "min_year", "est_year", "max_year",
                      "ffb_price_imp1", "ffb_price_imp2", # "in_ton_ffb_imp1", "in_ton_ffb_imp2", "in_val_ffb_imp1", "in_val_ffb_imp2",
                      "cpo_price_imp1", "cpo_price_imp2", # "out_ton_cpo_imp1", "out_ton_cpo_imp2", "out_val_cpo_imp1", "out_val_cpo_imp2",
-                     "prex_cpo_imp1", "prex_cpo_imp2",
-                     "pko_price_imp1","pko_price_imp2", # "out_ton_pko_imp1", "out_ton_pko_imp2", "out_val_pko_imp1", "out_val_pko_imp2",
-                     "prex_pko_imp1", "prex_pko_imp2",
+                     "prex_cpo_imp1", "prex_cpo_imp2", "lag1_prex_cpo_imp1", "lag1_prex_cpo_imp2", "avg_prex_cpo_imp1", "avg_prex_cpo_imp2", 
+                     #"pko_price_imp1","pko_price_imp2", # "out_ton_pko_imp1", "out_ton_pko_imp2", "out_val_pko_imp1", "out_val_pko_imp2",
+                     #"prex_pko_imp1", "prex_pko_imp2",
                      # "export_pct_imp", "revenue_total", "workers_total_imp3",
                      "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp")
 

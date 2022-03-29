@@ -478,17 +478,17 @@ for(catchment_radius in catchment_radiuseS){
 
 ### TIME SERIES 
 ts <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
-ts <- dplyr::select(ts, year, 
-                    taxeffectiverate,
-                    ref_int_cpo_price,
-                    cif_rtdm_cpo,
-                    dom_blwn_cpo,
-                    fob_blwn_cpo,
-                    spread_int_dom_paspi,
-                    rho,
-                    dom_blwn_pko,
-                    cif_rtdm_pko,
-                    spread1, spread2, spread3, spread4, spread5, spread6)
+ts <- dplyr::select(ts, year, spread)
+                    # taxeffectiverate,
+                    # ref_int_cpo_price,
+                    # cif_rtdm_cpo,
+                    # dom_blwn_cpo,
+                    # fob_blwn_cpo,
+                    # spread_int_dom_paspi,
+                    # rho,
+                    # dom_blwn_pko,
+                    # cif_rtdm_pko,
+                    # spread1, spread2, spread3, spread4, spread5, spread6)
 # we only need the time series
 ts <- ts[!duplicated(ts$year),]
 
@@ -681,85 +681,85 @@ for(catchment_radius in catchment_radiuseS){
     
     
     
-    ### Contemporaneous and past-year averaged YEAR-ON-YEAR GROWTH
+    ### Contemporaneous and past-year averaged YEAR-ON-YEAR GROWTH - DEPRECATED, USED NOWHERE AND THUS COMMENTED OUT
     
-    ## contemporaneous yoyg - SHORT RUN MEASURE - (invalid for at least the first record of each lonlat)
-    parcels <- mutate(parcels,
-                      !!as.symbol(paste0(voi,"_yoyg")) := 100*(!!as.symbol(paste0(voi)) - 
-                                                                 !!as.symbol(paste0(voi,"_lag1"))) /
-                        !!as.symbol(paste0(voi,"_lag1")))
+    # ## contemporaneous yoyg - SHORT RUN MEASURE - (invalid for at least the first record of each lonlat)
+    # parcels <- mutate(parcels,
+    #                   !!as.symbol(paste0(voi,"_yoyg")) := 100*(!!as.symbol(paste0(voi)) - 
+    #                                                              !!as.symbol(paste0(voi,"_lag1"))) /
+    #                     !!as.symbol(paste0(voi,"_lag1")))
+    # 
+    # ## Lagged yoyg 
+    # # (the first lag is invalid for at least two first records of each lonlat;    
+    # # the fourth lag is invalid for at least 5 first records)
+    # for(lag in c(1:4)){
+    #   parcels <- dplyr::arrange(parcels, lonlat, year)
+    #   parcels <- DataCombine::slide(parcels,
+    #                                 Var = paste0(voi,"_yoyg"), 
+    #                                 TimeVar = "year",
+    #                                 GroupVar = "lonlat",
+    #                                 NewVar = paste0(voi,"_yoyg_lag",lag),
+    #                                 slideBy = -lag, 
+    #                                 keepInvalid = TRUE)  
+    #   # parcels <- dplyr::arrange(parcels, lonlat, year)
+    # }
     
-    ## Lagged yoyg 
-    # (the first lag is invalid for at least two first records of each lonlat;    
-    # the fourth lag is invalid for at least 5 first records)
-    for(lag in c(1:4)){
-      parcels <- dplyr::arrange(parcels, lonlat, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = paste0(voi,"_yoyg"), 
-                                    TimeVar = "year",
-                                    GroupVar = "lonlat",
-                                    NewVar = paste0(voi,"_yoyg_lag",lag),
-                                    slideBy = -lag, 
-                                    keepInvalid = TRUE)  
-      # parcels <- dplyr::arrange(parcels, lonlat, year)
-    }
     
-    
-    ## past-years averaged yoyg - LONG RUN MEASURE - 
+    ## past-years averaged yoyg - LONG RUN MEASURE - DEPRECATED, USED NOWHERE AND THUS COMMENTED OUT WITHIN THE LOOP
     for(py in c(2,3,4)){
-      parcels$newv <- rowMeans(x = parcels[,paste0(voi,"_yoyg_lag",c(1:py))], na.rm = FALSE)
-      # treat NaNs that arise from means over only NAs when na.rm = T 
-      parcels[is.nan(parcels$newv),"newv"] <- NA
-      colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_yoyg_",py,"pya")
-      
-      
-      # Lag by one year
-      parcels <- dplyr::arrange(parcels, lonlat, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = paste0(voi,"_yoyg_",py,"pya"), 
-                                    TimeVar = "year",
-                                    GroupVar = "lonlat",
-                                    NewVar = paste0(voi,"_yoyg_",py,"pya_lag1"),
-                                    slideBy = -1, 
-                                    keepInvalid = TRUE)  
+      # parcels$newv <- rowMeans(x = parcels[,paste0(voi,"_yoyg_lag",c(1:py))], na.rm = FALSE)
+      # # treat NaNs that arise from means over only NAs when na.rm = T 
+      # parcels[is.nan(parcels$newv),"newv"] <- NA
+      # colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_yoyg_",py,"pya")
+      # 
+      # 
+      # # Lag by one year
       # parcels <- dplyr::arrange(parcels, lonlat, year)
-      
-      
-      ## contemporaneous AND pya yoyg mean - OVERALLMEASURE -   
-      
-      # note that we add voi column (not lagged) in the row mean
-      parcels$newv <- rowMeans(x = parcels[,c(paste0(voi,"_yoyg"), paste0(voi,"_yoyg_lag",c(1:py)))], na.rm = FALSE)
-      parcels[is.nan(parcels$newv),"newv"] <- NA
-      # note that we name it ya (year average) and not past year average (pya). It the average of past years AND
-      # contemporaneous obs..
-      # When e.g. the looping variable py = 2, then pya are computed as averages of t-1 and t-2 values and
-      # ya are computed as averages of t, t-1 and t-2 values. 
-      # Coherently, the names of ya variables have _3ya_ (the py+1) to reflect the average being made over 3 years.    
-      colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_yoyg_",py+1,"ya")
-      
-      
-      # Lag by one year
-      parcels <- dplyr::arrange(parcels, lonlat, year)
-      parcels <- DataCombine::slide(parcels,
-                                    Var = paste0(voi,"_yoyg_",py+1,"ya"), 
-                                    TimeVar = "year",
-                                    GroupVar = "lonlat",
-                                    NewVar = paste0(voi,"_yoyg_",py+1,"ya_lag1"),
-                                    slideBy = -1, 
-                                    keepInvalid = TRUE)  
+      # parcels <- DataCombine::slide(parcels,
+      #                               Var = paste0(voi,"_yoyg_",py,"pya"), 
+      #                               TimeVar = "year",
+      #                               GroupVar = "lonlat",
+      #                               NewVar = paste0(voi,"_yoyg_",py,"pya_lag1"),
+      #                               slideBy = -1, 
+      #                               keepInvalid = TRUE)  
+      # # parcels <- dplyr::arrange(parcels, lonlat, year)
+      # 
+      # 
+      # ## contemporaneous AND pya yoyg mean - OVERALLMEASURE -   
+      # 
+      # # note that we add voi column (not lagged) in the row mean
+      # parcels$newv <- rowMeans(x = parcels[,c(paste0(voi,"_yoyg"), paste0(voi,"_yoyg_lag",c(1:py)))], na.rm = FALSE)
+      # parcels[is.nan(parcels$newv),"newv"] <- NA
+      # # note that we name it ya (year average) and not past year average (pya). It the average of past years AND
+      # # contemporaneous obs..
+      # # When e.g. the looping variable py = 2, then pya are computed as averages of t-1 and t-2 values and
+      # # ya are computed as averages of t, t-1 and t-2 values. 
+      # # Coherently, the names of ya variables have _3ya_ (the py+1) to reflect the average being made over 3 years.    
+      # colnames(parcels)[colnames(parcels)=="newv"] <- paste0(voi,"_yoyg_",py+1,"ya")
+      # 
+      # 
+      # # Lag by one year
       # parcels <- dplyr::arrange(parcels, lonlat, year)
-      
+      # parcels <- DataCombine::slide(parcels,
+      #                               Var = paste0(voi,"_yoyg_",py+1,"ya"), 
+      #                               TimeVar = "year",
+      #                               GroupVar = "lonlat",
+      #                               NewVar = paste0(voi,"_yoyg_",py+1,"ya_lag1"),
+      #                               slideBy = -1, 
+      #                               keepInvalid = TRUE)  
+      # # parcels <- dplyr::arrange(parcels, lonlat, year)
+      # 
     }
   }# closes the loop on variables  
   
-  # remove some variables that were only temporarily necessary
-  vars_torm <- names(parcels)[grepl(pattern = "price_", x = names(parcels)) &
-                                (grepl(pattern = "_lag2", x = names(parcels)) |
-                                   grepl(pattern = "_lag3", x = names(parcels)) |
-                                   grepl(pattern = "_lag4", x = names(parcels)) |
-                                   grepl(pattern = "_lag5", x = names(parcels)))]
-  
-  parcels <- parcels[,!(names(parcels) %in% vars_torm)]
+  # remove some variables that were only temporarily necessary - NOT ANYMORE, IN ORDER TO TRY SPECIFICATION WITH ANNUAL PRICE SIGNALS 
+  # vars_torm <- names(parcels)[grepl(pattern = "price_", x = names(parcels)) &
+  #                               (grepl(pattern = "_lag2", x = names(parcels)) |
+  #                                  grepl(pattern = "_lag3", x = names(parcels)) |
+  #                                  grepl(pattern = "_lag4", x = names(parcels)) |
+  #                                  grepl(pattern = "_lag5", x = names(parcels)))]
+  # 
+  # parcels <- parcels[,!(names(parcels) %in% vars_torm)]
   
   
   ### PRICE LOGARITHMS
@@ -780,25 +780,46 @@ for(catchment_radius in catchment_radiuseS){
   parcels <- merge(parcels, ts, by = "year")
   
   # Make the SHIFT SHARE INSTRUMENTAL VARIABLES 
+  
   for(IMP in c(1,2)){
-    for(SP in c(1:6)){
-      parcels[,paste0("iv",SP,"_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_lag1")]*parcels[,paste0("spread",SP)] 
-    }
+    # for(SP in c(1:6)){
+      # make the instrument based on lagged export shares
+      parcels[,paste0("iv_lagged_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_lag1")]*parcels[,paste0("spread")] 
+      
+      # # compute the average export share for the mill 
+      # avg_prex_cpo <- ddply(.data = parcels[, c("lonlat", "year", paste0("wa_prex_cpo_imp",IMP))], 
+      #                       .variables = "lonlat", 
+      #                       .fun = summarise, 
+      #                       newvar := mean( !!as.symbol(paste0("wa_prex_cpo_imp",IMP)), na.rm = TRUE))
+      # 
+      # names(avg_prex_cpo) <- c("lonlat", paste0("wa_prex_cpo_imp",IMP,"_avg"))
+      # 
+      # parcels <- left_join(parcels, avg_prex_cpo, by = "lonlat")
+      
+      # and make the instrument based on it
+      parcels[,paste0("iv_avged_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_avg")]*parcels[,paste0("spread")] 
+      
+    #}
   }
   
   # lag the iv variables
-  ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
+  # ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
+  ivS <- c(paste0("iv_lagged_imp", c(1,2)), paste0("iv_avged_imp", c(1,2)))
+  
+  parcels <- dplyr::arrange(parcels, lonlat, year)
   
   for(IV in ivS){
-    parcels <- dplyr::arrange(parcels, lonlat, year)
-    parcels <- DataCombine::slide(parcels,
-                                  Var = IV, 
-                                  TimeVar = "year",
-                                  GroupVar = "lonlat",
-                                  NewVar = paste0(IV,"_lag1"),
-                                  slideBy = -1, 
-                                  keepInvalid = TRUE)  
-    # parcels <- dplyr::arrange(parcels, lonlat, year)
+    for(lag in c(1, 2, 3, 4)){
+      parcels <- dplyr::arrange(parcels, lonlat, year)
+      parcels <- DataCombine::slide(parcels,
+                                    Var = IV, 
+                                    TimeVar = "year",
+                                    GroupVar = "lonlat",
+                                    NewVar = paste0(IV,"_lag", lag),
+                                    slideBy = -lag, 
+                                    keepInvalid = TRUE)  
+      # parcels <- dplyr::arrange(parcels, lonlat, year)
+    }
   }
   
   # View(parcels[!is.na(parcels$wa_prex_cpo_imp1_lag1) &
