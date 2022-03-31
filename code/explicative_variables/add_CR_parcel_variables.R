@@ -154,7 +154,7 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
                                       parcel_size/1000,"km_",
                                       catchment_radius/1000,"km_IBS_CR.rds")))
   
-
+  
   # make a spatial cross section of it (parcels' coordinates are constant over time)
   parcels_centro <- parcels[!duplicated(parcels$lonlat), c("lonlat", "idncrs_lat", "idncrs_lon")]
   # (lon lat are already expressed in indonesian crs)
@@ -162,35 +162,35 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
   
   parcels$newv_uml <- rep(0, nrow(parcels))
   parcels$newv_ibsuml <- rep(0, nrow(parcels))
-    
+  
   for(t in 1:length(years)){
-      
-      # UML
-      # This is not a panel, so the information on presence or not a given year is whether 
-      # the establishment year is anterior. We impute NA establishment year to be older than 1998. 
-      present_uml <- uml[uml$est_year_imp <= years[t] | is.na(uml$est_year_imp),]
-
-      annual_reachable_uml <- st_is_within_distance(parcels_centro, present_uml, dist = catchment_radius)
-      parcels[parcels$year == years[t], "newv_uml"] <- lengths(annual_reachable_uml)
-
-      # IBS-UML
-      present_ibsuml <- ibsuml[ibsuml$est_year_imp <= years[t] | is.na(ibsuml$est_year_imp),]
-      
-      annual_reachable_ibsuml <- st_is_within_distance(parcels_centro, present_ibsuml, dist = catchment_radius)
-      parcels[parcels$year == years[t], "newv_ibsuml"] <- lengths(annual_reachable_ibsuml)
-      
-      # Note that n_reachable_ibs was already computed in wa_at_parcels.R, 
-      # but this includes ibs that are not matched with uml, which we do not want to count here. 
-      # We used the year variable from the IBS panel to determine whether a firm was present in a given year. 
-      # This means that when a firm has a yearly record missing, although we know it was there 
-      # that year bc we observe an older and an earlier records, we do not count it as reachable 
-      # by the parcel, because no IBS information would be usable that year in such a case.
-      # But when the mill has a record line in IBS this year, but some or all information is missing we still 
-      # count the mill as one more being reachable, altough we use no info from it.
     
-    }
+    # UML
+    # This is not a panel, so the information on presence or not a given year is whether 
+    # the establishment year is anterior. We impute NA establishment year to be older than 1998. 
+    present_uml <- uml[uml$est_year_imp <= years[t] | is.na(uml$est_year_imp),]
     
+    annual_reachable_uml <- st_is_within_distance(parcels_centro, present_uml, dist = catchment_radius)
+    parcels[parcels$year == years[t], "newv_uml"] <- lengths(annual_reachable_uml)
     
+    # IBS-UML
+    present_ibsuml <- ibsuml[ibsuml$est_year_imp <= years[t] | is.na(ibsuml$est_year_imp),]
+    
+    annual_reachable_ibsuml <- st_is_within_distance(parcels_centro, present_ibsuml, dist = catchment_radius)
+    parcels[parcels$year == years[t], "newv_ibsuml"] <- lengths(annual_reachable_ibsuml)
+    
+    # Note that n_reachable_ibs was already computed in wa_at_parcels.R, 
+    # but this includes ibs that are not matched with uml, which we do not want to count here. 
+    # We used the year variable from the IBS panel to determine whether a firm was present in a given year. 
+    # This means that when a firm has a yearly record missing, although we know it was there 
+    # that year bc we observe an older and an earlier records, we do not count it as reachable 
+    # by the parcel, because no IBS information would be usable that year in such a case.
+    # But when the mill has a record line in IBS this year, but some or all information is missing we still 
+    # count the mill as one more being reachable, altough we use no info from it.
+    
+  }
+  
+  
   # IBS/all mills (IBS-UML matched + IBS not matched with UML but with desa centroid) -> sample coverage
   # any reachable ibs is also counted as a reachable uml : YES if ibs is defined as ibs[ibs$uml_matched_sample==1,]
   nrow(parcels[parcels$newv_uml< parcels$newv_ibsuml,])
@@ -199,7 +199,7 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
   # that is catched by our sample of analysis, i.e. geo-localized palm oil mills. 
   parcels$ratio <- rep(0, nrow(parcels))  
   parcels[parcels$newv_uml != 0, "ratio"] <- 100*(parcels[parcels$newv_uml != 0, "newv_ibsuml"]/parcels[parcels$newv_uml != 0,"newv_uml"])
-    
+  
   colnames(parcels)[colnames(parcels) == "newv_ibsuml"] <- paste0("n_reachable_ibsuml")
   colnames(parcels)[colnames(parcels) == "newv_uml"] <- paste0("n_reachable_uml")
   colnames(parcels)[colnames(parcels) == "ratio"] <- paste0("sample_coverage")
@@ -216,7 +216,7 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
                                 keepInvalid = TRUE)
   parcels <- dplyr::arrange(parcels, lonlat, year)
   
-
+  
   ### MAKE ID FOR THE SET OF REACHABLE IBS MILLS
   
   ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))  
@@ -247,14 +247,14 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
   # nearest_mill_idx <- st_nearest_feature(parcels_centro, ibs_cs)
   # 
   # parcels_centro$nearest_firm_id <- ibs_cs$firm_id[nearest_mill_idx]
-
+  
   parcels <- left_join(parcels, parcels_centro[,c("lonlat", "reachable")], by = "lonlat")#, "nearest_firm_id"
   
   parcels <- st_drop_geometry(parcels)
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_reachable_uml_",
-                               parcel_size/1000,"km_",
-                               catchment_radius/1000,"CR.rds")))
+                                    parcel_size/1000,"km_",
+                                    catchment_radius/1000,"CR.rds")))
 }
 
 
@@ -262,7 +262,7 @@ catchment_radius <- 10000
 while(catchment_radius < 60000){
   
   make_n_reachable_uml(parcel_size, catchment_radius) 
-
+  
   catchment_radius <- catchment_radius + 20000
 }
 
@@ -333,29 +333,29 @@ for(catchment_radius in catchment_radiuseS){
   
   
   ### PROVINCE variable
-
+  
   # the nearest feature function enables to also grab those parcels which centroids are in the sea.
   nearest_prov_idx <- st_nearest_feature(parcels_cs, province_sf_prj)
   
   parcels_cs$province <- province_sf_prj$NAME_1[nearest_prov_idx]
   
   ### DISTRICT variable
- 
+  
   # the nearest feature function enables to also grab those parcels which centroids are in the sea.
   nearest_dstr_idx <- st_nearest_feature(parcels_cs, district_sf_prj)
   
   parcels_cs$district <- district_sf_prj$name_[nearest_dstr_idx]
   # (4 parcels are closest to district with no name (NA) )
-
-
- 
+  
+  
+  
   ### SUB-DISTRICT AND VILLAGE   VARIABLES
   # use st_join, don't know why I did not use it above...
   parcels_cs <- st_join(parcels_cs, 
                         subdistrict_prj[,c("KECAMATAN", "DESA")], 
                         join = st_nearest_feature)
   
-
+  
   ### NEIGHBOR VARIABLE
   # create a grouping variable at the cross section (9 is to recall the the group id includes the 8 neighbors + the central grid cell.)
   
@@ -380,7 +380,7 @@ for(catchment_radius in catchment_radiuseS){
   
   names(parcels)[names(parcels)=="KECAMATAN"] <- "subdistrict"
   names(parcels)[names(parcels)=="DESA"] <- "village"
-
+  
   rm(parcels_cs)
   
   
@@ -392,11 +392,11 @@ for(catchment_radius in catchment_radiuseS){
   parcels$village_year <- paste0(parcels$village,"_",parcels$year)
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
-                                     parcel_size/1000,"km_",
-                                     catchment_radius/1000,"CR.rds")))
+                                    parcel_size/1000,"km_",
+                                    catchment_radius/1000,"CR.rds")))
 }
 rm(district_sf, district_sf_prj, province_sf, province_sf_prj, island_sf, island_sf_prj, island_sf_prj_bbox)
-  # parcels_list[[match(catchment_radius, catchment_radiuseS)]] <- parcels
+# parcels_list[[match(catchment_radius, catchment_radiuseS)]] <- parcels
 
 
 
@@ -479,16 +479,16 @@ for(catchment_radius in catchment_radiuseS){
 ### TIME SERIES 
 ts <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
 ts <- dplyr::select(ts, year, spread)
-                    # taxeffectiverate,
-                    # ref_int_cpo_price,
-                    # cif_rtdm_cpo,
-                    # dom_blwn_cpo,
-                    # fob_blwn_cpo,
-                    # spread_int_dom_paspi,
-                    # rho,
-                    # dom_blwn_pko,
-                    # cif_rtdm_pko,
-                    # spread1, spread2, spread3, spread4, spread5, spread6)
+# taxeffectiverate,
+# ref_int_cpo_price,
+# cif_rtdm_cpo,
+# dom_blwn_cpo,
+# fob_blwn_cpo,
+# spread_int_dom_paspi,
+# rho,
+# dom_blwn_pko,
+# cif_rtdm_pko,
+# spread1, spread2, spread3, spread4, spread5, spread6)
 # we only need the time series
 ts <- ts[!duplicated(ts$year),]
 
@@ -499,25 +499,12 @@ for(catchment_radius in catchment_radiuseS){
   ### MERGE WEIGHTED AVERAGE AND NEAREST MILL VARIABLES
   
   wavars <- readRDS(file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
-                                                                  parcel_size/1000,"km_",
-                                                                  catchment_radius/1000,"CR.rds")))
-  # TEMPORARY NECESSARY PREPARATION OF PARCELS
-  wavars <- st_as_sf(wavars, coords = c("lon", "lat"), crs = indonesian_crs, remove = FALSE)
-  names(wavars)[names(wavars)=="lon"] <- "idncrs_lon"
-  names(wavars)[names(wavars)=="lat"] <- "idncrs_lat"
-  wavars <- st_transform(wavars, crs = 4326)
-  wavars$lon <- st_coordinates(wavars)[,"X"]%>% round(6) # the rounding is bc otherwise there are very little differences in the decimals of the coordinates...
-  wavars$lat <- st_coordinates(wavars)[,"Y"]%>% round(6)
-  wavars <- mutate(wavars, lonlat = paste0(lon, lat))
-  wavars <- st_drop_geometry(wavars)
-  wavars <- dplyr::select(wavars, -parcel_id)
-  
-  # ONCE  wa_at_parcels_distances.R IS RERUN ONCE, THE PREPARATION CODE WILL RATHER BE 
-  # nothing actually. 
+                                     parcel_size/1000,"km_",
+                                     catchment_radius/1000,"CR.rds")))
   
   nmvars <- readRDS(file.path(paste0("temp_data/processed_parcels/nm_panel_parcels_",
-                                                                 parcel_size/1000,"km_",
-                                                                 catchment_radius/1000,"CR.rds")))
+                                     parcel_size/1000,"km_",
+                                     catchment_radius/1000,"CR.rds")))
   
   names(nmvars) %in% names(wavars)
   
@@ -528,6 +515,10 @@ for(catchment_radius in catchment_radiuseS){
   ### EXPORT SHARES FROM PCT TO FRACTION   
   parcels$wa_prex_cpo_imp1 <- parcels$wa_prex_cpo_imp1/100 
   parcels$wa_prex_cpo_imp2 <- parcels$wa_prex_cpo_imp2/100 
+  parcels$wa_lag1_prex_cpo_imp1 <- parcels$wa_lag1_prex_cpo_imp1/100 
+  parcels$wa_lag1_prex_cpo_imp2 <- parcels$wa_lag1_prex_cpo_imp2/100 
+  parcels$wa_avg_prex_cpo_imp1 <- parcels$wa_avg_prex_cpo_imp1/100 
+  parcels$wa_avg_prex_cpo_imp2 <- parcels$wa_avg_prex_cpo_imp2/100 
   
   
   ### SHORT LAGS OF OTHER VARIABLES THAN PRICES 
@@ -656,8 +647,8 @@ for(catchment_radius in catchment_radiuseS){
       ## Repeat for standard deviation
       # need have input parcels as a rowwise dataframe here (see https://dplyr.tidyverse.org/articles/rowwise.html)
       newv <- rowwise(parcels, c("lonlat", "year")) %>% 
-                      summarise(newv = sd(c_across(contains(paste0(voi,"_lag",c(1:py)))), na.rm = FALSE)) %>% 
-                      as.data.frame()
+        summarise(newv = sd(c_across(contains(paste0(voi,"_lag",c(1:py)))), na.rm = FALSE)) %>% 
+        as.data.frame()
       parcels <- left_join(parcels, newv, by = c("lonlat", "year"))
       parcels[is.nan(parcels$newv),"newv"] <- NA
       
@@ -673,7 +664,7 @@ for(catchment_radius in catchment_radiuseS){
                                     NewVar = paste0(voi,"_",py+1,"yv_lag1"),
                                     slideBy = -1, 
                                     keepInvalid = TRUE)  
-     parcels <- dplyr::arrange(parcels, lonlat, year)
+      parcels <- dplyr::arrange(parcels, lonlat, year)
       
       
     }
@@ -701,7 +692,7 @@ for(catchment_radius in catchment_radiuseS){
     #                                 NewVar = paste0(voi,"_yoyg_lag",lag),
     #                                 slideBy = -lag, 
     #                                 keepInvalid = TRUE)  
-    #   # parcels <- dplyr::arrange(parcels, lonlat, year)
+    #   parcels <- dplyr::arrange(parcels, lonlat, year)
     # }
     
     
@@ -783,22 +774,26 @@ for(catchment_radius in catchment_radiuseS){
   
   for(IMP in c(1,2)){
     # for(SP in c(1:6)){
-      # make the instrument based on lagged export shares
-      parcels[,paste0("iv_lagged_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_lag1")]*parcels[,paste0("spread")] 
-      
-      # # compute the average export share for the mill 
-      # avg_prex_cpo <- ddply(.data = parcels[, c("lonlat", "year", paste0("wa_prex_cpo_imp",IMP))], 
-      #                       .variables = "lonlat", 
-      #                       .fun = summarise, 
-      #                       newvar := mean( !!as.symbol(paste0("wa_prex_cpo_imp",IMP)), na.rm = TRUE))
-      # 
-      # names(avg_prex_cpo) <- c("lonlat", paste0("wa_prex_cpo_imp",IMP,"_avg"))
-      # 
-      # parcels <- left_join(parcels, avg_prex_cpo, by = "lonlat")
-      
-      # and make the instrument based on it
-      parcels[,paste0("iv_avged_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_avg")]*parcels[,paste0("spread")] 
-      
+    # make the instrument based on lagged export shares
+    parcels[,paste0("iv_lagged_imp",IMP)] <- parcels[,paste0("wa_lag1_prex_cpo_imp",IMP)]*parcels[,paste0("spread")] 
+    
+    # and on the average export share over time (at mill level)
+    parcels[,paste0("iv_avged_imp",IMP)] <- parcels[,paste0("wa_avg_prex_cpo_imp",IMP)]*parcels[,paste0("spread")] 
+    
+    # this is the average export shares of reachable mills over time at the parcel level -yields much less NA
+    # not done because less representative of the spread shock at the mill level. 
+    # avg_prex_cpo <- ddply(.data = parcels[, c("lonlat", "year", paste0("wa_prex_cpo_imp",IMP))], 
+    #                       .variables = "lonlat", 
+    #                       .fun = summarise, 
+    #                       newvar := mean( !!as.symbol(paste0("wa_prex_cpo_imp",IMP)), na.rm = TRUE))
+    # 
+    # names(avg_prex_cpo) <- c("lonlat", paste0("wa_prex_cpo_imp",IMP,"_avg"))
+    # 
+    # parcels <- left_join(parcels, avg_prex_cpo, by = "lonlat")
+    # 
+    # # and make the instrument based on it
+    # parcels[,paste0("iv_imp",IMP,"_avged")] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_avg")]*parcels[,paste0("spread")] 
+    
     #}
   }
   
@@ -809,7 +804,7 @@ for(catchment_radius in catchment_radiuseS){
   parcels <- dplyr::arrange(parcels, lonlat, year)
   
   for(IV in ivS){
-    for(lag in c(1, 2, 3, 4)){
+    for(lag in c(1:5)){
       parcels <- dplyr::arrange(parcels, lonlat, year)
       parcels <- DataCombine::slide(parcels,
                                     Var = IV, 
@@ -919,9 +914,9 @@ for(catchment_radius in catchment_radiuseS){
                                       parcel_size/1000,"km_",
                                       catchment_radius/1000,"km_IBS_CR.rds")))
   
-
+  
   parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
-
+  
   
   ### RSPO
   parcels$rspo_cert <- rep(FALSE, nrow(parcels))
@@ -933,7 +928,7 @@ for(catchment_radius in catchment_radiuseS){
     rspo_cs <- rspo[rspo$year <= y,] %>% st_geometry()
     
     sgbp <- st_within(x = parcels_cs, y = rspo_cs)
-
+    
     parcels$rspo_cert[parcels$year == y][lengths(sgbp) == 1] <- TRUE
   }
   
@@ -968,7 +963,7 @@ for(catchment_radius in catchment_radiuseS){
   # some grid cells seem to fall within overlapping llu shapes though. 
   # It's really marginal (12 instances). Just remove the duplicates it produces.
   parcels_cs <- parcels_cs[!duplicated(parcels_cs$lonlat),]
-
+  
   # merge back with panel 
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
@@ -988,7 +983,7 @@ for(catchment_radius in catchment_radiuseS){
                                                         llu == "HP" |
                                                         llu == "HPT" |
                                                         llu == "HL")))
-
+  
   # yields many missing in illegal because many grid cells are within a mising land use legal classification
   # parcels[!duplicated(parcels$lonlat) & !is.na(parcels$llu), c("lonlat", "concession", "llu", "illegal1", "illegal2")]
   
@@ -1008,13 +1003,13 @@ rm(cns, llu, parcels, parcels_cs, rspo, rspo_cs, sgbp)
 
 for(catchment_radius in c(1e4, 3e4, 5e4)){
   reachable <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_reachable_uml_",
+                                        parcel_size/1000,"km_",
+                                        catchment_radius/1000,"CR.rds")))
+  
+  geovars <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
                                       parcel_size/1000,"km_",
                                       catchment_radius/1000,"CR.rds")))
-
-  geovars <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
-                                       parcel_size/1000,"km_",
-                                       catchment_radius/1000,"CR.rds")))
-
+  
   
   extmar <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_extmar_",
                                      parcel_size/1000,"km_",
@@ -1049,7 +1044,7 @@ for(catchment_radius in c(1e4, 3e4, 5e4)){
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
                                     parcel_size/1000,"km_",
                                     catchment_radius/1000,"CR.rds")))
-                                     
+  
   
 }
 
@@ -1144,7 +1139,7 @@ make_spatial_ov_lags <- function(catchment_radius){
   # overlap <- LHS[LHS$lucpfip_pixelcount > 0 & LHS$lucpfsmp_pixelcount > 0,]
   # overlap[overlap$lucpfip_pixelcount == overlap$lucpfsmp_pixelcount ,"lucpfip_pixelcount"] %>% length()
   # ---------------------------  
-
+  
   ## make a variable that counts lucfp events on all types of plantations
   LHS <- mutate(LHS, lucpfap_pixelcount = (lucpfip_pixelcount + lucpfsmp_pixelcount))
   LHS <- mutate(LHS, lucfap_pixelcount = (lucfip_pixelcount + lucfsmp_pixelcount))
@@ -1199,7 +1194,7 @@ make_spatial_ov_lags <- function(catchment_radius){
   
   ## Compute the 4-year lagged total deforestation in neighboring cells.
   # (it does make sense only for the total deforestation to be spatially lagged, even when it's another type that is studied).
-
+  
   # lag the outcome variable
   LHS <- dplyr::arrange(LHS, lonlat, year)
   LHS <- DataCombine::slide(LHS,
@@ -1210,31 +1205,31 @@ make_spatial_ov_lags <- function(catchment_radius){
                             slideBy = -4,
                             keepInvalid = TRUE)
   LHS <- dplyr::arrange(LHS, lonlat, year)
-
+  
   # keep the most general cross section
   LHS_cs <- LHS[!duplicated(LHS$lonlat),c("lonlat", "year", "idncrs_lat", "idncrs_lon", "lucpfap_pixelcount")]
-
+  
   # spatial
   LHS_cs <- st_as_sf(LHS_cs, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
-
+  
   # identify neighbors
   nn <- st_nn(st_geometry(LHS_cs), st_geometry(LHS_cs), sparse = TRUE, k = 9, maxdist = 10000)
   # remove self index
   nn <- lapply(nn, FUN = function(x){x[-1]})
-
+  
   LHS_cs <- st_drop_geometry(LHS_cs)
-
+  
   # get the parcel_id corresponding to the sgbp index
   lonlat_list <-  lapply(nn, function(ngbid){LHS_cs[ngbid, "lonlat"]})
-
+  
   LHS[,"ngb_ov_lag4"] <- rep(NA, nrow(LHS))
-
+  
   for(y in unique(LHS[LHS$year>2004,"year"])){
     LHS[LHS$year == y, "ngb_ov_lag4"] <- sapply(lonlat_list,
                                                 FUN = function(lonlat_id){mean(LHS[LHS$lonlat %in% lonlat_id[[3]] & LHS$year == y, "lucpfap_pixelcount_lag4"],
                                                                                na.rm = TRUE)})
   }
-
+  
   # empty neighbor sets (those that have no neighbors but themselves) and  end up with NaN as mean(integer(0))
   # turn them into NA
   LHS[is.nan(LHS$ngb_ov_lag4),"ngb_ov_lag4"] <- NA
@@ -1243,7 +1238,7 @@ make_spatial_ov_lags <- function(catchment_radius){
   # save LHS, because the spatial operation is long
   saveRDS(LHS, paste0("temp_data/processed_parcels/parcels_lhs_panel_final_", 
                       parcel_size/1000,"km_",catchment_radius/1000,"CR.rds"))
-
+  
 }
 
 ### Execute
@@ -1376,9 +1371,9 @@ for(CR in c(3e4, 5e4)){
 # }
 # 
 #   
-  
 
-  
+
+
 
 
 

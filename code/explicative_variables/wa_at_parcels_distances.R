@@ -107,8 +107,8 @@ ibs <- ibs[, c("firm_id", "year", "trase_code", "uml_id", "mill_name", "parent_c
                "prex_pko_imp1", "prex_pko_imp2",
                "export_pct_imp", "revenue_total", "workers_total_imp3",
                "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp")]#,
-               # "iv2_imp1", "iv2_imp2", "iv3_imp1", "iv3_imp2", "iv4_imp1", "iv4_imp2", 
-               # "concentration_10", "concentration_30", "concentration_50"
+# "iv2_imp1", "iv2_imp2", "iv3_imp1", "iv3_imp2", "iv4_imp1", "iv4_imp2", 
+# "concentration_10", "concentration_30", "concentration_50"
 
 # we don't keep the logs because we don't want to compute means of logs, but logs of means. 
 # "ffb_price_imp1_ln", "ffb_price_imp2_ln", "cpo_price_imp1_ln", "cpo_price_imp2_ln",        
@@ -150,7 +150,7 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
   parcels_centro <- st_as_sf(parcels_centro, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
   parcels_centro <- dplyr::select(parcels_centro, lonlat, geometry)
   
-
+  
   
   
   #### Compute panel of weighted averages ####
@@ -205,25 +205,25 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
                                      crs = indonesian_crs)
       # # at this stage let's store our working object somewhere 
       # parcels_saved <- parcels
-
+      
       # make a distance column in the reachable data frames 
       parcels$reachable[s] <- lapply(parcels$lonlat[s], 
-                                           FUN = function(i){
-                                             mutate(parcels$reachable[parcels$lonlat == i][[1]], 
-                                                    distance = st_distance(x = parcels$geometry[parcels$lonlat == i], 
-                                                                           y = parcels$reachable[parcels$lonlat == i][[1]]$geometry,
-                                                                           by_element = TRUE) %>% as.numeric()
-                                                    )
-                                             })
-                                           
+                                     FUN = function(i){
+                                       mutate(parcels$reachable[parcels$lonlat == i][[1]], 
+                                              distance = st_distance(x = parcels$geometry[parcels$lonlat == i], 
+                                                                     y = parcels$reachable[parcels$lonlat == i][[1]]$geometry,
+                                                                     by_element = TRUE) %>% as.numeric()
+                                       )
+                                     })
+      
       # make the inverse of distance column
       parcels$reachable[s] <- lapply(parcels$lonlat[s], 
-                                           FUN = function(i){
-                                             mutate(parcels$reachable[parcels$lonlat == i][[1]], 
-                                                    w = 1/distance
-                                             )
-                                           })
-                                     
+                                     FUN = function(i){
+                                       mutate(parcels$reachable[parcels$lonlat == i][[1]], 
+                                              w = 1/distance
+                                       )
+                                     })
+      
       # Define the variables of interest we want to compute the weighted averages of. 
       # variables <- c("ffb_price_imp1", "ffb_price_imp2")      
       variables <- c("est_year_imp", # "min_year", "est_year", "max_year",
@@ -234,19 +234,19 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
                      #"prex_pko_imp1", "prex_pko_imp2",
                      # "export_pct_imp", "revenue_total", "workers_total_imp3",
                      "pct_own_cent_gov_imp", "pct_own_loc_gov_imp", "pct_own_nat_priv_imp", "pct_own_for_imp")
-
-
+      
+      
       # make the variable specific sum of the inverse of distance over all the reachable mills that have no missing on this variable.
       for(voi in variables){
         parcels$reachable[s] <- lapply(parcels$lonlat[s], 
-                                             FUN =function(i){
-                                               voi_missing <- parcels$reachable[parcels$lonlat == i][[1]][,voi] %>% st_drop_geometry() %>% is.na() %>% as.vector() 
-                                               
-                                               mutate(parcels$reachable[parcels$lonlat == i][[1]],
-                                                      !!as.symbol(paste0("sum_w_",voi)) := ifelse(voi_missing, 
-                                                                                                  yes = NA, 
-                                                                                                  no = sum(w[!voi_missing])))
-                                             })
+                                       FUN =function(i){
+                                         voi_missing <- parcels$reachable[parcels$lonlat == i][[1]][,voi] %>% st_drop_geometry() %>% is.na() %>% as.vector() 
+                                         
+                                         mutate(parcels$reachable[parcels$lonlat == i][[1]],
+                                                !!as.symbol(paste0("sum_w_",voi)) := ifelse(voi_missing, 
+                                                                                            yes = NA, 
+                                                                                            no = sum(w[!voi_missing])))
+                                       })
         
         # for(i in parcels$lonlat[s]){
         #   voi_missing <- parcels$reachable[parcels$lonlat == i][[1]][,voi] %>% st_drop_geometry() %>% is.na() %>% as.vector() 
@@ -257,15 +257,15 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
         
         
         parcels$reachable[s] <- lapply(parcels$lonlat[s], 
-                                             FUN =function(i){
-                                               mutate(parcels$reachable[parcels$lonlat == i][[1]],
-                                                      # make the standardized weights. They are variable specific too.
-                                                      # this ratio indeed is NA if sum_w_voi is NA
-                                                      !!as.symbol(paste0("std_w_", voi)) := w/!!as.symbol(paste0("sum_w_", voi)),
-                                                      # compute an intermediate column in reachable in which each mill gets the product of its weight and its attribute
-                                                      !!as.symbol(paste0("w_var_", voi)) := !!as.symbol(paste0("std_w_", voi))*(!!as.symbol(voi))
-                                               )
-                                             })
+                                       FUN =function(i){
+                                         mutate(parcels$reachable[parcels$lonlat == i][[1]],
+                                                # make the standardized weights. They are variable specific too.
+                                                # this ratio indeed is NA if sum_w_voi is NA
+                                                !!as.symbol(paste0("std_w_", voi)) := w/!!as.symbol(paste0("sum_w_", voi)),
+                                                # compute an intermediate column in reachable in which each mill gets the product of its weight and its attribute
+                                                !!as.symbol(paste0("w_var_", voi)) := !!as.symbol(paste0("std_w_", voi))*(!!as.symbol(voi))
+                                         )
+                                       })
         
         # build the column in parcels in which every cell is the weighted average of voi
         # sum these weighted terms and hence compute the weighted averages
@@ -278,25 +278,25 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
                                                 %>% is.na()
                                                 %>% all() 
                                                 %>% ifelse(yes = NA, no = sum(st_drop_geometry(x[,paste0("w_var_",voi)]),na.rm = T)))
-      
+        
       }# closes the loop on variables
       
-        parcels$idncrs_lon <- st_coordinates(parcels)[,"X"]
-        parcels$idncrs_lat <- st_coordinates(parcels)[,"Y"]
-        parcels <- st_drop_geometry(parcels)
-        
-        parcels <- mutate(parcels, 
-                          reachable = NULL)
-        
-        # give year specific variable names to the variables built in this function 
-        names(parcels) <- names(parcels) %>% paste0(".", years[t])
-        
-        saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/temp_cs_wa_explanatory/cs_wa_explanatory_",
-                                     parcel_size/1000,"km_",catchment_radius/1000,"CR_",years[t],".rds")))
-    }# closes annual_w_averages
-       
-        
+      parcels$idncrs_lon <- st_coordinates(parcels)[,"X"]
+      parcels$idncrs_lat <- st_coordinates(parcels)[,"Y"]
+      parcels <- st_drop_geometry(parcels)
       
+      parcels <- mutate(parcels, 
+                        reachable = NULL)
+      
+      # give year specific variable names to the variables built in this function 
+      names(parcels) <- names(parcels) %>% paste0(".", years[t])
+      
+      saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/temp_cs_wa_explanatory/cs_wa_explanatory_",
+                                        parcel_size/1000,"km_",catchment_radius/1000,"CR_",years[t],".rds")))
+    }# closes annual_w_averages
+    
+    
+    
     ## register cluster
     registerDoParallel(cores = ncores) 
     
@@ -312,26 +312,27 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
   
   ### Execute it
   parallel_w_averages(detectCores() - 1)
-
+  
   
   ### Read annual cross-sections and bind them 
   annual_parcel_paths <- list.files(path = file.path("temp_data/processed_parcels/temp_cs_wa_explanatory/"), 
-                             pattern = paste0("cs_wa_explanatory_",parcel_size/1000,"km_",catchment_radius/1000,"CR_"), 
-                             full.names = TRUE) 
+                                    pattern = paste0("cs_wa_explanatory_",parcel_size/1000,"km_",catchment_radius/1000,"CR_"), 
+                                    full.names = TRUE) 
   
   wide_parcels <- lapply(annual_parcel_paths, 
                          FUN = function(x){readRDS(x)}) %>% bind_cols()
   
   # manage repetitions of lonlat variables over years
   wide_parcels$lonlat <- wide_parcels$lonlat.1998
-  wide_parcels <- dplyr::select(wide_parcels, lonlat, everything())
+  wide_parcels <- dplyr::select(wide_parcels, lonlat, everything()) # just changes columns order
   wide_parcels <- dplyr::select(wide_parcels, -starts_with("lonlat."))  
   
-  # manage repetitions of lat and lon variables over years
-  wide_parcels$lat <- wide_parcels$lat.1998
-  wide_parcels <- dplyr::select(wide_parcels, -starts_with("lat."))
-  wide_parcels$lon <- wide_parcels$lon.1998
-  wide_parcels <- dplyr::select(wide_parcels, -starts_with("lon."))
+  # manage repetitions of lat and lon variables over years - NO BECAUSE THEY ARE NOT THERE ANYMORE
+  # wide_parcels$lat <- wide_parcels$lat.1998
+  # wide_parcels <- dplyr::select(wide_parcels, -starts_with("lat."))
+  # wide_parcels$lon <- wide_parcels$lon.1998
+  # wide_parcels <- dplyr::select(wide_parcels, -starts_with("lon."))
+  
   # manage repetitions of idncrs_lat and idncrs_lon variables over years
   wide_parcels$idncrs_lat <- wide_parcels$idncrs_lat.1998
   wide_parcels <- dplyr::select(wide_parcels, -starts_with("idncrs_lat."))
@@ -341,7 +342,7 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
   # saveRDS(wide_parcels, file = here(paste0("build/output/wa_wide_panel_parcels_",parcel_size/1000,"km_",catchment_radius/1000,"CR.rds")))
   
   # reshape to long 
-  varying_vars <- wide_parcels %>% dplyr::select(-lonlat, -lat, -lon, -idncrs_lat, -idncrs_lon) %>% colnames()
+  varying_vars <- wide_parcels %>% dplyr::select(-lonlat, -idncrs_lat, -idncrs_lon) %>% colnames()   # -lat, -lon, 
   
   long_parcels <- reshape(wide_parcels, 
                           varying = varying_vars, 
@@ -358,7 +359,7 @@ parcel_set_w_average <- function(parcel_size, catchment_radius){
   long_parcels <- dplyr::arrange(long_parcels, lonlat, year)
   
   saveRDS(long_parcels, file = file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",parcel_size/1000,"km_",catchment_radius/1000,"CR.rds")))
-
+  
 }
 
 ##### EXECUTE FUNCTION #####
