@@ -77,7 +77,7 @@ merge_lhs_rhs <- function(parcel_size, catchment_radius){
   # RHS <- dplyr::select(RHS, -lat, -lon, -parcel_id)
   
   # Final code if wa_at_CR_parcels.R and add_CR_parcels.R are run again
-  RHS <- dplyr::select(RHS, -lat, -lon, -idncrs_lat, -idncrs_lon)
+  RHS <- dplyr::select(RHS,  -idncrs_lat, -idncrs_lon) # -lat, -lon,
 
   # MERGE
   # years 1998 - 2000 from RHS will not match, we don't need to keep them because the information 

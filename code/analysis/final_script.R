@@ -16,7 +16,7 @@ neededPackages = c("tibble", "plyr", "dplyr", "data.table",
                    "raster", "rgdal",  "sp", "spdep", "sf",
                    "DataCombine",
                    "knitr", "kableExtra",
-                   "msm", "car", "fixest", "sandwich", "lmtest", "boot", "multcomp", "urca",
+                   "car", "fixest", "sandwich", "boot", "multcomp", "urca",
                    "ggplot2")#,"leaflet", "htmltools"
 # "pglm", "multiwayvcov", "clusterSEs", "alpaca", "clubSandwich",
 
@@ -98,39 +98,40 @@ rm(d_30, d_50)
 ##### REGRESSION FUNCTION ##### 
 # Commented out below are the arguments of the regression making function. 
 # They may be useful to run parts of the operations within the function. 
-# catchment = "CR"
-# outcome_variable = "lucpfap_pixelcount"
-# island = "both"
-# start_year = 2002
-# end_year = 2014
-# alt_cr = FALSE
-# nearest_mill = FALSE
-# margin = "both"
-# restr_marg_def = TRUE
-# commo = c("cpo")
-# x_pya = 3
-# dynamics = FALSE
-# price_variation = FALSE
-# log_prices = TRUE
-# yoyg = FALSE
-# only_sr = FALSE
-# short_run = "full"
-# imp = 1
-# distribution = "quasipoisson"
-# fe = "lonlat + district_year"#
-# offset = FALSE
-# lag_or_not = "_lag1"
-# controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml", "illegal2")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
-# remaining_forest = FALSE
-# interaction_terms = c("illegal2") # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
-# interact_regressors = TRUE
-# interacted = "regressors"
-# pya_ov = FALSE
-# illegal = "all"# "ill2" #
-# weights = FALSE
-# min_forest_2000 = 0
-# min_coverage = 0
-# output_full = FALSE
+catchment = "CR"
+outcome_variable = "lucpfap_pixelcount"
+island = "both"
+start_year = 2002
+end_year = 2014
+alt_cr = FALSE
+nearest_mill = FALSE
+margin = "both"
+restr_marg_def = TRUE
+commo = c("cpo")
+x_pya = 3
+dynamics = FALSE
+annual = TRUE
+price_variation = FALSE
+log_prices = TRUE
+yoyg = FALSE
+only_sr = FALSE
+short_run = "full"
+imp = 1
+distribution = "quasipoisson"
+fe = "lonlat + district_year"#
+offset = FALSE
+lag_or_not = "_lag1"
+controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
+remaining_forest = FALSE
+interaction_terms = NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
+interact_regressors = TRUE
+interacted = "regressors"
+pya_ov = FALSE
+illegal = "all"# "ill2" #
+weights = FALSE
+min_forest_2000 = 0
+min_coverage = 0
+output_full = FALSE
 # 
 # rm(catchment,outcome_variable,island,alt_cr,commo,x_pya,dynamics,log_prices,yoyg,short_run,imp,distribution,fe,remaining_forest,offset,lag_or_not,controls,interaction_terms ,interacted,pya_ov,illegal, nearest_mill, weights)
 
@@ -147,6 +148,7 @@ make_base_reg <- function(island,
                           commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo"), commodities the price signals of which should be included in the RHS
                           x_pya = 3, # either 2, 3, or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
                           dynamics = FALSE, # Logical, should the total price signal(s) be split into current year and x_pya past year average. 
+                          annual = FALSE,
                           price_variation = FALSE, # should the regressors be price variation over the past years, or average (the default)
                           yoyg = FALSE, # logical, should the price variables be computed in year-on-year growth rate instead of level.
                           only_sr = FALSE,
@@ -297,6 +299,11 @@ make_base_reg <- function(island,
         }
       }
     }
+  }
+  
+  # if we want every annual price to be a regressor
+  if(annual){
+    regressors <- paste0(commo,"_price_imp",imp,"_lag",c(1:(x_pya+1)))
   }
   
   if(only_sr){
@@ -699,8 +706,7 @@ make_base_reg <- function(island,
                                   notes = TRUE)
     }
   }
-  
-  
+
   
   if(output_full){
     toreturn <- list(reg_res, d_clean, d)
@@ -723,10 +729,10 @@ make_base_reg <- function(island,
 # K=1
 # controls_pe = F
 # SE = "cluster"
-# CLUSTER = "subdistrict"
+# CLUSTER = "reachable"
+# stddev = FALSE
 # rel_price_change = 0.01 # sd/m #
 # abs_price_change = 1
-# stddev = FALSE
 # rounding = 2
 
 make_APEs <- function(res_data, K=1, 
@@ -994,17 +1000,20 @@ make_APEs <- function(res_data, K=1,
 # In rm(coeff_names, interaction_effects, others, interaction_terms,  :
 # objet 'ape_fml_it' introuvable
 
-# this is a simpler version of make_APEs function above, that does not handle interaction terms. 
-make_APEs_1regr <- function(res_data, 
-                            #SE = "cluster", 
-                            stddev = TRUE,
-                            CLUSTER = "reachable",# "subdistrict", 
-                            rel_price_change = 0.01, 
-                            abs_price_change = 1){
+# This function computes the cumulative APE of annual price signals. The formula is the sum of the individual APEs (not the APE of the sum). 
+# but yields very similar results btw. 
+make_cumulative_APE <- function(res_data, 
+                                CLUSTER = "reachable",# "subdistrict", 
+                                cumulative = TRUE, # should the cumulative APE be returned, or the annual ones.
+                                stddev = FALSE,
+                                rel_price_change = 0.01, 
+                                abs_price_change = 1){
   # get estimation results and data 
   reg_res <- res_data[[1]]
   d_clean <- res_data[[2]]
   
+  # store APEs and their deltaMethod statistics in this list 
+  dM_ape_roi_list <- list()
   
   ## Redefine changes in regressor to one standard deviation if asked 
   if(stddev){
@@ -1022,65 +1031,192 @@ make_APEs_1regr <- function(res_data,
   
   # identify the nature of different variables
   coeff_names <- names(coef(reg_res))
-  # define actual interaction terms (possibly lagged)
-  interaction_effects <- coeff_names[grepl(pattern = "X", names(coef(reg_res)))]
-  others <- coeff_names[!(grepl(pattern = "X", coeff_names))]
-  interaction_terms <- others[paste0(others,"X",coeff_names[1]) %in% interaction_effects]
   
   
-  # data POINTS that deltaMethod will grab 
+  ## FORMULA FOR SUM OF APE OF REGRESSORS OF INTEREST 
   
-  # averages of the interaction terms -the controls that we interacted with the regressor of interest) 
-  int_term_avg <- list()
-  if(length(interaction_terms) >0){
-    for(i in 1:length(interaction_terms)){
-      int_term_avg[[i]] <- mean(d_clean[,interaction_terms[i]])
-    }
+  # select regressors of interest
+  roi <- grep(pattern = "price", x = coeff_names, value = TRUE)
+  
+  ape_formulas <- c()
+  i <- 1
+  for(r in roi){
+    # the final formula is different depending on the regressor of interest being in the log scale or not. 
+    if(grepl("ln_",coeff_names[1])){
+      ape_formulas[i] <- paste0("((",1+rel_price_change,")^(",r,") - 1)*100")#*fv_bar*",pixel_area_ha)
+    } else{
+      ape_formulas[i] <- paste0("(exp(",r,"*",abs_price_change,") - 1)*100")#*fv_bar*",pixel_area_ha)
+    }  
+    i <- i+1
+  }  
+  
+  if(cumulative){
+    
+    final_formula <- paste0(ape_formulas, collapse = " + ")
+    
+    dM_ape_roi <- deltaMethod(object = coef(reg_res), 
+                              vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE, 
+                              g. = final_formula, 
+                              rhs = 0)
+    
+    row.names(dM_ape_roi) <- NULL
+    dM_ape_roi <- as.matrix(dM_ape_roi)
+    dM_ape_roi_list[[1]] <- dM_ape_roi[,c("Estimate","2.5 %","97.5 %")]
+    
+  } else { 
+    ape_list <- list()
+    for(i in 1:length(ape_formulas)){
+      dM_ape_roi <- deltaMethod(object = coef(reg_res), 
+                                vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE, 
+                                g. = ape_formulas[i], 
+                                rhs = 0) 
+      
+      row.names(dM_ape_roi) <- NULL
+      dM_ape_roi <- as.matrix(dM_ape_roi)
+      dM_ape_roi_list[[i]] <- dM_ape_roi[,c("Estimate","2.5 %","97.5 %")]
+    }  
+    
   }
   
-  # average fitted values
-  fv_bar <- mean(reg_res$fitted.values) 
-  
-  ## FORMULA FOR APE OF REGRESSOR OF INTEREST 
-  
-  linear_ape_fml <- paste0(coeff_names[1])
-  i_t <- 1
-  while(i_t<=length(interaction_terms)){
-    linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[grepl(coeff_names[1],interaction_effects)][i_t],"*",int_term_avg[[i_t]])
-    i_t <- i_t +1
-  }
-  
-  # the final formula is different depending on the regressor of interest being in the log scale or not. 
-  if(grepl("ln_",coeff_names[1])){
-    ape_fml_roi <- paste0("((",1+rel_price_change,")^(",linear_ape_fml,") - 1)*100")#*fv_bar*",pixel_area_ha)
-  } else{
-    ape_fml_roi <- paste0("(exp(",linear_ape_fml,"*",abs_price_change,") - 1)*100")#*fv_bar*",pixel_area_ha)
-  }   
-  
-  dM_ape_roi <- deltaMethod(object = coef(reg_res), 
-                            vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE, 
-                            g. = ape_fml_roi, 
-                            rhs = 0)
-  
-  
-  row.names(dM_ape_roi) <- NULL
-  dM_ape_roi <- as.matrix(dM_ape_roi)
-  dM_ape_roi <- dM_ape_roi[,c("Estimate","SE","Pr(>|z|)")]
-  
-  dM_ape_list <- list()
-  dM_ape_list[[1]] <- dM_ape_roi
   
   mat <- matrix(ncol = 1, 
-                nrow = length(unlist(dM_ape_list)), 
-                data = unlist(dM_ape_list))  
+                nrow = length(unlist(dM_ape_roi_list)), 
+                data = unlist(dM_ape_roi_list))  
+  
+  mat <- round(mat, digits = rounding)
+  
+  k  <- 1
+  while(k < nrow(mat)){
+    mat[k+1,] <- paste0("[",mat[k+1,],"; ",mat[k+2,],"]")
+    k <- k + 3
+  } 
+  row.names(mat) <- c(rep(c("Estimate","CI","delete"), nrow(mat)/3))
+  mat <- mat[row.names(mat)!="delete",] %>% as.matrix()
   
   # add a row with the number of observations
   mat <- rbind(mat, reg_res$nobs)
+  row.names(mat)[nrow(mat)] <- "Observations"
+  mat[row.names(mat)=="Observations",] <- mat[row.names(mat)=="Observations",] %>% formatC(digits = 0, format = "f")
+  
+  # add a row with the number of clusters
+  mat <- rbind(mat, length(unique(d_clean[,CLUSTER])))
+  row.names(mat)[nrow(mat)] <- "Clusters"
+  mat[row.names(mat)=="Clusters",] <- mat[row.names(mat)=="Clusters",] %>% formatC(digits = 0, format = "f")
   
   #row.names(mat) <- rep(c("Estimate","SE","p-value"),1+length(interaction_terms))
   
-  rm(coeff_names, interaction_effects, others, interaction_terms, reg_res, d_clean, int_term_avg, 
-     ape_fml_roi, dM_ape_roi, dM_ape_list)
+  rm(coeff_names, reg_res, d_clean, 
+     ape_formulas, roi, final_formula, dM_ape_roi)
+  return(mat)
+}
+
+
+# this is a simpler version of make_APEs function above, that does not handle interaction terms. 
+make_cumulative_APE <- function(res_data, 
+                                CLUSTER = "reachable",# "subdistrict", 
+                                cumulative = TRUE, # should the cumulative APE be returned, or the annual ones.
+                                stddev = FALSE,
+                                rel_price_change = 0.01, 
+                                abs_price_change = 1){
+  # get estimation results and data 
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]]
+  
+  # store APEs and their deltaMethod statistics in this list 
+  dM_ape_roi_list <- list()
+  
+  ## Redefine changes in regressor to one standard deviation if asked 
+  if(stddev){
+    # remove fixed effect variations from the regressor
+    reg_sd <- fixest::feols(fml = as.formula(paste0(
+      names(reg_res$coefficients)[1],
+      " ~ 1 | ", 
+      paste0(reg_res$fixef_vars, collapse = "+"))),
+      data = d_clean)
+    
+    # and take the remaining standard deviation
+    rel_price_change <- sd(reg_sd$residuals)
+    abs_price_change <- sd(reg_sd$residuals)
+  }
+  
+  # identify the nature of different variables
+  coeff_names <- names(coef(reg_res))
+  
+  
+  ## FORMULA FOR SUM OF APE OF REGRESSORS OF INTEREST 
+  
+  # select regressors of interest
+  roi <- grep(pattern = "price", x = coeff_names, value = TRUE)
+  
+  ape_formulas <- c()
+  i <- 1
+  for(r in roi){
+    # the final formula is different depending on the regressor of interest being in the log scale or not. 
+    if(grepl("ln_",coeff_names[1])){
+      ape_formulas[i] <- paste0("((",1+rel_price_change,")^(",r,") - 1)*100")#*fv_bar*",pixel_area_ha)
+    } else{
+      ape_formulas[i] <- paste0("(exp(",r,"*",abs_price_change,") - 1)*100")#*fv_bar*",pixel_area_ha)
+    }  
+    i <- i+1
+  }  
+  
+  if(cumulative){
+    
+    final_formula <- paste0(ape_formulas, collapse = " + ")
+    
+    dM_ape_roi <- deltaMethod(object = coef(reg_res), 
+                              vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE, 
+                              g. = final_formula, 
+                              rhs = 0)
+    
+    row.names(dM_ape_roi) <- NULL
+    dM_ape_roi <- as.matrix(dM_ape_roi)
+    dM_ape_roi_list[[1]] <- dM_ape_roi[,c("Estimate","2.5 %","97.5 %")]
+    
+  } else { 
+    ape_list <- list()
+    for(i in 1:length(ape_formulas)){
+      dM_ape_roi <- deltaMethod(object = coef(reg_res), 
+                                vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE, 
+                                g. = ape_formulas[i], 
+                                rhs = 0) 
+      
+      row.names(dM_ape_roi) <- NULL
+      dM_ape_roi <- as.matrix(dM_ape_roi)
+      dM_ape_roi_list[[i]] <- dM_ape_roi[,c("Estimate","2.5 %","97.5 %")]
+    }  
+    
+  }
+  
+  
+  mat <- matrix(ncol = 1, 
+                nrow = length(unlist(dM_ape_roi_list)), 
+                data = unlist(dM_ape_roi_list))  
+  
+  mat <- round(mat, digits = rounding)
+  
+  k  <- 1
+  while(k < nrow(mat)){
+    mat[k+1,] <- paste0("[",mat[k+1,],"; ",mat[k+2,],"]")
+    k <- k + 3
+  } 
+  row.names(mat) <- c(rep(c("Estimate","CI","delete"), nrow(mat)/3))
+  mat <- mat[row.names(mat)!="delete",] %>% as.matrix()
+  
+  # add a row with the number of observations
+  mat <- rbind(mat, reg_res$nobs)
+  row.names(mat)[nrow(mat)] <- "Observations"
+  mat[row.names(mat)=="Observations",] <- mat[row.names(mat)=="Observations",] %>% formatC(digits = 0, format = "f")
+  
+  # add a row with the number of clusters
+  mat <- rbind(mat, length(unique(d_clean[,CLUSTER])))
+  row.names(mat)[nrow(mat)] <- "Clusters"
+  mat[row.names(mat)=="Clusters",] <- mat[row.names(mat)=="Clusters",] %>% formatC(digits = 0, format = "f")
+  
+  #row.names(mat) <- rep(c("Estimate","SE","p-value"),1+length(interaction_terms))
+  
+  rm(coeff_names, reg_res, d_clean, 
+     ape_formulas, roi, final_formula, dM_ape_roi)
   return(mat)
 }
 

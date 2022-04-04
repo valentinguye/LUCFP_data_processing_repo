@@ -34,7 +34,7 @@ neededPackages <- c("data.table", "plyr", "tidyr", "dplyr",  "Hmisc", "sjmisc", 
                     "doParallel", "foreach", "snow", 
                     "knitr", "kableExtra",
                     "DataCombine", 
-                    "multcomp", "car", "fixest", "sandwich", "lmtest", "broom", "glmhdfe",
+                    "multcomp", "car", "fixest", "sandwich", "broom", "glmhdfe", "urca",
                     "ggeffects",
                     "ggplot2", "leaflet")
 
@@ -117,6 +117,7 @@ if(FALSE){
   library(car)
   library(multcomp)
   library(fixest)
+  library(urca)
   #library(effects)
   #library(glmhdfe)
   #library(sandwich)
@@ -144,7 +145,7 @@ if(renv:::renv_download_method() != getOption("download.file.method")){
 }
 
 # If new packages are needed along the project data processing workflow, one should: 
-new_pck <- c("FitAR")
+new_pck <- c("urca")
 # 1. install the packages in the project library (the default if you are within the project)
 install.packages(new_pck)
 # devtools::install_github("julianhinz/R_glmhdfe")

@@ -1201,6 +1201,13 @@
       "Repository": "CRAN",
       "Hash": "687aa5dfc4ec01ad4da86862a7e6a05b"
     },
+    "urca": {
+      "Package": "urca",
+      "Version": "1.3-0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "7e54e92d0362b977e26dd5a5a3a263a1"
+    },
     "utf8": {
       "Package": "utf8",
       "Version": "1.1.4",
