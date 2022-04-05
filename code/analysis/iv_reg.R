@@ -127,7 +127,7 @@ interaction_terms = NULL # c("wa_pct_own_nat_priv_imp""wa_pct_own_for_imp""n_rea
 interacted = "regressors"
 interact_regressors = TRUE # if there are two regressors (e.g. ffb and cpo) should their interaction be included in the model? 
 pya_ov = FALSE # logical whether the lagged (by one year) outcome_variable should be added in controls
-illegal = "no_ill2" # the default "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions see add_parcel_variables.R)
+illegal = "all" # the default "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions see add_parcel_variables.R)
 min_forest_2000 = 0 
 min_coverage = 0 # fraction from 0 to 1. Minimum share of reachable IBS over all reachable (UML) for an obs.to be included in sample. 
 weights = FALSE # logical should obs. be weighted by the share of our sample reachable mills in all (UML) reachable mills. 
@@ -704,11 +704,7 @@ make_IV_reg <- function(island,
                              data = d_clean)
     
     # Extract first stage information
-    print(f)
-    print(names(d_clean))
     est_1st_list[[f]] <- summary(est_1st, .vcov = vcov(est_1st, cluster = CLUSTER) )#se = "cluster", cluster = CLUSTER
-    
-    print("hey")
     
     # save residuals 
     d_clean[,errors_1stg[f]] <- est_1st$residuals
@@ -718,7 +714,8 @@ make_IV_reg <- function(island,
   toreturn <- list(firststages_summary = est_1st_list, 
                    # fitstat not available in this version of fixest. Might want to compute a F-test by hand ... wald_jointnull_1st = fitstat(est_1st_list[[f]], "wald"), # F-test not available for GLM. 
                    # sum_fv_1st = sum(est_1st_list$fitted.values), # leave it in bare unit and convert/scale post estimation 
-                   APE_estimand = NA) # this will be filled below
+                   boot_info = NA,
+                   APE_mat = NA) # this will be filled below
   
  
  # SECOND STAGE ESTIMATION   
@@ -749,6 +746,7 @@ make_IV_reg <- function(island,
  # ssf <- fml_2nd
   ctrl_fun_endo <- function(myfun_data, fsf_list, ssf){
     
+    # As many first stages as there are endogenous variables
     for(f in 1:length(regressors)){
       BS_est_1st <- fixest::feols(fsf_list[[f]], 
                                data = myfun_data)
@@ -848,7 +846,8 @@ make_IV_reg <- function(island,
         clda[,CLUSTER] <- paste0(clda[,CLUSTER], sub(".*\\.","_",row.names(clda)))
         
         # stack the bootstrap samples iteratively 
-        cl_boot_dat <- rbind(cl_boot_dat, clda)       }
+        cl_boot_dat <- rbind(cl_boot_dat, clda)       
+      }
     }  
     return(cl_boot_dat)
   }
@@ -863,6 +862,7 @@ make_IV_reg <- function(island,
   
   # bootstrap on d_clean, no specific subset, because bootstrapping WILL lead to different data sets that have different 
   # patterns of always zero units. 
+  set.seed(8888)
   bootstraped_1 <- boot(data = d_clean, 
                         statistic = ctrl_fun_endo, # 2 first arguments do not need to be called.
                         # the first one, arbitrarily called "myfun_data" is passed the previous "data" argument 
@@ -870,34 +870,83 @@ make_IV_reg <- function(island,
                         ssf = fml_2nd,
                         ran.gen = ran.gen_cluster,
                         mle = par_list,
-                        sim = "parametric",
+                        sim = "parametric", # Note, from ?boot : "Use of sim = "parametric" with a suitable ran.gen allows the user to implement any types of nonparametric resampling which are not supported directly."
                         R = boot_rep)
     
+  G <- length(unique(d_clean[,CLUSTER]))
   # bootstraped_1$t is a matrix with as many rows as bootrstrap replicates, and one column for each bootstrap statistic. 
-  APE_estimand <- matrix(nrow = ncol(bootstraped_1$t), ncol = 4)
-  colnames(APE_estimand) <- c("Estimate", "Std. Error", "t value", "Pr(>|t|)")
-  for(n_reg in 1:ncol(bootstraped_1$t)){ # 
-    APE_estimand[n_reg, "Std. Error"] <- sd(bootstraped_1$t[,n_reg])
-    
-    APE_estimand[n_reg, "Estimate"] <- bootstraped_1$t0[n_reg]
   
-    APE_estimand[n_reg, "t value"] <- (APE_estimand[n_reg, "Estimate"] - 0)/APE_estimand[n_reg, "Std. Error"]
+  # store final information and bootstrap information (for checks) separately
+  APE_estimand <- matrix(nrow = ncol(bootstraped_1$t), ncol = 4)
+  colnames(APE_estimand) <- c("Estimate", "SE", "2.5 %", "97.5 %")
+  output_list <- list()
+  # Bootstrap info 
+  boot_info <-  matrix(nrow = ncol(bootstraped_1$t), ncol = 4)
+  colnames(boot_info) <- c("Estimate", "bootstrap_bias", "SE", "p_value")
+  
+  for(n_reg in 1:ncol(bootstraped_1$t)){ # 
+    SE <- sd(bootstraped_1$t[,n_reg])
+    
+    beta_hat <- bootstraped_1$t0[n_reg]
+  
+    tval <- (beta_hat - 0)/SE
     
     # find degrees of freedom with "min" method: the number of clusters G, minus one.  
     # this follows the default in fixest package, as of version 0.7.0. See https://lrberge.github.io/fixest/articles/standard_errors.html
     # and from further version of the package, I verified that degrees_freedom(est_object, type = "t") indeed returns G-1
-    t.df <- length(unique(d_clean[,CLUSTER])) - 1
+    boot_info[n_reg, "p_value"] <- (2*pt(abs(tval),
+                                              lower.tail = FALSE,
+                                              df = G-1))
+    boot_info[n_reg, "bootstrap_bias"] <- mean(bootstraped_1$t[,n_reg]) - bootstraped_1$t0[n_reg] 
     
-    APE_estimand[n_reg, "Pr(>|t|)"] <- (2*pt(abs(APE_estimand[n_reg, "t value"]), 
-                                              lower.tail = FALSE, 
-                                              df = t.df)) 
+    boot_info[n_reg, "Estimate"] <- beta_hat
+    boot_info[n_reg, "SE"] <- SE
+    
+    
+    APE_estimand[n_reg, "Estimate"] <- beta_hat
+    APE_estimand[n_reg, "SE"] <- SE
+    APE_estimand[n_reg, "2.5 %"] <- beta_hat - qt(0.975, lower.tail=T, df=(G-1)) * SE
+    APE_estimand[n_reg, "97.5 %"] <- beta_hat + qt(0.975, lower.tail=T, df=(G-1)) * SE
+    
+    output_list[[n_reg]] <- APE_estimand[n_reg, ]
   }
   
 
   ### OUTPUT ### 
-  toreturn[["APE_estimand"]] <- APE_estimand
+  if(length(regressors)==1){ # just because it is doubled when there is only one regressor
+    boot_info <- boot_info[1,]
+    output_list <- output_list[1]
+  }
+  # make a one column matrix with all computed APEs' estimates, LB and HB values. 
+  mat <- matrix(ncol = 1, 
+                nrow = length(unlist(output_list)), 
+                data = unlist(output_list))  
   
-  rm(d, d_nona)
+  mat <- round(mat, digits = rounding)
+  
+  k  <- 1
+  while(k < nrow(mat)){
+    mat[k+2,] <- paste0("[",mat[k+2,],"; ",mat[k+3,],"]")
+    k <- k + 4
+  } 
+  row.names(mat) <- c(rep(c("Estimate","SE", "CI","delete"), nrow(mat)/4))
+  mat <- mat[row.names(mat)!="delete",] %>% as.matrix()
+  
+  # add a row with the number of observations
+  mat <- rbind(mat, est_2nd$nobs)
+  row.names(mat)[nrow(mat)] <- "Observations"
+  mat[row.names(mat)=="Observations",] <- mat[row.names(mat)=="Observations",] %>% formatC(digits = 0, format = "f")
+  
+  # add a row with the number of clusters
+  mat <- rbind(mat, G)
+  row.names(mat)[nrow(mat)] <- "Clusters"
+  mat[row.names(mat)=="Clusters",] <- mat[row.names(mat)=="Clusters",] %>% formatC(digits = 0, format = "f")
+  
+  
+  toreturn[["APE_mat"]] <- mat
+  toreturn[["boot_info"]] <- boot_info
+  
+  rm(d, d_nona, d_clean)
   return(toreturn)
   
 }
@@ -905,7 +954,7 @@ make_IV_reg <- function(island,
 
 ### REGRESSIONS ### 
 # infrastructure to store results
-res_data_list_full <- list()
+res_iv_avged_imp1_ffb <- list()
 elm <- 1
 
 isl_list <- list("both")#"Sumatra", "Kalimantan", 
@@ -920,26 +969,38 @@ ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
 
 for(SIZE in size_list){
   for(ILL in ill_status){
-    res_data_list_full[[elm]] <- make_IV_reg(island = ISL,
+    res_iv_avged_imp1_ffb[[elm]] <- make_IV_reg(island = ISL,
                                                outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
                                                illegal = ILL,
-                                               annual = TRUE,
-                                               boot_rep = 200,
+                                               commo = "ffb",
+                                               instru_share = "avged",
+                                               imp = 1,
+                                               annual = FALSE, # if annual = FALSE, everything works well, just the APE_estimand dataframe outputed will have identical first two rows.
+                                               boot_rep = 2,
                                                offset = FALSE)
-    names(res_data_list_full)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    names(res_iv_avged_imp1_ffb)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
     elm <- elm + 1
   }
 }
+ape_mat <- bind_cols(lapply(res_iv_lagged, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix()
 
-res_data_list_full[[1]]$firststages_summary[[1]] %>% summary(cluster = "reachable")
+boot_info <- lapply(res_iv_lagged, FUN = function(x){x[["boot_info"]]})
 
+first_stage_info <- lapply(res_iv_lagged, FUN = function(x){x[[1]]})
+res_iv_lagged[["both_i_all"]][["APE_mat"]]
 
+ape_mat # this is instru share = lagged ; imp1
 
+bind_cols(lapply(res_iv_lagged, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() # this is instru share = lagged ; imp2
 
+bind_cols(lapply(res_data_list_full, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() # this is instru share = avged ; imp1
 
+bind_cols(lapply(res_iv_avged_imp2, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() # this is instru share = avged ; imp2
 
+### FFB
+bind_cols(lapply(res_iv_avged_imp1_ffb, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
 
-
+lapply(res_iv_avged_imp1_ffb, FUN = function(x){x[[1]]})
 
 
 
@@ -1202,7 +1263,7 @@ make_APEs <- function(res_data, K=1,
   mat[row.names(mat)=="Observations",] <- mat[row.names(mat)=="Observations",] %>% formatC(digits = 0, format = "f")
   
   # add a row with the number of clusters
-  mat <- rbind(mat, length(unique(d_clean[,CLUSTER])))
+  mat <- rbind(mat, G)
   row.names(mat)[nrow(mat)] <- "Clusters"
   mat[row.names(mat)=="Clusters",] <- mat[row.names(mat)=="Clusters",] %>% formatC(digits = 0, format = "f")
   

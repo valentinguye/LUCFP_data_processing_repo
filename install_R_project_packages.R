@@ -124,7 +124,7 @@ if(FALSE){
   #library(lmtest)
   #library(pglm)
   #library(multiwayvcov)
-  #library(clusterSEs)
+  library(clusterSEs)
   #library(clubSandwich)
   #library(boot)
   #library(Countr)
@@ -145,7 +145,7 @@ if(renv:::renv_download_method() != getOption("download.file.method")){
 }
 
 # If new packages are needed along the project data processing workflow, one should: 
-new_pck <- c("urca")
+new_pck <- c("clusterSEs")
 # 1. install the packages in the project library (the default if you are within the project)
 install.packages(new_pck)
 # devtools::install_github("julianhinz/R_glmhdfe")
