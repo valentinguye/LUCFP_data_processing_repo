@@ -13,6 +13,13 @@
     ]
   },
   "Packages": {
+    "AER": {
+      "Package": "AER",
+      "Version": "1.2-9",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "dccc3a89c739957286953821f9bcd971"
+    },
     "BH": {
       "Package": "BH",
       "Version": "1.72.0-3",
@@ -146,6 +153,13 @@
       "Repository": "CRAN",
       "Hash": "c6faf038ba4346b1de19ad7c99b8f94a"
     },
+    "Rdpack": {
+      "Package": "Rdpack",
+      "Version": "2.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "30b04e5b957144334d31e024ee2a222e"
+    },
     "SparseM": {
       "Package": "SparseM",
       "Version": "1.78",
@@ -208,6 +222,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "543776ae6848fde2f48ff3816d0628bc"
+    },
+    "bdsmatrix": {
+      "Package": "bdsmatrix",
+      "Version": "1.3-4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "1012f2033c32d595e1a16bee3bb0b3e5"
     },
     "bitops": {
       "Package": "bitops",
@@ -293,6 +314,13 @@
       "Repository": "CRAN",
       "Hash": "db63a44aab5aadcb6bf2f129751d129a"
     },
+    "clusterSEs": {
+      "Package": "clusterSEs",
+      "Version": "2.6.5",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "f9f2e34f7002f9ae62303fd3aca559a9"
+    },
     "coda": {
       "Package": "coda",
       "Version": "0.19-4",
@@ -306,6 +334,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "89cf4b8207269ccf82fbeb6473fd662b"
+    },
+    "collapse": {
+      "Package": "collapse",
+      "Version": "1.7.6",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "1bcb8d8e330bf1c849295e70b02d8e33"
     },
     "colorspace": {
       "Package": "colorspace",
@@ -356,6 +391,13 @@
       "Repository": "CRAN",
       "Hash": "5ecce9536aef446cf9b7b8519c0effae"
     },
+    "dfidx": {
+      "Package": "dfidx",
+      "Version": "0.0-4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "2f4a62f66732d0efdc6f920d367cba07"
+    },
     "digest": {
       "Package": "digest",
       "Version": "0.6.23",
@@ -379,10 +421,10 @@
     },
     "dreamerr": {
       "Package": "dreamerr",
-      "Version": "1.2.1",
+      "Version": "1.2.3",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "5b40791eb317bcafe51f49f6a1e192de"
+      "Hash": "5b31f43f60613477ee28abec9ab07f1b"
     },
     "e1071": {
       "Package": "e1071",
@@ -435,10 +477,10 @@
     },
     "fixest": {
       "Package": "fixest",
-      "Version": "0.6.0",
+      "Version": "0.9.0",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "855288ba72046fed5a11c3fb1f1dc186"
+      "Hash": "6aa41ae32cc4a2070f12406c43a12727"
     },
     "forcats": {
       "Package": "forcats",
@@ -692,6 +734,13 @@
       "Repository": "CRAN",
       "Hash": "ad24d1fd9ed431543f4633bb083e194a"
     },
+    "lmtest": {
+      "Package": "lmtest",
+      "Version": "0.9-37",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "c108129ded5ffdb129064ec1d7ba77d0"
+    },
     "lubridate": {
       "Package": "lubridate",
       "Version": "1.7.4",
@@ -741,6 +790,13 @@
       "Repository": "CRAN",
       "Hash": "7249fc52d19eab5af7a02925ab534d9c"
     },
+    "maxLik": {
+      "Package": "maxLik",
+      "Version": "1.5-2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "56b86f88928f66983965406582149e5c"
+    },
     "mgcv": {
       "Package": "mgcv",
       "Version": "1.8-28",
@@ -761,6 +817,20 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "eaee7d2a6f3ed4491df868611cb064cc"
+    },
+    "miscTools": {
+      "Package": "miscTools",
+      "Version": "0.6-26",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "340f0789cb2dcc816d9856d375c1df83"
+    },
+    "mlogit": {
+      "Package": "mlogit",
+      "Version": "1.1-1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "314e016755f75f0a6f1ba91ac7b0441a"
     },
     "multcomp": {
       "Package": "multcomp",
@@ -874,6 +944,13 @@
       "Repository": "CRAN",
       "Hash": "01f28d4278f15c76cddbea05899c5d6f"
     },
+    "plm": {
+      "Package": "plm",
+      "Version": "2.6-1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "f677256ce01b586ac64671b33c5e3d38"
+    },
     "plyr": {
       "Package": "plyr",
       "Version": "1.8.6",
@@ -943,6 +1020,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "4c65445c62a6807f58e199165f7fa3b7"
+    },
+    "rbibutils": {
+      "Package": "rbibutils",
+      "Version": "2.2.7",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "69f4a840b0c2aa99f5ce473fd7fa21bd"
     },
     "readr": {
       "Package": "readr",

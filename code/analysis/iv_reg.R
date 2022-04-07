@@ -110,7 +110,7 @@ restr_marg_def = TRUE # should the restrictive definition of extensive margin be
 commo = "cpo" # either "ffb" "cpo" or c("ffb" "cpo") commodities the price signals of which should be included in the RHS
 x_pya = 3 # either 2 3 or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
 dynamics = FALSE # Logical should the total price signal(s) be split into current year and x_pya past year average. 
-annual = TRUE # should every annual price signal be specified in the RHS (for years from current or lag1 if lag_or_not == "_lag1" to x_pya+1...)
+annual = FALSE # should every annual price signal be specified in the RHS (for years from current or lag1 if lag_or_not == "_lag1" to x_pya+1...)
 price_variation = FALSE # should the regressors be price variation over the past years or average (the default)
 yoyg = FALSE # logical should the price variables be computed in year-on-year growth rate instead of level.
 only_sr = FALSE
@@ -118,10 +118,10 @@ log_prices = TRUE # Logical should the price variables be included as their loga
 short_run = "full" # either "full" or "dev". Used only if dynamics = TRUE and yoyg = FALSE. Should the short run (SR) measure of regressors be the price signal as such ("full") or be the deviation to past year average price signal ("dev"). 
 imp = 1 # either 1 or 2. 1 selects the data cleaned with the stronger imputations. 
 distribution = "quasipoisson" # either "poisson" "quasipoisson" or "negbin"
-fe = "lonlat + district_year" # fixed-effects interactions should not be specified in {fixest} synthax with fe1^fe2
+fe = "district_year" # fixed-effects interactions should not be specified in {fixest} synthax with fe1^fe2
 offset = FALSE # Logical. Should the log of the remaining forest be added as an offset.  
 lag_or_not = "_lag1" # either "_lag1" or  "" should the 
-controls = c("wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "n_reachable_uml") #  "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
+controls = c("wa_avg_prex_cpo_imp1", "n_reachable_uml") #  "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
 remaining_forest = FALSE # Logical. If TRUE the remaining forest is added as a control
 interaction_terms = NULL # c("wa_pct_own_nat_priv_imp""wa_pct_own_for_imp""n_reachable_uml" "wa_prex_cpo_imp1") # may be one or several of the controls specified above. 
 interacted = "regressors"
@@ -141,55 +141,55 @@ stddev = FALSE # if TRUE the PEs are computed for a one standard deviation (afte
 rel_price_change = 0.01 
 abs_price_change = 1 
 rounding = 2 
-boot_rep = 5
+boot_rep = 2
 # 
 # rm(catchment,outcome_variable,island,alt_cr,commo,x_pya,dynamics,log_prices,yoyg,short_run,imp,distribution,fe,remaining_forest,offset,lag_or_not,controls,interaction_terms ,interacted,pya_ov,illegal, nearest_mill, weights)
 
 
 make_IV_reg <- function(island,
-                          start_year = 2002, 
-                          end_year = 2014, 
-                          outcome_variable = "lucpfip_pixelcount", # LHS. One of "lucfip_pixelcount", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount"p
-                          catchment = "CR",  
-                          alt_cr = FALSE, # logical, if TRUE, Sumatra's catchment radius is 50000 meters, and Kalimantan's is 30000. 
-                          nearest_mill = FALSE, # whether the ibs variables should be attributed to parcels as from the nearest mill or inverse distance weighted average.  
-                          margin = "both", # "both"
-                          restr_marg_def = TRUE, # should the restrictive definition of extensive margin be used, if margin is either "intensive" of "extensive"
-                          commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo"), commodities the price signals of which should be included in the RHS
-                          x_pya = 3, # either 2, 3, or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
-                          dynamics = FALSE, # Logical, should the total price signal(s) be split into current year and x_pya past year average. 
-                          annual = TRUE, # should every annual price signal be specified in the RHS (for years from current, or lag1 if lag_or_not == "_lag1", to x_pya+1...)
-                          price_variation = FALSE, # should the regressors be price variation over the past years, or average (the default)
-                          yoyg = FALSE, # logical, should the price variables be computed in year-on-year growth rate instead of level.
-                          only_sr = FALSE,
-                          log_prices = TRUE, # Logical, should the price variables be included as their logarithms instead of levels. No effect if yoyg is TRUE.    
-                          short_run = "full", # either "full", or "dev". Used only if dynamics = TRUE and yoyg = FALSE. Should the short run (SR) measure of regressors be the price signal as such ("full") or be the deviation to past year average price signal ("dev"). 
-                          imp = 1, # either 1 or 2. 1 selects the data cleaned with the stronger imputations. 
-                          distribution = "quasipoisson", # either "poisson", "quasipoisson", or "negbin"
-                          fe = "lonlat + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
-                          offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
-                          lag_or_not = "_lag1", # either "_lag1", or  "", should the 
-                          controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # , "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
-                          remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
-                          interaction_terms = NULL, # c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
-                          interacted = "regressors",
-                          interact_regressors = TRUE, # if there are two regressors (e.g. ffb and cpo), should their interaction be included in the model? 
-                          pya_ov = FALSE, # logical, whether the lagged (by one year) outcome_variable should be added in controls
-                          illegal = "all", # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
-                          min_forest_2000 = 0, 
-                          min_coverage = 0, # fraction, from 0 to 1. Minimum share of reachable IBS over all reachable (UML), for an obs.to be included in sample. 
-                          weights = FALSE, # logical, should obs. be weighted by the share of our sample reachable mills in all (UML) reachable mills. 
-                          output_full = FALSE, # if TRUE, the larger dataset (not only the one prepared foranalysis within the function) is returned as a third element of the list output 
-                          
-                          IV_REG = TRUE, # there is the option to set IV_REG to false, just to test similarity with make_main_reg
-                          instru_share = "avged",  
-                          # APE parameters, that were in APE function in standard final script, but with IV reg, APE and its SE needs to be computed within bootstrap estimation
-                          CLUSTER = "reachable",#"subdistrict",
-                          stddev = FALSE, # if TRUE, the PEs are computed for a one standard deviation (after removing variation in the fixed-effect dimensions)
-                          rel_price_change = 0.01, 
-                          abs_price_change = 1, 
-                          rounding = 2, 
-                          boot_rep = 500
+                        start_year = 2002, 
+                        end_year = 2014, 
+                        outcome_variable = "lucpfip_pixelcount", # LHS. One of "lucfip_pixelcount", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount"p
+                        catchment = "CR",  
+                        alt_cr = FALSE, # logical, if TRUE, Sumatra's catchment radius is 50000 meters, and Kalimantan's is 30000. 
+                        nearest_mill = FALSE, # whether the ibs variables should be attributed to parcels as from the nearest mill or inverse distance weighted average.  
+                        margin = "both", # "both"
+                        restr_marg_def = TRUE, # should the restrictive definition of extensive margin be used, if margin is either "intensive" of "extensive"
+                        commo = "cpo", # either "ffb", "cpo", or c("ffb", "cpo"), commodities the price signals of which should be included in the RHS
+                        x_pya = 3, # either 2, 3, or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
+                        dynamics = FALSE, # Logical, should the total price signal(s) be split into current year and x_pya past year average. 
+                        annual = TRUE, # should every annual price signal be specified in the RHS (for years from current, or lag1 if lag_or_not == "_lag1", to x_pya+1...)
+                        price_variation = FALSE, # should the regressors be price variation over the past years, or average (the default)
+                        yoyg = FALSE, # logical, should the price variables be computed in year-on-year growth rate instead of level.
+                        only_sr = FALSE,
+                        log_prices = TRUE, # Logical, should the price variables be included as their logarithms instead of levels. No effect if yoyg is TRUE.    
+                        short_run = "full", # either "full", or "dev". Used only if dynamics = TRUE and yoyg = FALSE. Should the short run (SR) measure of regressors be the price signal as such ("full") or be the deviation to past year average price signal ("dev"). 
+                        imp = 1, # either 1 or 2. 1 selects the data cleaned with the stronger imputations. 
+                        distribution = "quasipoisson", # either "poisson", "quasipoisson", or "negbin"
+                        fe = "lonlat + district_year", # fixed-effects, interactions should not be specified in {fixest} synthax with fe1^fe2
+                        offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
+                        lag_or_not = "_lag1", # either "_lag1", or  "", should the 
+                        controls = c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml"), # , "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
+                        remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
+                        interaction_terms = NULL, # c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
+                        interacted = "regressors",
+                        interact_regressors = TRUE, # if there are two regressors (e.g. ffb and cpo), should their interaction be included in the model? 
+                        pya_ov = FALSE, # logical, whether the lagged (by one year) outcome_variable should be added in controls
+                        illegal = "all", # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
+                        min_forest_2000 = 0, 
+                        min_coverage = 0, # fraction, from 0 to 1. Minimum share of reachable IBS over all reachable (UML), for an obs.to be included in sample. 
+                        weights = FALSE, # logical, should obs. be weighted by the share of our sample reachable mills in all (UML) reachable mills. 
+                        output_full = FALSE, # if TRUE, the larger dataset (not only the one prepared foranalysis within the function) is returned as a third element of the list output 
+                        
+                        IV_REG = TRUE, # there is the option to set IV_REG to false, just to test similarity with make_main_reg
+                        instru_share = "avged",  
+                        # APE parameters, that were in APE function in standard final script, but with IV reg, APE and its SE needs to be computed within bootstrap estimation
+                        CLUSTER = "reachable",#"subdistrict",
+                        stddev = FALSE, # if TRUE, the PEs are computed for a one standard deviation (after removing variation in the fixed-effect dimensions)
+                        rel_price_change = 0.01, 
+                        abs_price_change = 1, 
+                        rounding = 2, 
+                        boot_rep = 500
 ){
   
   ### BASE DATA 
@@ -324,7 +324,7 @@ make_IV_reg <- function(island,
   
   # if we want every annual price to be a regressor
   if(annual){
-        regressors <- paste0(commo,"_price_imp",imp,"_lag",c(1:(x_pya+1)))
+    regressors <- paste0(commo,"_price_imp",imp,"_lag",c(1:(x_pya+1)))
   }
   
   if(only_sr){
@@ -403,7 +403,7 @@ make_IV_reg <- function(island,
   
   
   # lag controls that are from IBS 
-  select_ibs_controls <- grepl("pct_own", controls) | grepl("prex_", controls)
+  select_ibs_controls <- grepl("wa", controls) & !grepl("wa_avg_", controls) # | grepl("prex_", controls)
   if(lag_or_not=="_lag1" & length(controls)>0 & any(select_ibs_controls)){
     # find them
     controls[select_ibs_controls] <- sapply(controls[select_ibs_controls], FUN = paste0, lag_or_not)
@@ -445,6 +445,14 @@ make_IV_reg <- function(island,
     controls <- c(controls, instruments)
   }
   
+  # Log price variables that are among controls (in case of independent/integrated investigations)
+  if(log_prices & !price_variation){
+    for(reg in controls[grepl(pattern = "price", controls)]){ 
+      d[,paste0("ln_",reg)] <- log(d[,reg])
+      controls[match(reg, controls)] <- paste0("ln_", reg)
+    }
+    rm(reg)
+  }
   
   
   # ### WEIGHTS
@@ -601,10 +609,9 @@ make_IV_reg <- function(island,
   
   
   # - and those with not only zero outcome, i.e. that feglm would remove, see ?fixest::obs2remove
-  d_clean <- d_nona[-obs2remove(fml = as.formula(paste0(outcome_variable, " ~ ", fe)),
-                                d_nona, 
-                                family = "poisson"),]
-  
+  # d_clean <- d_nona[-obs2remove(fml = as.formula(paste0(outcome_variable, " ~ ", fe)),
+  #                               d_nona, 
+  #                               family = "poisson"),]
   # note that obs2remove has to be the last filtering operation on data, otherwise some units (along fe dimension)
   # may become "only-zero-outcome" units after other data removal.  
   
@@ -635,15 +642,15 @@ make_IV_reg <- function(island,
     for(con in interaction_terms){
       actual_ <- controls[grepl(con, controls)]
       for(reg in interacted){
-        d_clean[,paste0(actual_,"X",reg)] <- d_clean[,actual_]*d_clean[,reg]
+        d_nona[,paste0(actual_,"X",reg)] <- d_nona[,actual_]*d_nona[,reg]
       }
     }
   }
   
   # and add the interaction between the regressors 
   if(length(regressors) == 2 & interact_regressors){
-    d_clean[,paste0(regressors[1],"X",regressors[2])] <- d_clean[,regressors[1]]*d_clean[,regressors[2]]
-    #d_clean[,paste0(regressors[2],"X",regressors[1])] <- d_clean[,regressors[2]]*d_clean[,regressors[1]]
+    d_nona[,paste0(regressors[1],"X",regressors[2])] <- d_nona[,regressors[1]]*d_nona[,regressors[2]]
+    #d_nona[,paste0(regressors[2],"X",regressors[1])] <- d_nona[,regressors[2]]*d_nona[,regressors[1]]
   }
   
   
@@ -660,18 +667,31 @@ make_IV_reg <- function(island,
   
   
   ### FORMULAE ###
-
+  
   # INTRUMENTS ARE IN CONTROLS   
   # store first stage formulae in this list 
   fml_1st_list <- list()
+  classic_iv_fixest_fml <- list()
   for(f in 1:length(regressors)){
     fml_1st_list[[f]] <- as.formula(paste0(regressors[f],
-                                     " ~ ", 
-                                     paste0(controls, collapse = "+"), #  instruments are in controls
-                                     " | ", 
-                                     fe))
+                                           " ~ ", 
+                                           paste0(controls, collapse = "+"), #  instruments are in controls
+                                           " | ", 
+                                           fe))
+    
+    # this is not for within bootstraps, but to fit in feols-iv in fixest package to extract 1st stage stats readily
+    classic_iv_fixest_fml[[f]] <- as.formula(paste0(outcome_variable,
+                                                    " ~ ", 
+                                                    paste0(controls[!(controls %in% instruments)], collapse = "+"), # only "included" controls, i.e. z1, i.e. not instruments.
+                                                    " | ",
+                                                    fe, 
+                                                    " | ",
+                                                    regressors[f], 
+                                                    " ~ ",
+                                                    paste0(instruments, collapse = "+")))
+    
   }
- 
+  
   # need to specify the names of first stages' residuals now
   errors_1stg <- paste0("est_res_1st_", c(1:length(regressors)))
   
@@ -690,66 +710,73 @@ make_IV_reg <- function(island,
   # this is just for testing purpose
   if(!IV_REG){
     reg_res <- fixest::feglm(fe_model,
-                                   data = d_clean, 
-                                   family = distribution, 
-                                   glm.iter = 100,
-                                   #fixef.iter = 100000,
-                                   notes = TRUE)
+                             data = d_nona, 
+                             family = distribution, 
+                             glm.iter = 100,
+                             #fixef.iter = 100000,
+                             notes = TRUE)
   } 
   
   # We run the first stage outside the bootstrapping process, in order to extract related information
   est_1st_list <- list()
+  Ftest_list <- list()
+  Waldtest_list <- list()
   for(f in 1:length(regressors)){
-    est_1st <- fixest::feols(fml_1st_list[[f]], 
-                             data = d_clean)
+    est_1st <- fixest::feols(classic_iv_fixest_fml[[f]], 
+                             data = d_nona)
     
     # Extract first stage information
     est_1st_list[[f]] <- summary(est_1st, .vcov = vcov(est_1st, cluster = CLUSTER) )#se = "cluster", cluster = CLUSTER
     
+    Ftest_list[[f]] <- fitstat(est_1st, type = "ivf")
+    Waldtest_list[[f]] <- fitstat(est_1st, type = "ivwald1")
+    
     # save residuals 
-    d_clean[,errors_1stg[f]] <- est_1st$residuals
+    d_nona[,errors_1stg[f]] <- est_1st$residuals
   }
-
-
-  toreturn <- list(firststages_summary = est_1st_list, 
+  
+  toreturn <- list(firstg_summary = est_1st_list, 
                    # fitstat not available in this version of fixest. Might want to compute a F-test by hand ... wald_jointnull_1st = fitstat(est_1st_list[[f]], "wald"), # F-test not available for GLM. 
                    # sum_fv_1st = sum(est_1st_list$fitted.values), # leave it in bare unit and convert/scale post estimation 
                    boot_info = NA,
                    APE_mat = NA) # this will be filled below
   
- 
- # SECOND STAGE ESTIMATION   
- est_2nd <- fixest::feglm(fml_2nd,
-                           data = d_clean,
+  Fstat <- unlist(Ftest_list)[[1]] %>% round(2)
+  Waldstat <- unlist(Waldtest_list)[[1]] %>% as.numeric() %>% round(2)
+  
+  
+  # SECOND STAGE ESTIMATION   
+  est_2nd <- fixest::feglm(fml_2nd,
+                           data = d_nona,
                            family = distribution, 
                            glm.iter = 100,
                            notes = TRUE)
- # summary(est_2nd, se = "cluster", cluster = CLUSTER)  
- 
- ## Redefine changes in endogenous variable (first stage outcome) to one standard deviation if asked 
- if(stddev){
-   # remove fixed effect variations from the regressor
-   reg_sd <- fixest::feols(fml = as.formula(paste0(
-     regressors[1],
-     " ~ 1 | ", 
-     paste0(est_1st$fixef_vars, collapse = "+"))),
-     data = d_clean)
-   
-   # and take the remaining standard deviation
-   rel_lu_change <- sd(reg_sd$residuals)
-   abs_lu_change <- sd(reg_sd$residuals)
- }
+  # summary(est_2nd, se = "cluster", cluster = CLUSTER)  
+  
+  ## Redefine changes in endogenous variable (first stage outcome) to one standard deviation if asked 
+  if(stddev){
+    # remove fixed effect variations from the regressor
+    reg_sd <- fixest::feols(fml = as.formula(paste0(
+      regressors[1],
+      " ~ 1 | ", 
+      paste0(est_1st$fixef_vars, collapse = "+"))),
+      data = d_nona)
+    
+    # and take the remaining standard deviation
+    rel_lu_change <- sd(reg_sd$residuals)
+    abs_lu_change <- sd(reg_sd$residuals)
+  }
   
   # function applied to each bootstrap replicate
- # myfun_data <- d_clean
- # fsf_list <- fml_1st_list
- # ssf <- fml_2nd
+  # myfun_data <- d_nona
+  # fsf_list <- fml_1st_list
+  # ssf <- fml_2nd
   ctrl_fun_endo <- function(myfun_data, fsf_list, ssf){
     
     # As many first stages as there are endogenous variables
     for(f in 1:length(regressors)){
       BS_est_1st <- fixest::feols(fsf_list[[f]], 
-                               data = myfun_data)
+                                  data = myfun_data)
       
       # save residuals 
       myfun_data[,errors_1stg[f]] <- BS_est_1st$residuals
@@ -757,11 +784,11 @@ make_IV_reg <- function(island,
     
     # 2nd stage
     BS_est_2nd <- fixest::feglm(ssf, 
-                             data = myfun_data, 
-                             family = distribution, 
-                             glm.iter = 100,
-                             notes = TRUE)
-
+                                data = myfun_data, 
+                                family = distribution, 
+                                glm.iter = 100,
+                                notes = TRUE)
+    
     ## MAKE APE 
     # Unlike in the non-IV case, APEs are not estimated with the delta Method, because their SEs are only computed asymptotically, by bootstrap. 
     # we don't need to compute inference statistics on them, as inference is handled by bootstrap (on APE).
@@ -782,7 +809,7 @@ make_IV_reg <- function(island,
     
     # return both cumulative and annual APE as statistics to bootstrap (i.e. don't force to decide here which is intersting, because it's as cotsly to compute both or only one)
     ape <- c(sum(annual_ape), annual_ape)
-      
+    
     # statistics we want to evaluate the variance of:
     return(ape)
   }
@@ -790,7 +817,7 @@ make_IV_reg <- function(island,
   ## BOOTSTRAP
   
   # get the different cluster sizeS. This is necessary to cluster bootstrapping with clusters of different sizes. 
-  sizes <- table(d_clean[,CLUSTER])
+  sizes <- table(d_nona[,CLUSTER])
   u_sizes <- sort(unique(sizes))
   
   # names and numbers of clusters of every sizes
@@ -806,10 +833,10 @@ make_IV_reg <- function(island,
                    number_clusters = n_clusters)
   
   # helper function
-  # original_data <- d_clean
+  # original_data <- d_nona
   # arg_list <- par_list
   ran.gen_cluster <- function(original_data, arg_list){
-
+    
     # to store 
     cl_boot_dat <- NULL
     
@@ -824,7 +851,7 @@ make_IV_reg <- function(island,
       
       # because of replacement, some names are sampled more than once
       sample_cl_s_tab <- table(sample_cl_s)
-    
+      
       # because of replacement, some names are sampled more than once
       # we need to give them a new cluster identifier, otherwise a cluster sampled more than once 
       # will be "incorrectly treated as one large cluster rather than two distinct clusters" (by the fixed effects) (Cameron and Miller, 2015)    
@@ -852,18 +879,18 @@ make_IV_reg <- function(island,
     return(cl_boot_dat)
   }
   
-  # test that 
-  test_boot_d <- ran.gen_cluster(original_data = d_clean,
-                                 arg_list = par_list)
-  dim(test_boot_d)
-  dim(d_clean)
+  # # test that 
+  # test_boot_d <- ran.gen_cluster(original_data = d_nona,
+  #                                arg_list = par_list)
+  # dim(test_boot_d)
+  # dim(d_nona)
   
   ## RUN BOOTSTRAP PROCEDURE
   
-  # bootstrap on d_clean, no specific subset, because bootstrapping WILL lead to different data sets that have different 
+  # bootstrap on d_nona, no specific subset, because bootstrapping WILL lead to different data sets that have different 
   # patterns of always zero units. 
   set.seed(8888)
-  bootstraped_1 <- boot(data = d_clean, 
+  bootstraped_1 <- boot(data = d_nona, 
                         statistic = ctrl_fun_endo, # 2 first arguments do not need to be called.
                         # the first one, arbitrarily called "myfun_data" is passed the previous "data" argument 
                         fsf_list = fml_1st_list,
@@ -872,7 +899,10 @@ make_IV_reg <- function(island,
                         mle = par_list,
                         sim = "parametric", # Note, from ?boot : "Use of sim = "parametric" with a suitable ran.gen allows the user to implement any types of nonparametric resampling which are not supported directly."
                         R = boot_rep)
-    
+  
+  # extract the data on which 2nd stage is run without bootstraping (in each boot replicate it's a different dataset) 
+  d_clean <- d_nona[unlist(est_2nd$obs_selection),]
+  
   G <- length(unique(d_clean[,CLUSTER]))
   # bootstraped_1$t is a matrix with as many rows as bootrstrap replicates, and one column for each bootstrap statistic. 
   
@@ -881,25 +911,26 @@ make_IV_reg <- function(island,
   colnames(APE_estimand) <- c("Estimate", "SE", "2.5 %", "97.5 %")
   output_list <- list()
   # Bootstrap info 
-  boot_info <-  matrix(nrow = ncol(bootstraped_1$t), ncol = 4)
-  colnames(boot_info) <- c("Estimate", "bootstrap_bias", "SE", "p_value")
+  boot_info <-  matrix(nrow = ncol(bootstraped_1$t), ncol = 5)
+  colnames(boot_info) <- c("Estimate", "bootstrap_bias", "boot bias to coeff", "SE", "p_value")
   
   for(n_reg in 1:ncol(bootstraped_1$t)){ # 
     SE <- sd(bootstraped_1$t[,n_reg])
     
     beta_hat <- bootstraped_1$t0[n_reg]
-  
+    
     tval <- (beta_hat - 0)/SE
     
     # find degrees of freedom with "min" method: the number of clusters G, minus one.  
     # this follows the default in fixest package, as of version 0.7.0. See https://lrberge.github.io/fixest/articles/standard_errors.html
     # and from further version of the package, I verified that degrees_freedom(est_object, type = "t") indeed returns G-1
     boot_info[n_reg, "p_value"] <- (2*pt(abs(tval),
-                                              lower.tail = FALSE,
-                                              df = G-1))
+                                         lower.tail = FALSE,
+                                         df = G-1))
     boot_info[n_reg, "bootstrap_bias"] <- mean(bootstraped_1$t[,n_reg]) - bootstraped_1$t0[n_reg] 
     
     boot_info[n_reg, "Estimate"] <- beta_hat
+    boot_info[n_reg, "boot bias to coeff"] <- boot_info[n_reg, "bootstrap_bias"] / beta_hat
     boot_info[n_reg, "SE"] <- SE
     
     
@@ -911,7 +942,7 @@ make_IV_reg <- function(island,
     output_list[[n_reg]] <- APE_estimand[n_reg, ]
   }
   
-
+  
   ### OUTPUT ### 
   if(length(regressors)==1){ # just because it is doubled when there is only one regressor
     boot_info <- boot_info[1,]
@@ -943,6 +974,12 @@ make_IV_reg <- function(island,
   mat[row.names(mat)=="Clusters",] <- mat[row.names(mat)=="Clusters",] %>% formatC(digits = 0, format = "f")
   
   
+  # First stage info
+  mat <- rbind(mat, Fstat)
+  row.names(mat)[nrow(mat)] <- "1st stage F-stat"
+  mat <- rbind(mat, Waldstat)
+  row.names(mat)[nrow(mat)] <- "1st stage joint Wald-stat"
+  
   toreturn[["APE_mat"]] <- mat
   toreturn[["boot_info"]] <- boot_info
   
@@ -954,7 +991,7 @@ make_IV_reg <- function(island,
 
 ### REGRESSIONS ### 
 # infrastructure to store results
-res_iv_avged_imp1_ffb <- list()
+res_iv_avged_indep <- list()
 elm <- 1
 
 isl_list <- list("both")#"Sumatra", "Kalimantan", 
@@ -969,19 +1006,22 @@ ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
 
 for(SIZE in size_list){
   for(ILL in ill_status){
-    res_iv_avged_imp1_ffb[[elm]] <- make_IV_reg(island = ISL,
+    res_iv_avged_indep[[elm]] <- make_IV_reg(island = ISL,
                                                outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
                                                illegal = ILL,
-                                               commo = "ffb",
+                                               commo = "cpo",
+                                               controls = c("wa_avg_prex_cpo_imp1", "wa_cpo_price_imp1_4ya_lag1", 
+                                                            "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "n_reachable_uml"), 
                                                instru_share = "avged",
-                                               imp = 1,
-                                               annual = FALSE, # if annual = FALSE, everything works well, just the APE_estimand dataframe outputed will have identical first two rows.
-                                               boot_rep = 2,
+                                               annual = TRUE, # if annual = FALSE, everything works well, just the APE_estimand dataframe outputed will have identical first two rows.
+                                               boot_rep = 1,
                                                offset = FALSE)
-    names(res_iv_avged_imp1_ffb)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    names(res_iv_avged_indep)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
     elm <- elm + 1
   }
 }
+ape <- bind_cols(lapply(res_iv_avged_indep, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix()
+
 ape_mat <- bind_cols(lapply(res_iv_lagged, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix()
 
 boot_info <- lapply(res_iv_lagged, FUN = function(x){x[["boot_info"]]})
