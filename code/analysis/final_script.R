@@ -16,7 +16,7 @@ neededPackages = c("tibble", "plyr", "dplyr", "data.table",
                    "raster", "rgdal",  "sp", "spdep", "sf",
                    "DataCombine",
                    "knitr", "kableExtra",
-                   "car",  "sandwich", "boot", "multcomp", "urca",# "fixest",
+                   "car",  "fixest", "sandwich", "boot", "multcomp", "urca",# 
                    "ggplot2")#,"leaflet", "htmltools"
 # "pglm", "multiwayvcov", "clusterSEs", "alpaca", "clubSandwich",
 
@@ -734,7 +734,7 @@ restr_marg_def = TRUE # should the restrictive definition of extensive margin be
 commo = "cpo" # either "ffb" "cpo" or c("ffb" "cpo") commodities the price signals of which should be included in the RHS
 x_pya = 3 # either 2 3 or 4. The number of past years to compute the average of rhs variables over. The total price signal is the average over these x_pya years and the current year. 
 dynamics = FALSE # Logical should the total price signal(s) be split into current year and x_pya past year average. 
-annual = TRUE # should every annual price signal be specified in the RHS (for years from current or lag1 if lag_or_not == "_lag1" to x_pya+1...)
+annual = FALSE # should every annual price signal be specified in the RHS (for years from current or lag1 if lag_or_not == "_lag1" to x_pya+1...)
 price_variation = FALSE # should the regressors be price variation over the past years or average (the default)
 yoyg = FALSE # logical should the price variables be computed in year-on-year growth rate instead of level.
 only_sr = FALSE
@@ -742,10 +742,10 @@ log_prices = TRUE # Logical should the price variables be included as their loga
 short_run = "full" # either "full" or "dev". Used only if dynamics = TRUE and yoyg = FALSE. Should the short run (SR) measure of regressors be the price signal as such ("full") or be the deviation to past year average price signal ("dev"). 
 imp = 1 # either 1 or 2. 1 selects the data cleaned with the stronger imputations. 
 distribution = "quasipoisson" # either "poisson" "quasipoisson" or "negbin"
-fe = "district_year" # fixed-effects interactions should not be specified in {fixest} synthax with fe1^fe2
+fe = "reachable + district_year" # fixed-effects interactions should not be specified in {fixest} synthax with fe1^fe2
 offset = FALSE # Logical. Should the log of the remaining forest be added as an offset.  
 lag_or_not = "_lag1" # either "_lag1" or  "" should the 
-controls = c("wa_avg_prex_cpo_imp1", "n_reachable_uml") #  "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
+controls = c("wa_avg_prex_cpo_imp1") #, "n_reachable_uml"  "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
 remaining_forest = FALSE # Logical. If TRUE the remaining forest is added as a control
 interaction_terms = NULL # c("wa_pct_own_nat_priv_imp""wa_pct_own_for_imp""n_reachable_uml" "wa_prex_cpo_imp1") # may be one or several of the controls specified above. 
 interacted = "regressors"
@@ -758,7 +758,8 @@ weights = FALSE # logical should obs. be weighted by the share of our sample rea
 output_full = FALSE # if TRUE the larger dataset (not only the one prepared foranalysis within the function) is returned as a third element of the list output 
 
 IV_REG = TRUE # there is the option to set IV_REG to false just to test similarity with make_main_reg
-instru_share = "avged"  
+instru_share = "avged" 
+preclean_level = "FE"
 # APE parameters that were in APE function in standard final script but with IV reg APE and its SE needs to be computed within bootstrap estimation
 CLUSTER = "reachable"#"subdistrict"
 stddev = FALSE # if TRUE the PEs are computed for a one standard deviation (after removing variation in the fixed-effect dimensions)
@@ -804,8 +805,9 @@ make_IV_reg <- function(island,
                         weights = FALSE, # logical, should obs. be weighted by the share of our sample reachable mills in all (UML) reachable mills. 
                         output_full = FALSE, # if TRUE, the larger dataset (not only the one prepared foranalysis within the function) is returned as a third element of the list output 
                         
-                        IV_REG = TRUE, # there is the option to set IV_REG to false, just to test similarity with make_main_reg
+                        IV_REG = TRUE, # there is the option to set IV_REG to false, just to compare with regression without IV
                         instru_share = "avged",  
+                        preclean_level = "FE", # on what dimensions should precleaning occur? Either same as fixed effects (FE) or another string value with "+" btwn dimension vars.
                         # APE parameters, that were in APE function in standard final script, but with IV reg, APE and its SE needs to be computed within bootstrap estimation
                         CLUSTER = "reachable",#"subdistrict",
                         stddev = FALSE, # if TRUE, the PEs are computed for a one standard deviation (after removing variation in the fixed-effect dimensions)
@@ -1230,18 +1232,30 @@ make_IV_reg <- function(island,
   # otl <- boxplot.stats(d_nona[,regressors[1]])$out
   # d_nona <- d_nona[!(d_nona[,regressors[1]] %in% otl), ]
   
+  # PRE - CLEAN 
+  # After lots of consideration, we DO pre-clean the data, based on second stage feglm criteria, 
+  # i.e. remove always zero a FE dimension, BEFORE the first stage. 
+  # note that this has to be the last filtering operation on data, otherwise some units may become "only-zero-outcome" units after other data removal. 
+  if(preclean_level == "FE"){
+    preclean_level <- fe
+  }
+  temp_est <- feglm(fml = as.formula(paste0(outcome_variable, " ~ 1 | ", preclean_level)),
+                    data = d_nona,
+                    family = "poisson")
+  # it's possible that the removal of always zero dep.var in some FE dimensions above is equal to with the FE currently implemented
+  if(length(temp_est$obs_selection)>0){
+    d_precleaned <- d_nona[unlist(temp_est$obs_selection),]
+  }  else { 
+    d_precleaned <- d_nona
+  }
   
-  # - and those with not only zero outcome, i.e. that feglm would remove, see ?fixest::obs2remove
-  # d_clean <- d_nona[-obs2remove(fml = as.formula(paste0(outcome_variable, " ~ ", fe)),
-  #                               d_nona, 
-  #                               family = "poisson"),]
-  # note that obs2remove has to be the last filtering operation on data, otherwise some units (along fe dimension)
-  # may become "only-zero-outcome" units after other data removal.  
+  # save these for later
+  avg_defo_ha <- (fitstat(temp_est, "my")[[1]]*pixel_area_ha) %>% round(1)
   
+  G <- length(unique(d_precleaned[,CLUSTER]))
   
   
   # make the interaction variables in the data
-  
   ## INTERACTIONS
   interaction_vars <- c()
   
@@ -1265,28 +1279,17 @@ make_IV_reg <- function(island,
     for(con in interaction_terms){
       actual_ <- controls[grepl(con, controls)]
       for(reg in interacted){
-        d_nona[,paste0(actual_,"X",reg)] <- d_nona[,actual_]*d_nona[,reg]
+        d_precleaned[,paste0(actual_,"X",reg)] <- d_precleaned[,actual_]*d_precleaned[,reg]
       }
     }
   }
   
   # and add the interaction between the regressors 
   if(length(regressors) == 2 & interact_regressors){
-    d_nona[,paste0(regressors[1],"X",regressors[2])] <- d_nona[,regressors[1]]*d_nona[,regressors[2]]
-    #d_nona[,paste0(regressors[2],"X",regressors[1])] <- d_nona[,regressors[2]]*d_nona[,regressors[1]]
+    d_precleaned[,paste0(regressors[1],"X",regressors[2])] <- d_precleaned[,regressors[1]]*d_precleaned[,regressors[2]]
+    #d_precleaned[,paste0(regressors[2],"X",regressors[1])] <- d_precleaned[,regressors[2]]*d_precleaned[,regressors[1]]
   }
   
-  
-  ### REGRESSIONS
-  
-  # Model specification
-  fe_model <- as.formula(paste0(outcome_variable,
-                                " ~ ",
-                                paste0(regressors, collapse = "+"),
-                                " + ",
-                                paste0(controls[!(controls %in% instruments)], collapse = "+"),
-                                " | ",
-                                fe))
   
   
   ### FORMULAE ###
@@ -1304,14 +1307,14 @@ make_IV_reg <- function(island,
     
     # this is not for within bootstraps, but to fit in feols-iv in fixest package to extract 1st stage stats readily
     classic_iv_fixest_fml[[f]] <- as.formula(paste0(outcome_variable,
-                                              " ~ ", 
-                                              paste0(controls[!(controls %in% instruments)], collapse = "+"), # only "included" controls, i.e. z1, i.e. not instruments.
-                                              " | ",
-                                              fe, 
-                                              " | ",
-                                              regressors[f], 
-                                              " ~ ",
-                                              paste0(instruments, collapse = "+")))
+                                                    " ~ ", 
+                                                    paste0(controls[!(controls %in% instruments)], collapse = "+"), # only "included" controls, i.e. z1, i.e. not instruments.
+                                                    " | ",
+                                                    fe, 
+                                                    " | ",
+                                                    regressors[f], 
+                                                    " ~ ",
+                                                    paste0(instruments, collapse = "+")))
     
   }
   
@@ -1329,248 +1332,293 @@ make_IV_reg <- function(island,
                                fe))
   
   # ESTIMATION 
+  if(IV_REG){
+    
+    # We run the first stage outside the bootstrapping process, in order to extract related information
+    est_1st_list <- list()
+    Ftest_list <- list()
+    Waldtest_list <- list()
+    for(f in 1:length(regressors)){
+      est_1st <- fixest::feols(classic_iv_fixest_fml[[f]], 
+                               data = d_precleaned)
+      
+      # Extract first stage information
+      est_1st_list[[f]] <- summary(est_1st, .vcov = vcov(est_1st, cluster = CLUSTER) )#se = "cluster", cluster = CLUSTER
+      
+      Ftest_list[[f]] <- fitstat(est_1st, type = "ivf1")
+      Waldtest_list[[f]] <- fitstat(est_1st, type = "ivwald1")
+      
+      # save residuals 
+      # d_precleaned[,errors_1stg[f]] <- summary(est_1st, stage = 1)$residuals 
+    }
+    
+    toreturn <- list(firstg_summary = est_1st_list, 
+                     # fitstat not available in this version of fixest. Might want to compute a F-test by hand ... wald_jointnull_1st = fitstat(est_1st_list[[f]], "wald"), # F-test not available for GLM. 
+                     # sum_fv_1st = sum(est_1st_list$fitted.values), # leave it in bare unit and convert/scale post estimation 
+                     boot_info = NA,
+                     APE_mat = NA) # this will be filled below
+    
+    Fstat <- unlist(Ftest_list)[[1]] %>% round(2)
+    Waldstat <- unlist(Waldtest_list)[[1]] %>% as.numeric() %>% round(2)
+    
+    
+    # SECOND STAGE ESTIMATION   
+    # est_2nd <- fixest::feglm(fml_2nd,
+    #                          data = d_precleaned,
+    #                          family = distribution,
+    #                          glm.iter = 100,
+    #                          notes = TRUE)
+    # summary(est_2nd, se = "cluster", cluster = CLUSTER)  
+    
+    
+    ## Redefine changes in endogenous variable (first stage outcome) to one standard deviation if asked 
+    if(stddev){
+      # remove fixed effect variations from the regressor
+      reg_sd <- fixest::feols(fml = as.formula(paste0(
+        regressors[1],
+        " ~ 1 | ", 
+        paste0(est_1st$fixef_vars, collapse = "+"))),
+        data = d_precleaned)
+      
+      # and take the remaining standard deviation
+      rel_lu_change <- sd(reg_sd$residuals)
+      abs_lu_change <- sd(reg_sd$residuals)
+    }
+    
+    # function applied to each bootstrap replicate
+    # myfun_data <- d_precleaned
+    # fsf_list <- fml_1st_list
+    # ssf <- fml_2nd
+    ctrl_fun_endo <- function(myfun_data, fsf_list, ssf){
+      
+      ape <- try({
+        # As many first stages as there are endogenous variables
+        for(f in 1:length(regressors)){
+          BS_est_1st <- fixest::feols(fsf_list[[f]], 
+                                      data = myfun_data)
+          
+          # save residuals 
+          myfun_data[,errors_1stg[f]] <- BS_est_1st$residuals
+        }
+        
+        # 2nd stage
+        BS_est_2nd <- fixest::feglm(ssf, 
+                                    data = myfun_data, 
+                                    family = distribution, 
+                                    glm.iter = 100,
+                                    notes = TRUE)
+        
+        ## MAKE APE 
+        # Unlike in the non-IV case, APEs are not estimated with the delta Method, because their SEs are only computed asymptotically, by bootstrap. 
+        # we don't need to compute inference statistics on them, as inference is handled by bootstrap (on APE).
+        
+        # select coefficient of interest 
+        roi <- BS_est_2nd$coefficients[regressors]
+        annual_ape <- c()
+        i <- 1
+        for(r in roi){
+          # the APE is different depending on the regressor of interest being in the log scale or not. 
+          if(grepl("ln_",regressors[1])){
+            annual_ape[i] <- ((1+rel_price_change)^(r) - 1)*100
+          } else{
+            annual_ape[i] <- (exp(r*abs_price_change) - 1)*100 
+          } 
+          i <- i+1
+        }  
+        
+        # return both cumulative and annual APE as statistics to bootstrap (i.e. don't force to decide here which is intersting, because it's as cotsly to compute both or only one)
+        ape <- c(sum(annual_ape), annual_ape)
+        ape
+      })
+      
+      # if fixest returns an error in either stage in this boot sample   
+      if(!is.numeric(ape)){
+        ape <- NA
+      }
+      
+      # statistics we want to evaluate the variance of:
+      return(ape)
+    }
+    
+    ## BOOTSTRAP
+    
+    # get the different cluster sizeS. This is necessary to cluster bootstrapping with clusters of different sizes. 
+    sizes <- table(d_precleaned[,CLUSTER])
+    u_sizes <- sort(unique(sizes))
+    
+    # names and numbers of clusters of every sizes
+    cl_names <- list()
+    n_clusters <- list()
+    for(s in u_sizes){
+      cl_names[[s]] <- names(sizes[sizes == s]) # these names are unique, by construction of using table() for sizes
+      n_clusters[[s]] <- length(cl_names[[s]])
+    }
+    
+    par_list <- list(unique_sizes = u_sizes,
+                     cluster_names = cl_names,
+                     number_clusters = n_clusters)
+    
+    # helper function
+    # original_data <- d_precleaned
+    # arg_list <- par_list
+    ran.gen_cluster <- function(original_data, arg_list){
+      
+      # to store 
+      cl_boot_dat <- NULL
+      
+      # non-unique names of clusters (repeated when there is more than one obs. in a cluster) 
+      nu_cl_names <- as.character(original_data[,CLUSTER]) 
+      
+      for(s in arg_list[["unique_sizes"]]){
+        # sample, in the vector of names of clusters of size s, as many draws as there are clusters of that size, with replacement
+        sample_cl_s <- sample(arg_list[["cluster_names"]][[s]], 
+                              arg_list[["number_clusters"]][[s]], 
+                              replace = TRUE) 
+        
+        # because of replacement, some names are sampled more than once
+        sample_cl_s_tab <- table(sample_cl_s)
+        
+        # because of replacement, some names are sampled more than once
+        # we need to give them a new cluster identifier, otherwise a cluster sampled more than once 
+        # will be "incorrectly treated as one large cluster rather than two distinct clusters" (by the fixed effects) (Cameron and Miller, 2015)    
+        # here we do not necessarily need to bother with this, as clustering at the set of reachable mills is not a FE dimension. 
+        sample_cl_tab <- table(sample_cl_s_tab)
+        
+        for(n in 1:max(sample_cl_s_tab)){ # from 1 to the max number of times a name was sampled bc of replacement
+          # vector to select obs. that are within the sampled clusters. 
+          names_n <- names(sample_cl_s_tab[sample_cl_s_tab == n])
+          sel <- nu_cl_names %in% names_n
+          
+          # select data accordingly to the cluster sampling (duplicating n times observations from clusters sampled n times)
+          clda <- original_data[sel,][rep(seq_len(sum(sel)), n), ]
+          
+          #identify row names without periods, and add ".0" 
+          row.names(clda)[grep("\\.", row.names(clda), invert = TRUE)] <- paste0(grep("\\.", row.names(clda), invert = TRUE, value = TRUE),".0")
+          
+          # add the suffix due to the repetition after the existing cluster identifier. 
+          clda[,CLUSTER] <- paste0(clda[,CLUSTER], sub(".*\\.","_",row.names(clda)))
+          
+          # stack the bootstrap samples iteratively 
+          cl_boot_dat <- rbind(cl_boot_dat, clda)       
+        }
+      }  
+      return(cl_boot_dat)
+    }
+    
+    # # test that 
+    # test_boot_d <- ran.gen_cluster(original_data = d_precleaned,
+    #                                arg_list = par_list)
+    # dim(test_boot_d)
+    # dim(d_precleaned)
+    
+    ## RUN BOOTSTRAP PROCEDURE
+    
+    # bootstrap on d_precleaned, no specific subset, because bootstrapping WILL lead to different data sets that have different 
+    # patterns of always zero units. 
+    set.seed(8888)
+    bootstraped_1 <- boot(data = d_precleaned, 
+                          statistic = ctrl_fun_endo, # 2 first arguments do not need to be called.
+                          # the first one, arbitrarily called "myfun_data" is passed the previous "data" argument 
+                          fsf_list = fml_1st_list,
+                          ssf = fml_2nd,
+                          ran.gen = ran.gen_cluster,
+                          mle = par_list,
+                          sim = "parametric", # Note, from ?boot : "Use of sim = "parametric" with a suitable ran.gen allows the user to implement any types of nonparametric resampling which are not supported directly."
+                          R = boot_rep)
+    
+    # bootstraped_1$t is a matrix with as many rows as bootrstrap replicates, and one column for each bootstrap statistic. 
+    
+    # store final information and bootstrap information (for checks) separately
+    APE_estimand <- matrix(nrow = ncol(bootstraped_1$t), ncol = 4)
+    colnames(APE_estimand) <- c("Estimate", "SE", "2.5 %", "97.5 %")
+    output_list <- list()
+    # Bootstrap info 
+    boot_info <-  matrix(nrow = ncol(bootstraped_1$t), ncol = 5)
+    colnames(boot_info) <- c("Estimate", "bootstrap_bias", "boot bias to coeff", "SE", "p_value")
+    
+    for(n_reg in 1:ncol(bootstraped_1$t)){ # 
+      SE <- sd(bootstraped_1$t[,n_reg])
+      
+      beta_hat <- bootstraped_1$t0[n_reg]
+      
+      tval <- (beta_hat - 0)/SE
+      
+      # find degrees of freedom with "min" method: the number of clusters G, minus one.  
+      # this follows the default in fixest package, as of version 0.7.0. See https://lrberge.github.io/fixest/articles/standard_errors.html
+      # and from further version of the package, I verified that degrees_freedom(est_object, type = "t") indeed returns G-1
+      boot_info[n_reg, "p_value"] <- (2*pt(abs(tval),
+                                           lower.tail = FALSE,
+                                           df = G-1))
+      boot_info[n_reg, "bootstrap_bias"] <- mean(bootstraped_1$t[,n_reg]) - bootstraped_1$t0[n_reg] 
+      
+      boot_info[n_reg, "Estimate"] <- beta_hat
+      boot_info[n_reg, "boot bias to coeff"] <- boot_info[n_reg, "bootstrap_bias"] / beta_hat
+      boot_info[n_reg, "SE"] <- SE
+      
+      
+      APE_estimand[n_reg, "Estimate"] <- beta_hat
+      APE_estimand[n_reg, "SE"] <- SE
+      APE_estimand[n_reg, "2.5 %"] <- beta_hat - qt(0.975, lower.tail=T, df=(G-1)) * SE
+      APE_estimand[n_reg, "97.5 %"] <- beta_hat + qt(0.975, lower.tail=T, df=(G-1)) * SE
+      
+      output_list[[n_reg]] <- APE_estimand[n_reg, ]
+    }
+    
+    # just because it is doubled when there is only one regressor
+    if(length(regressors)==1){ 
+      boot_info <- boot_info[1,]
+      output_list <- output_list[1]
+    }
+    
+    toreturn[["boot_info"]] <- boot_info
+  }
   
-  # this is just for testing purpose
+  # this is just for comparison purpose
   if(!IV_REG){
+    # Model specification
+    fe_model <- as.formula(paste0(outcome_variable,
+                                  " ~ ",
+                                  paste0(regressors, collapse = "+"),
+                                  " + ",
+                                  paste0(controls[!(controls %in% instruments)], collapse = "+"),
+                                  " | ",
+                                  fe))
+    
+    
+    
     reg_res <- fixest::feglm(fe_model,
-                             data = d_nona, 
+                             data = d_precleaned, 
                              family = distribution, 
                              glm.iter = 100,
                              #fixef.iter = 100000,
                              notes = TRUE)
-  } 
-  
-  # We run the first stage outside the bootstrapping process, in order to extract related information
-  est_1st_list <- list()
-  Ftest_list <- list()
-  Waldtest_list <- list()
-  for(f in 1:length(regressors)){
-    est_1st <- fixest::feols(classic_iv_fixest_fml[[f]], 
-                             data = d_nona)
-    
-    # Extract first stage information
-    est_1st_list[[f]] <- summary(est_1st, .vcov = vcov(est_1st, cluster = CLUSTER) )#se = "cluster", cluster = CLUSTER
-    
-    Ftest_list[[f]] <- fitstat(est_1st, type = "ivf")
-    Waldtest_list[[f]] <- fitstat(est_1st, type = "ivwald1")
-    
-    # save residuals 
-    d_nona[,errors_1stg[f]] <- est_1st$residuals
-  }
-  
-  toreturn <- list(firstg_summary = est_1st_list, 
-                   # fitstat not available in this version of fixest. Might want to compute a F-test by hand ... wald_jointnull_1st = fitstat(est_1st_list[[f]], "wald"), # F-test not available for GLM. 
-                   # sum_fv_1st = sum(est_1st_list$fitted.values), # leave it in bare unit and convert/scale post estimation 
-                   boot_info = NA,
-                   APE_mat = NA) # this will be filled below
-  
-  Fstat <- unlist(Ftest_list)[[1]] %>% round(2)
-  Waldstat <- unlist(Waldtest_list)[[1]] %>% as.numeric() %>% round(2)
-  
-  
-  # SECOND STAGE ESTIMATION   
-  est_2nd <- fixest::feglm(fml_2nd,
-                           data = d_nona,
-                           family = distribution, 
-                           glm.iter = 100,
-                           notes = TRUE)
-  # summary(est_2nd, se = "cluster", cluster = CLUSTER)  
-  
-  ## Redefine changes in endogenous variable (first stage outcome) to one standard deviation if asked 
-  if(stddev){
-    # remove fixed effect variations from the regressor
-    reg_sd <- fixest::feols(fml = as.formula(paste0(
-      regressors[1],
-      " ~ 1 | ", 
-      paste0(est_1st$fixef_vars, collapse = "+"))),
-      data = d_nona)
-    
-    # and take the remaining standard deviation
-    rel_lu_change <- sd(reg_sd$residuals)
-    abs_lu_change <- sd(reg_sd$residuals)
-  }
-  
-  # function applied to each bootstrap replicate
-  # myfun_data <- d_nona
-  # fsf_list <- fml_1st_list
-  # ssf <- fml_2nd
-  ctrl_fun_endo <- function(myfun_data, fsf_list, ssf){
-    
-    # As many first stages as there are endogenous variables
-    for(f in 1:length(regressors)){
-      BS_est_1st <- fixest::feols(fsf_list[[f]], 
-                                  data = myfun_data)
-      
-      # save residuals 
-      myfun_data[,errors_1stg[f]] <- BS_est_1st$residuals
-    }
-    
-    # 2nd stage
-    BS_est_2nd <- fixest::feglm(ssf, 
-                                data = myfun_data, 
-                                family = distribution, 
-                                glm.iter = 100,
-                                notes = TRUE)
-    
-    ## MAKE APE 
-    # Unlike in the non-IV case, APEs are not estimated with the delta Method, because their SEs are only computed asymptotically, by bootstrap. 
-    # we don't need to compute inference statistics on them, as inference is handled by bootstrap (on APE).
-    
     # select coefficient of interest 
-    roi <- BS_est_2nd$coefficients[regressors]
-    annual_ape <- c()
+    roi <- names(reg_res$coefficients[regressors])
+    annual_ape_list <- list()
     i <- 1
     for(r in roi){
-      # the APE is different depending on the regressor of interest being in the log scale or not. 
-      if(grepl("ln_",regressors[1])){
-        annual_ape[i] <- ((1+rel_price_change)^(r) - 1)*100
+      # the final formula is different depending on the regressor of interest being in the log scale or not. 
+      if(grepl("ln_",r)){
+        ape_fml_roi <- paste0("((",1+rel_price_change,")^(",r,") - 1)*100")#*fv_bar*",pixel_area_ha)
       } else{
-        annual_ape[i] <- (exp(r*abs_price_change) - 1)*100 
+        ape_fml_roi <- paste0("(exp(",r,"*",abs_price_change,") - 1)*100")#*fv_bar*",pixel_area_ha)
       } 
-      i <- i+1
-    }  
-    
-    # return both cumulative and annual APE as statistics to bootstrap (i.e. don't force to decide here which is intersting, because it's as cotsly to compute both or only one)
-    ape <- c(sum(annual_ape), annual_ape)
-    
-    # statistics we want to evaluate the variance of:
-    return(ape)
-  }
-  
-  ## BOOTSTRAP
-  
-  # get the different cluster sizeS. This is necessary to cluster bootstrapping with clusters of different sizes. 
-  sizes <- table(d_nona[,CLUSTER])
-  u_sizes <- sort(unique(sizes))
-  
-  # names and numbers of clusters of every sizes
-  cl_names <- list()
-  n_clusters <- list()
-  for(s in u_sizes){
-    cl_names[[s]] <- names(sizes[sizes == s]) # these names are unique, by construction of using table() for sizes
-    n_clusters[[s]] <- length(cl_names[[s]])
-  }
-  
-  par_list <- list(unique_sizes = u_sizes,
-                   cluster_names = cl_names,
-                   number_clusters = n_clusters)
-  
-  # helper function
-  # original_data <- d_nona
-  # arg_list <- par_list
-  ran.gen_cluster <- function(original_data, arg_list){
-    
-    # to store 
-    cl_boot_dat <- NULL
-    
-    # non-unique names of clusters (repeated when there is more than one obs. in a cluster) 
-    nu_cl_names <- as.character(original_data[,CLUSTER]) 
-    
-    for(s in arg_list[["unique_sizes"]]){
-      # sample, in the vector of names of clusters of size s, as many draws as there are clusters of that size, with replacement
-      sample_cl_s <- sample(arg_list[["cluster_names"]][[s]], 
-                            arg_list[["number_clusters"]][[s]], 
-                            replace = TRUE) 
       
-      # because of replacement, some names are sampled more than once
-      sample_cl_s_tab <- table(sample_cl_s)
+      dM_ape_roi <- deltaMethod(object = coef(reg_res), 
+                                vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE, 
+                                g. = ape_fml_roi, 
+                                rhs = 0)
       
-      # because of replacement, some names are sampled more than once
-      # we need to give them a new cluster identifier, otherwise a cluster sampled more than once 
-      # will be "incorrectly treated as one large cluster rather than two distinct clusters" (by the fixed effects) (Cameron and Miller, 2015)    
-      # here we do not necessarily need to bother with this, as clustering at the set of reachable mills is not a FE dimension. 
-      sample_cl_tab <- table(sample_cl_s_tab)
-      
-      for(n in 1:max(sample_cl_s_tab)){ # from 1 to the max number of times a name was sampled bc of replacement
-        # vector to select obs. that are within the sampled clusters. 
-        names_n <- names(sample_cl_s_tab[sample_cl_s_tab == n])
-        sel <- nu_cl_names %in% names_n
-        
-        # select data accordingly to the cluster sampling (duplicating n times observations from clusters sampled n times)
-        clda <- original_data[sel,][rep(seq_len(sum(sel)), n), ]
-        
-        #identify row names without periods, and add ".0" 
-        row.names(clda)[grep("\\.", row.names(clda), invert = TRUE)] <- paste0(grep("\\.", row.names(clda), invert = TRUE, value = TRUE),".0")
-        
-        # add the suffix due to the repetition after the existing cluster identifier. 
-        clda[,CLUSTER] <- paste0(clda[,CLUSTER], sub(".*\\.","_",row.names(clda)))
-        
-        # stack the bootstrap samples iteratively 
-        cl_boot_dat <- rbind(cl_boot_dat, clda)       
-      }
-    }  
-    return(cl_boot_dat)
-  }
-  
-  # # test that 
-  # test_boot_d <- ran.gen_cluster(original_data = d_nona,
-  #                                arg_list = par_list)
-  # dim(test_boot_d)
-  # dim(d_nona)
-  
-  ## RUN BOOTSTRAP PROCEDURE
-  
-  # bootstrap on d_nona, no specific subset, because bootstrapping WILL lead to different data sets that have different 
-  # patterns of always zero units. 
-  set.seed(8888)
-  bootstraped_1 <- boot(data = d_nona, 
-                        statistic = ctrl_fun_endo, # 2 first arguments do not need to be called.
-                        # the first one, arbitrarily called "myfun_data" is passed the previous "data" argument 
-                        fsf_list = fml_1st_list,
-                        ssf = fml_2nd,
-                        ran.gen = ran.gen_cluster,
-                        mle = par_list,
-                        sim = "parametric", # Note, from ?boot : "Use of sim = "parametric" with a suitable ran.gen allows the user to implement any types of nonparametric resampling which are not supported directly."
-                        R = boot_rep)
-  
-  # extract the data on which 2nd stage is run without bootstraping (in each boot replicate it's a different dataset) 
-  d_clean <- d_nona[unlist(est_2nd$obs_selection),]
-  
-  G <- length(unique(d_clean[,CLUSTER]))
-  # bootstraped_1$t is a matrix with as many rows as bootrstrap replicates, and one column for each bootstrap statistic. 
-  
-  # store final information and bootstrap information (for checks) separately
-  APE_estimand <- matrix(nrow = ncol(bootstraped_1$t), ncol = 4)
-  colnames(APE_estimand) <- c("Estimate", "SE", "2.5 %", "97.5 %")
-  output_list <- list()
-  # Bootstrap info 
-  boot_info <-  matrix(nrow = ncol(bootstraped_1$t), ncol = 5)
-  colnames(boot_info) <- c("Estimate", "bootstrap_bias", "boot bias to coeff", "SE", "p_value")
-  
-  for(n_reg in 1:ncol(bootstraped_1$t)){ # 
-    SE <- sd(bootstraped_1$t[,n_reg])
+      row.names(dM_ape_roi) <- NULL
+      dM_ape_roi <- as.matrix(dM_ape_roi)
+      output_list[[match(r, roi)]] <- dM_ape_roi[,c("Estimate", "SE", "2.5 %","97.5 %")]
+    }
     
-    beta_hat <- bootstraped_1$t0[n_reg]
-    
-    tval <- (beta_hat - 0)/SE
-    
-    # find degrees of freedom with "min" method: the number of clusters G, minus one.  
-    # this follows the default in fixest package, as of version 0.7.0. See https://lrberge.github.io/fixest/articles/standard_errors.html
-    # and from further version of the package, I verified that degrees_freedom(est_object, type = "t") indeed returns G-1
-    boot_info[n_reg, "p_value"] <- (2*pt(abs(tval),
-                                         lower.tail = FALSE,
-                                         df = G-1))
-    boot_info[n_reg, "bootstrap_bias"] <- mean(bootstraped_1$t[,n_reg]) - bootstraped_1$t0[n_reg] 
-    
-    boot_info[n_reg, "Estimate"] <- beta_hat
-    boot_info[n_reg, "boot bias to coeff"] <- boot_info[n_reg, "bootstrap_bias"] / beta_hat
-    boot_info[n_reg, "SE"] <- SE
-    
-    
-    APE_estimand[n_reg, "Estimate"] <- beta_hat
-    APE_estimand[n_reg, "SE"] <- SE
-    APE_estimand[n_reg, "2.5 %"] <- beta_hat - qt(0.975, lower.tail=T, df=(G-1)) * SE
-    APE_estimand[n_reg, "97.5 %"] <- beta_hat + qt(0.975, lower.tail=T, df=(G-1)) * SE
-    
-    output_list[[n_reg]] <- APE_estimand[n_reg, ]
-  }
-  
-  
+    Fstat <- ""
+    Waldstat <- ""
+  } 
   ### OUTPUT ### 
-  if(length(regressors)==1){ # just because it is doubled when there is only one regressor
-    boot_info <- boot_info[1,]
-    output_list <- output_list[1]
-  }
+  
   # make a one column matrix with all computed APEs' estimates, LB and HB values. 
   mat <- matrix(ncol = 1, 
                 nrow = length(unlist(output_list)), 
@@ -1586,17 +1634,20 @@ make_IV_reg <- function(island,
   row.names(mat) <- c(rep(c("Estimate","SE", "CI","delete"), nrow(mat)/4))
   mat <- mat[row.names(mat)!="delete",] %>% as.matrix()
   
-  # add a row with the number of observations
-  mat <- rbind(mat, est_2nd$nobs)
-  row.names(mat)[nrow(mat)] <- "Observations"
-  mat[row.names(mat)=="Observations",] <- mat[row.names(mat)=="Observations",] %>% formatC(digits = 0, format = "f")
+  # Average dependent variable 
+  mat <- rbind(mat, avg_defo_ha)
+  row.names(mat)[nrow(mat)] <- "Average deforestation (ha)"
   
   # add a row with the number of clusters
   mat <- rbind(mat, G)
   row.names(mat)[nrow(mat)] <- "Clusters"
   mat[row.names(mat)=="Clusters",] <- mat[row.names(mat)=="Clusters",] %>% formatC(digits = 0, format = "f")
   
-
+  # add a row with the number of observations
+  mat <- rbind(mat, temp_est$nobs)
+  row.names(mat)[nrow(mat)] <- "Observations"
+  mat[row.names(mat)=="Observations",] <- mat[row.names(mat)=="Observations",] %>% formatC(digits = 0, format = "f")
+  
   # First stage info
   mat <- rbind(mat, Fstat)
   row.names(mat)[nrow(mat)] <- "1st stage F-stat"
@@ -1604,16 +1655,16 @@ make_IV_reg <- function(island,
   row.names(mat)[nrow(mat)] <- "1st stage joint Wald-stat"
   
   toreturn[["APE_mat"]] <- mat
-  toreturn[["boot_info"]] <- boot_info
   
-  rm(d, d_nona, d_clean)
+  
+  rm(d, d_nona, d_precleaned)
   return(toreturn)
   
 }
 
 ### IV REGRESSIONS ####
 # infrastructure to store results
-res_iv_avged_noown_cpo_twfe <- list()
+res_iv_avged_prexown_ready_ffb <- list()
 elm <- 1
 
 isl_list <- list("both")#"Sumatra", "Kalimantan", 
@@ -1628,19 +1679,31 @@ ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
 
 for(SIZE in size_list){
   for(ILL in ill_status){
-    res_iv_avged_noown_cpo_twfe[[elm]] <- make_IV_reg(island = ISL,
+    res_iv_avged_prexown_ready_ffb[[elm]] <- make_IV_reg(island = ISL,
                                                       outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
                                                       illegal = ILL,
-                                                      commo = "cpo",
-                                                      controls = c("wa_avg_prex_cpo_imp1"),#, "n_reachable_uml" "wa_ffb_price_imp1_4ya_lag1", 
-                                                      fe = "lonlat + district_year",
+                                                      commo = "ffb",
+                                                      controls = c("wa_avg_prex_cpo_imp1", "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp"),#, "n_reachable_uml" "wa_ffb_price_imp1_4ya_lag1", 
+                                                      fe = "reachable + district_year", # reachable + 
                                                       annual = FALSE, # if annual = FALSE, everything works well, just the APE_estimand dataframe outputed will have identical first two rows.
-                                                      boot_rep = 2,
+                                                      boot_rep = 1,
                                                       offset = FALSE)
-    names(res_iv_avged_noown_cpo_twfe)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    names(res_iv_avged_prexown_ready_ffb)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
     elm <- elm + 1
   }
 }
+bind_cols(lapply(res_iv_avged_prexown_ready_cpo, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
+
+
+bind_cols(lapply(res_iv_avged_prex_dy_ffb_reapreclean, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
+bind_cols(lapply(res_iv_avged_prex_ready_ffb_reapreclean, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
+bind_cols(lapply(res_iv_avged_prex_dy_cpo_reapreclean, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
+bind_cols(lapply(res_iv_avged_prex_ready_cpo_reapreclean, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
+
+bind_cols(lapply(res_iv_avged_prex_dy_ffb, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
+bind_cols(lapply(res_iv_avged_prex_ready_ffb, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
+bind_cols(lapply(res_iv_avged_prex_dy_cpo, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
+bind_cols(lapply(res_iv_avged_prex_ready_cpo, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
 
 
 
