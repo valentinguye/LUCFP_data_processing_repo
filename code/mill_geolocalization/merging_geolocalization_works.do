@@ -667,7 +667,8 @@ using "C:\Users\GUYE\Desktop\opalval\build\input\mill_geolocalization\overall_bt
 
 ** introduce the spreadsheet used to resolve overall between conflicts into a .dta 
 import excel "input_data/manually_matched_ibs_uml/overall_btw_conflicts_done.xlsx", firstrow clear  
-destring lat lon, replace dpcomma
+destring lat lon, replace 
+*dpcomma this is not used as an option anymore, because the conversion did not work anymore with it, and thus the merging below does not work either. 
 
 *keep only the merging key variables and the variables that have been modified manually and hence that we don't want to update
 keep firm_id year mill_name parent_co lat lon trase_code 
@@ -1096,6 +1097,7 @@ sort firm_id year
 save "temp_data/processed_mill_geolocalization/IBS_geo_panel.dta", replace
 
 
+save "temp_data/processed_mill_geolocalization/IBS_UML_panel.dta", replace
 
 
 
