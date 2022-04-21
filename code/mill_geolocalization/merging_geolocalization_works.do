@@ -1118,7 +1118,17 @@ cpo_price_imp1 cpo_price_imp2 out_ton_cpo out_ton_cpo_imp1 out_ton_cpo_imp2 out_
 pko_price_imp1 pko_price_imp2 out_ton_pko out_ton_pko_imp1 out_ton_pko_imp2 out_val_pko out_val_pko_imp1 out_val_pko_imp2 prex_pko prex_pko_imp1 prex_pko_imp2 out_pko ///
 out_ton_rpo out_ton_rpo_imp1 out_ton_rpo_imp2 out_val_rpo out_val_rpo_imp1 out_val_rpo_imp2 prex_rpo prex_rpo_imp1 prex_rpo_imp2 out_rpo tag_multioutput_rpo ///
 out_ton_rpko out_ton_rpko_imp1 out_ton_rpko_imp2 out_val_rpko out_val_rpko_imp1 out_val_rpko_imp2 prex_rpko prex_rpko_imp1 prex_rpko_imp2 out_rpko ///
-EKSPOR export_pct export_pct_imp revenue_total pct_own_cent_gov_imp pct_own_loc_gov_imp pct_own_nat_priv_imp pct_own_for_imp workers_total_imp3 ///
+EKSPOR export_pct export_pct_imp ///
+pct_own_cent_gov_imp pct_own_loc_gov_imp pct_own_nat_priv_imp pct_own_for_imp ///
+revenue_total revenue_total_imp1 revenue_total_imp2 revenue_total_imp3 ///
+value_added_self value_added_self_imp1 value_added_self_imp2 ///
+inv_tot inv_tot_imp fc_add fc_add_imp ///
+materials_tot materials_tot_imp1 materials_tot_imp2 materials_tot_imp3 ///
+elec_qty elec_qty_imp1 elec_qty_imp2 elec_qty_imp3  ///
+workers_total workers_total_imp1 workers_total_imp2 workers_total_imp3 ///
+workers_prod workers_other workers_total_imp1 workers_prod_imp1 workers_other_imp1 workers_total_imp2 workers_prod_imp2 workers_other_imp2 ///
+wage_prod wage_oth wage_prod_imp wage_oth_imp wage_prod_imp1 wage_prod_imp2 wage_oth_imp1 wage_oth_imp2 wage_prod_imp3 wage_oth_imp3 ///
+kbli1 kbli2 ///
 using "temp_data/processed_mill_geolocalization/IBS_UML_panel.xlsx", firstrow(variables) replace 
 
 * save a cross-sectional selected version of only matched ibs-uml mills

@@ -33,7 +33,16 @@ rename PRPREX export_pct
 keep firm_id year kabu_code industry_code startYear EKSPOR PRPREX 
 
 merge 1:1 firm_id year using "input_data/IBS_kraus/IBS_final_panel.dta", generate(merge_fp) keepusing(export_dummy export_dummy_imp export_pct export_pct_imp /// 
-	revenue_total pct_own_cent_gov_imp pct_own_loc_gov_imp pct_own_nat_priv_imp pct_own_for_imp workers_total_imp3)
+	 pct_own_cent_gov_imp pct_own_loc_gov_imp pct_own_nat_priv_imp pct_own_for_imp  /// 
+	 revenue_total revenue_total_imp1 revenue_total_imp2 revenue_total_imp3 ///
+	 value_added_self value_added_self_imp1 value_added_self_imp2 ///
+	 inv_tot inv_tot_imp fc_add fc_add_imp ///
+	 materials_tot materials_tot_imp1 materials_tot_imp2 materials_tot_imp3 ///
+	 elec_qty elec_qty_imp1 elec_qty_imp2 elec_qty_imp3  ///
+	 workers_total workers_total_imp1 workers_total_imp2 workers_total_imp3 ///
+	 workers_prod workers_other workers_total_imp1 workers_prod_imp1 workers_other_imp1 workers_total_imp2 workers_prod_imp2 workers_other_imp2 ///
+	 wage_prod wage_oth wage_prod_imp wage_oth_imp wage_prod_imp1 wage_prod_imp2 wage_oth_imp1 wage_oth_imp2 wage_prod_imp3 wage_oth_imp3 ///
+	 kbli1 kbli2)
 
 merge 1:1 firm_id year using "temp_data/processed_IBS/prepared_IO/IBSIO.dta", generate(merge_io)
 
