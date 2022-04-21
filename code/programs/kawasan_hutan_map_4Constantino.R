@@ -101,6 +101,7 @@ llu <- llu[!duplicated(llu$geometry),]
 # Hutan Cadangan: is not in MOEF but means "reserve forest". 
 # Hutan Pangonan: ??? don't know what it means
 # HSA: ???
+# SA ?? 
 
 
 HKL <- llu[( llu$llu=="SML" | 
@@ -110,6 +111,8 @@ HKL <- llu[( llu$llu=="SML" |
                llu$llu=="KSAL" ), ]
 plot(llu[llu$llu == "Hutan Cadangan",])
 
+# this is in a rather small region (bbox: xmin: 106.4455 ymin: -7.786833 xmax: 108.7177 ymax: -6.373507) 
+# and not many features (237)
 plot(llu[llu$llu == "Hutan Pangonan", "llu"])
 plot(countries, add = T)
 
@@ -125,7 +128,7 @@ llu <- mutate(llu, llu3 = if_else( (llu=="HK" |
                                     llu=="Tahura" | 
                                     llu=="SML" | 
                                     llu=="CAL" | 
-                                    llu=="TNL" | 
+                                    # llu=="TNL" | # remove juste this one for visibility 
                                     llu=="TWAL" | 
                                     llu=="KSAL" | 
                                     llu=="Hutan Cadangan"), true = "HK", false = ""))
@@ -133,28 +136,66 @@ llu[llu$llu=="HP" |
     llu$llu=="HPK" | 
     llu$llu=="HPT", "llu3"] <- "HP"
 
+llu[llu$llu=="HL", "llu3"] <- "HL"
 
+llu[llu$llu3=="",]$llu%>%unique()
+
+unique(llu$llu3)
+
+plot(llu[,"llu3"])
+
+#dissolve
+# llu_dissolve <- llu %>% group_by("llu3") %>% summarize() 
+
+# this takes ~1 hour, especially HP
+HK <- st_union(llu[llu$llu3=="HK",]) %>% st_sf() %>% mutate(llu3="HK")
+HL <- st_union(llu[llu$llu3=="HL",]) %>% st_sf() %>% mutate(llu3="HL")
+HP <- st_union(llu[llu$llu3=="HP",]) %>% st_sf() %>% mutate(llu3="HP")
+#OTHER <- st_union(llu[llu$llu3=="",]) %>% st_sf() %>% mutate(llu3="")
+
+llu_final <- rbind(HK, HL, HP) # ,OTHER
+
+st_write(llu_final, "temp_data/legal_lu_4categories.shp")
+
+plot(llu_final)
 
 
 # prepare backgroud layers with other countries
 countries <- st_read(file.path("input_data/Global_LSIB_Polygons_Detailed"))
 countries <- countries[countries$COUNTRY_NA == "Indonesia" | 
                          countries$COUNTRY_NA == "Malaysia" | 
-                         countries$COUNTRY_NA == "Brunei", "geometry"]
+                         countries$COUNTRY_NA == "Brunei", "COUNTRY_NA"]
 # these two lines to speed up mapping
 countries <- st_transform(countries, crs = indonesian_crs) %>% st_simplify(dTolerance = 1000)
 countries <- st_transform(countries, crs = 4326)
 
+## Prepare llu_final for the plot
+
+# First simplify
+llu_final <-  st_transform(llu_final, crs = indonesian_crs) %>% st_simplify(dTolerance = 100)
+llu_final <- st_transform(llu_final, crs = 4326)
+
+
+# Change the values for the legend
+llu_final[llu_final$llu3=="HL", "llu3"] <- "Protection forest"
+llu_final[llu_final$llu3=="HK", "llu3"] <- "Conservation forest"
+llu_final[llu_final$llu3=="HP", "llu3"] <- "Production forest"
+# llu_final[llu_final$llu3=="", "llu3"] <- "No-status forest"
+
+
 ggplot() +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank()) +
-  geom_sf(data = countries, fill = FALSE) +
-  geom_sf(data = HKL) + 
+  scale_color_brewer(type = "div", palette="Dark2") +
+  #geom_sf(data = countries[countries$COUNTRY_NA!="Indonesia",], fill = NA, col = "black") +
+  # geom_sf(data = countries[countries$COUNTRY_NA=="Indonesia",], col = alpha("grey",0.2)) +
+
+  geom_sf(data = llu_final, aes(col = NA, fill = llu_final$llu3)) + 
   #geom_sf(data=st_geometry(d_geo), color=alpha("grey",0.2))+
-  coord_sf(xlim = c(90, 145), ylim = c(-12, 7), expand = FALSE) 
+  coord_sf(xlim = c(90, 145), ylim = c(-12, 7), expand = FALSE) # 145
 
 
-
+plot(st_geometry(llu))
 
 
 

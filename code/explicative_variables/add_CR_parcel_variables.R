@@ -976,13 +976,26 @@ for(catchment_radius in catchment_radiuseS){
   
   parcels <- dplyr::mutate(parcels,
                            illegal1 = (!concession & (llu != "HPK" | llu == "<NA>")), # it's not in concession and not in a convertible forest zone
-                           illegal2 = (!concession & (llu == "KSA/KPA" | # it's not in concession and it's in a permanent forest zone designation
-                                                        llu == "KSA" |
-                                                        llu == "KPA" |
-                                                        llu == "KSAL" |
-                                                        llu == "HP" |
-                                                        llu == "HPT" |
-                                                        llu == "HL")))
+                           illegal2 = (!concession & (llu == "HL" | # it's not in concession and it's in a permanent forest zone designation
+                                                      
+                                                      llu == "HP" | # production forest : " these areas may be selectively logged in a normal manner".
+                                                      llu == "HPT" | # limited production forest : "These areas be logged less intensively than is permitted in the Permanent Production Forest" 
+                                                        
+                                                      llu=="HK" | # below are all categories of HK
+                                                        llu=="KSA/KPA" |
+                                                        llu=="KSA" | 
+                                                        llu=="CA" | 
+                                                        llu=="SM" | 
+                                                        llu=="KPA" | 
+                                                        llu=="TN" | 
+                                                        llu=="TWA" | 
+                                                        llu=="Tahura" | 
+                                                        llu=="SML" | 
+                                                        llu=="CAL" | 
+                                                        llu=="TNL" | 
+                                                        llu=="TWAL" | 
+                                                        llu=="KSAL" | 
+                                                        llu=="Hutan Cadangan")))
   
   # yields many missing in illegal because many grid cells are within a mising land use legal classification
   # parcels[!duplicated(parcels$lonlat) & !is.na(parcels$llu), c("lonlat", "concession", "llu", "illegal1", "illegal2")]
