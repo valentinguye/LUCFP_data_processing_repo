@@ -6,7 +6,7 @@ neededPackages = c("tibble", "plyr", "dplyr", "data.table",
                    "DataCombine",
                    "knitr", "kableExtra",
                    "car",  "fixest", "sandwich", "boot", "multcomp", "urca",# 
-                   "ggplot2","leaflet")
+                   "ggplot2")
 #install.packages("sf", source = TRUE)
 # library(sf)
 # 
@@ -114,7 +114,7 @@ plot(llu[llu$llu == "Hutan Cadangan",])
 # this is in a rather small region (bbox: xmin: 106.4455 ymin: -7.786833 xmax: 108.7177 ymax: -6.373507) 
 # and not many features (237)
 plot(llu[llu$llu == "Hutan Pangonan", "llu"])
-plot(countries, add = T)
+# plot(countries, add = T)
 
 
 llu <- mutate(llu, llu3 = if_else( (llu=="HK" | 
@@ -128,9 +128,10 @@ llu <- mutate(llu, llu3 = if_else( (llu=="HK" |
                                     llu=="Tahura" | 
                                     llu=="SML" | 
                                     llu=="CAL" | 
-                                    # llu=="TNL" | # remove juste this one for visibility 
+                                    llu=="TNL" | # remove juste this one for visibility 
                                     llu=="TWAL" | 
                                     llu=="KSAL" | 
+                                    llu=="TB" | # add hunting parks although it's not clear it's in HK
                                     llu=="Hutan Cadangan"), true = "HK", false = ""))
 llu[llu$llu=="HP" | 
     llu$llu=="HPK" | 
@@ -155,21 +156,12 @@ HP <- st_union(llu[llu$llu3=="HP",]) %>% st_sf() %>% mutate(llu3="HP")
 
 llu_final <- rbind(HK, HL, HP) # ,OTHER
 
-st_write(llu_final, "temp_data/legal_lu_4categories.shp")
-
-plot(llu_final)
-
-
-# prepare backgroud layers with other countries
-countries <- st_read(file.path("input_data/Global_LSIB_Polygons_Detailed"))
-countries <- countries[countries$COUNTRY_NA == "Indonesia" | 
-                         countries$COUNTRY_NA == "Malaysia" | 
-                         countries$COUNTRY_NA == "Brunei", "COUNTRY_NA"]
-# these two lines to speed up mapping
-countries <- st_transform(countries, crs = indonesian_crs) %>% st_simplify(dTolerance = 1000)
-countries <- st_transform(countries, crs = 4326)
-
 ## Prepare llu_final for the plot
+# llu_final <- llu_final[2:3,]
+# HK <- dplyr::select(HK, llu3, geometry)
+# names(HK) <- c("Forest estate", "geometry")
+# llu_final <- rbind(HK, llu_final)
+# llu_final[llu_final$`Forest estate`=="HK", "Forest estate"] <- "Conservation forest"
 
 # First simplify
 llu_final <-  st_transform(llu_final, crs = indonesian_crs) %>% st_simplify(dTolerance = 100)
@@ -183,17 +175,49 @@ llu_final[llu_final$llu3=="HP", "llu3"] <- "Production forest"
 # llu_final[llu_final$llu3=="", "llu3"] <- "No-status forest"
 
 
-ggplot() +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank()) +
-  scale_color_brewer(type = "div", palette="Dark2") +
-  #geom_sf(data = countries[countries$COUNTRY_NA!="Indonesia",], fill = NA, col = "black") +
-  # geom_sf(data = countries[countries$COUNTRY_NA=="Indonesia",], col = alpha("grey",0.2)) +
+st_write(llu_final, "temp_data/legal_lu_4categories.shp")
 
-  geom_sf(data = llu_final, aes(col = NA, fill = llu_final$llu3)) + 
-  #geom_sf(data=st_geometry(d_geo), color=alpha("grey",0.2))+
-  coord_sf(xlim = c(90, 145), ylim = c(-12, 7), expand = FALSE) # 145
+llu_final <- st_read("temp_data/legal_lu_4categories.shp")
 
+
+
+# prepare backgroud layers with other countries
+countries <- st_read(file.path("input_data/Global_LSIB_Polygons_Detailed"))
+countries <- countries[countries$COUNTRY_NA == "Indonesia" | 
+                         countries$COUNTRY_NA == "Malaysia" | 
+                         countries$COUNTRY_NA == "Brunei", "COUNTRY_NA"]
+# these two lines to speed up mapping
+countries <- st_transform(countries, crs = indonesian_crs) %>% st_simplify(dTolerance = 1000)
+countries <- st_transform(countries, crs = 4326)
+countries[,"Non forest estate or missing data"] <- ""
+names(llu_final) <- c("Forest estate", "geometry")
+
+
+
+ggplot(llu_final) +
+  geom_sf(data = countries[countries$COUNTRY_NA=="Indonesia",], 
+          mapping = aes(col = `Non forest estate or missing data`)) +
+  scale_colour_manual(values = "grey", 
+                      name = "Non forest estate or missing data: ") +
+  
+  # guide helps remove the color of the legend, but here the trick is done with scale_colour_manual
+  # guides(color = guide_legend(override.aes = list(col = NA))) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        legend.position="bottom", 
+        legend.box = "vertical", 
+        legend.box.just = "left") +
+  
+  geom_sf(data = countries[countries$COUNTRY_NA=="Indonesia",], col = alpha("grey",0.6)) +
+
+  geom_sf(mapping = aes(fill = `Forest estate`), col = NA) +  # col = NA has to be outside of aes()
+  
+  scale_fill_brewer(name = "Forest estate: ", type ="qual", palette="Dark2") +
+
+  coord_sf(xlim = c(90, 145), ylim = c(-12, 7), expand = FALSE) 
+
+# exported in 1670-690 dimensions
 
 plot(st_geometry(llu))
 
