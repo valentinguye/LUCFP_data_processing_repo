@@ -478,7 +478,7 @@ for(catchment_radius in catchment_radiuseS){
 
 ### TIME SERIES 
 ts <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
-ts <- dplyr::select(ts, year, spread)
+ts <- dplyr::select(ts, year, spread, dom_blwn_cpo_y)
 # taxeffectiverate,
 # ref_int_cpo_price,
 # cif_rtdm_cpo,
@@ -550,7 +550,9 @@ for(catchment_radius in catchment_radiuseS){
   variables <- c("wa_ffb_price_imp1", "wa_ffb_price_imp2", 
                  "wa_cpo_price_imp1", "wa_cpo_price_imp2",
                  "ffb_price_imp1", "ffb_price_imp2",
-                 "cpo_price_imp1", "cpo_price_imp2") #,"wa_pko_price_imp1", "wa_pko_price_imp2"
+                 "cpo_price_imp1", "cpo_price_imp2", 
+                 "wa_prex_cpo_imp1", "wa_prex_cpo_imp2") # those necessary for controls in IV lagged strategy
+                #,"wa_pko_price_imp1", "wa_pko_price_imp2"
   
   for(voi in variables){
     
@@ -774,11 +776,14 @@ for(catchment_radius in catchment_radiuseS){
   
   for(IMP in c(1,2)){
     # for(SP in c(1:6)){
+    # make the instrument based on contemporaneous export shares
+    parcels[,paste0("wa_iv_contemp_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP)]*parcels[,paste0("spread")] + parcels[,"dom_blwn_cpo_y"]
+    
     # make the instrument based on lagged export shares
-    parcels[,paste0("iv_lagged_imp",IMP)] <- parcels[,paste0("wa_lag1_prex_cpo_imp",IMP)]*parcels[,paste0("spread")] 
+    parcels[,paste0("wa_iv_lagged_imp",IMP)] <- parcels[,paste0("wa_lag1_prex_cpo_imp",IMP)]*parcels[,paste0("spread")] + parcels[,"dom_blwn_cpo_y"]
     
     # and on the average export share over time (at mill level)
-    parcels[,paste0("iv_avged_imp",IMP)] <- parcels[,paste0("wa_avg_prex_cpo_imp",IMP)]*parcels[,paste0("spread")] 
+    parcels[,paste0("wa_iv_avged_imp",IMP)] <- parcels[,paste0("wa_avg_prex_cpo_imp",IMP)]*parcels[,paste0("spread")] + parcels[,"dom_blwn_cpo_y"]
     
     # this is the average export shares of reachable mills over time at the parcel level -yields much less NA
     # not done because less representative of the spread shock at the mill level. 
@@ -799,7 +804,7 @@ for(catchment_radius in catchment_radiuseS){
   
   # lag the iv variables
   # ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
-  ivS <- c(paste0("iv_lagged_imp", c(1,2)), paste0("iv_avged_imp", c(1,2)))
+  ivS <- c(paste0("wa_iv_contemp_imp", c(1,2)), paste0("wa_iv_lagged_imp", c(1,2)), paste0("wa_iv_avged_imp", c(1,2)))
   
   parcels <- dplyr::arrange(parcels, lonlat, year)
   
@@ -975,7 +980,7 @@ for(catchment_radius in catchment_radiuseS){
   # one possible link to shed light on accronyms http://documents1.worldbank.org/curated/pt/561471468197386518/pdf/103486-WP-PUBLIC-DOC-107.pdf
   
   parcels <- dplyr::mutate(parcels,
-                           illegal1 = (!concession & (llu != "HPK" | llu == "<NA>")), # it's not in concession and not in a convertible forest zone
+                           illegal1 = (!concession & (llu != "HPK" )), # it's not in concession and not in a convertible forest zone. Don't add the following code, because these NAs are for all places outside the forest estate, and it changes exactly nothing to add this condition | llu == "<NA>"
                            illegal2 = (!concession & (llu == "HL" | # it's not in concession and it's in a permanent forest zone designation
                                                       
                                                       llu == "HP" | # production forest : " these areas may be selectively logged in a normal manner".
@@ -995,6 +1000,7 @@ for(catchment_radius in catchment_radiuseS){
                                                         llu=="TNL" | 
                                                         llu=="TWAL" | 
                                                         llu=="KSAL" | 
+                                                        llu=="TB" | 
                                                         llu=="Hutan Cadangan")))
   
   # yields many missing in illegal because many grid cells are within a mising land use legal classification
