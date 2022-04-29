@@ -194,6 +194,7 @@ make_IV_reg <- function(island,
                         rel_price_change = 0.01, 
                         abs_price_change = 1, 
                         rounding = 2, 
+                        randomization_test = FALSE, # should a randomization test be performed (reshuffling the regressor of interest) instead of bootstrapping the 2SLS control function
                         boot_rep = 500,
                         glm.iter = 200 # this is the number of glm iterations for the second stage coefficient estimated once, not for every bootstrap estimation
 ){
@@ -409,7 +410,7 @@ make_IV_reg <- function(island,
   
   
   # lag controls that are from IBS 
-  select_ibs_controls <- grepl("wa", controls) & !grepl("wa_avg_", controls) & !grepl("wa_lag1_", controls) # | grepl("prex_", controls)
+  select_ibs_controls <- grepl("wa", controls) & !grepl("prex", controls) # !grepl("wa_avg_", controls) & !grepl("wa_lag1_", controls) # | grepl("prex_", controls)
   if(lag_or_not=="_lag1" & length(controls)>0 & any(select_ibs_controls)){
     # find them
     controls[select_ibs_controls] <- sapply(controls[select_ibs_controls], FUN = paste0, lag_or_not)
@@ -445,10 +446,16 @@ make_IV_reg <- function(island,
   ### INSTRUMENTS ### 
   if(IV_REG){
     
-    instruments <- paste0("iv_",instru_share,"_imp",imp, "_lag", c(1:(x_pya+1)))
+    instruments <- paste0("wa_iv_",instru_share,"_imp",imp, "_lag", c(1:(x_pya+1)))
     
     controls <- c(controls, instruments)
   } 
+  
+  # log instruments
+  for(inst in instruments){ 
+    d[,inst] <- log(d[,inst])
+  }
+  rm(inst)
   
   # Log price variables that are among controls (in case of independent/integrated investigations)
   if(log_prices & !price_variation){
@@ -624,15 +631,15 @@ make_IV_reg <- function(island,
                     family = "poisson")
   # it's possible that the removal of always zero dep.var in some FE dimensions above is equal to with the FE currently implemented
   if(length(temp_est$obs_selection)>0){
-    d_precleaned <- d_nona[unlist(temp_est$obs_selection),]
+    d_clean <- d_nona[unlist(temp_est$obs_selection),]
   }  else { 
-    d_precleaned <- d_nona
+    d_clean <- d_nona
   }
   
   # save these for later
   avg_defo_ha <- (fitstat(temp_est, "my")[[1]]*pixel_area_ha) %>% round(1)
   
-  G <- length(unique(d_precleaned[,CLUSTER]))
+  G <- length(unique(d_clean[,CLUSTER]))
   
   
   # make the interaction variables in the data
@@ -659,15 +666,15 @@ make_IV_reg <- function(island,
     for(con in interaction_terms){
       actual_ <- controls[grepl(con, controls)]
       for(reg in interacted){
-        d_precleaned[,paste0(actual_,"X",reg)] <- d_precleaned[,actual_]*d_precleaned[,reg]
+        d_clean[,paste0(actual_,"X",reg)] <- d_clean[,actual_]*d_clean[,reg]
       }
     }
   }
   
   # and add the interaction between the regressors 
   if(length(regressors) == 2 & interact_regressors){
-    d_precleaned[,paste0(regressors[1],"X",regressors[2])] <- d_precleaned[,regressors[1]]*d_precleaned[,regressors[2]]
-    #d_precleaned[,paste0(regressors[2],"X",regressors[1])] <- d_precleaned[,regressors[2]]*d_precleaned[,regressors[1]]
+    d_clean[,paste0(regressors[1],"X",regressors[2])] <- d_clean[,regressors[1]]*d_clean[,regressors[2]]
+    #d_clean[,paste0(regressors[2],"X",regressors[1])] <- d_clean[,regressors[2]]*d_clean[,regressors[1]]
   }
   
   ## Infrastructure to store outputs from estimations below
@@ -725,7 +732,7 @@ make_IV_reg <- function(island,
     Waldtest_list <- list()
     for(f in 1:length(regressors)){
       tsls <- fixest::feols(classic_iv_fixest_fml[[f]], 
-                            data = d_precleaned)
+                            data = d_clean)
       
       # Extract first stage information
       # est_1st <- summary(tsls, stage = 1)
@@ -734,10 +741,10 @@ make_IV_reg <- function(island,
       Ftest_list[[f]] <- fitstat(tsls, type = "ivf1")
       Waldtest_list[[f]] <- fitstat(tsls, type = "ivwald1")
       
-      est_1st_list[[f]] <- summary(fixest::feols(fml_1st_list[[f]], d_precleaned), cluster = CLUSTER)
+      est_1st_list[[f]] <- summary(fixest::feols(fml_1st_list[[f]], d_clean), cluster = CLUSTER)
       
       # save residuals 
-      # d_precleaned[,errors_1stg[f]] <- summary(est_1st, stage = 1)$residuals 
+      # d_clean[,errors_1stg[f]] <- summary(est_1st, stage = 1)$residuals 
     }
     
     toreturn[["firstg_summary"]] <- est_1st_list
@@ -751,7 +758,7 @@ make_IV_reg <- function(island,
     
     # SECOND STAGE ESTIMATION   
     # est_2nd <- fixest::feglm(fml_2nd,
-    #                          data = d_precleaned,
+    #                          data = d_clean,
     #                          family = distribution,
     #                          glm.iter = 100,
     #                          notes = TRUE)
@@ -765,7 +772,7 @@ make_IV_reg <- function(island,
         regressors[1],
         " ~ 1 | ", 
         paste0(est_1st$fixef_vars, collapse = "+"))),
-        data = d_precleaned)
+        data = d_clean)
       
       # and take the remaining standard deviation
       rel_price_change <- sd(reg_sd$residuals)
@@ -773,7 +780,7 @@ make_IV_reg <- function(island,
     }
     
     # function applied to each bootstrap replicate
-    # myfun_data <- d_precleaned
+    # myfun_data <- d_clean
     # fsf_list <- fml_1st_list
     # ssf <- fml_2nd
     # num_iter = 25
@@ -874,7 +881,7 @@ make_IV_reg <- function(island,
     ## BOOTSTRAP
     
     # get the different cluster sizeS. This is necessary to cluster bootstrapping with clusters of different sizes. 
-    sizes <- table(d_precleaned[,CLUSTER])
+    sizes <- table(d_clean[,CLUSTER])
     u_sizes <- sort(unique(sizes))
     
     # names and numbers of clusters of every sizes
@@ -889,8 +896,49 @@ make_IV_reg <- function(island,
                      cluster_names = cl_names,
                      number_clusters = n_clusters)
     
+    randomize_endo <- function(original_data){
+      
+      original_data[,regressors[1]] <- sample(original_data[,regressors[1]], replace = FALSE)
+      
+      
+      # # to store 
+      # cl_boot_dat <- NULL
+      # 
+      # # non-unique names of clusters (repeated when there is more than one obs. in a cluster) 
+      # nu_cl_names <- as.character(original_data[,CLUSTER]) 
+      # 
+      # for(s in arg_list[["unique_sizes"]]){
+      #   # sample, in the vector of names of clusters of size s, as many draws as there are clusters of that size
+      #   sample_cl_s <- sample(arg_list[["cluster_names"]][[s]], 
+      #                         arg_list[["number_clusters"]][[s]], 
+      #                         replace = FALSE) # note that it is WITHOUT REPLACEMENT - i.e. it's reshuffling
+      #   
+      #   # because of replacement, some names are sampled more than once
+      #   sample_cl_s_tab <- table(sample_cl_s)
+      #   
+      #   # because of replacement, some names are sampled more than once
+      #   # we need to give them a new cluster identifier, otherwise a cluster sampled more than once 
+      #   # will be "incorrectly treated as one large cluster rather than two distinct clusters" (by the fixed effects) (Cameron and Miller, 2015)    
+      #   # here we do not necessarily need to bother with this, as clustering at the set of reachable mills is not a FE dimension. 
+      # 
+      #     # vector to select obs. that are within the sampled clusters. 
+      #     names_n <- names(sample_cl_s_tab)
+      #     sel <- nu_cl_names %in% names_n
+      #     
+      #     # select data accordingly to the cluster sampling (duplicating n times observations from clusters sampled n times)
+      #     clda <- original_data[sel,regressors][seq_len(sum(sel))]
+      #     
+      #     
+      #     # stack the bootstrap samples iteratively 
+      #     cl_boot_dat <- rbind(cl_boot_dat, clda)       
+      #   
+      # }  
+      return(original_data)
+    }
+    
+    
     # helper function
-    # original_data <- d_precleaned
+    # original_data <- d_clean
     # arg_list <- par_list
     ran.gen_cluster <- function(original_data, arg_list){
       
@@ -937,37 +985,48 @@ make_IV_reg <- function(island,
     }
     
     # # test that 
-    # test_boot_d <- ran.gen_cluster(original_data = d_precleaned,
+    # test_boot_d <- ran.gen_cluster(original_data = d_clean,
     #                                arg_list = par_list)
     # dim(test_boot_d)
-    # dim(d_precleaned)
+    # dim(d_clean)
     
     ## RUN BOOTSTRAP PROCEDURE
     
-    # bootstrap on d_precleaned, no specific subset, because bootstrapping WILL lead to different data sets that have different 
+    # bootstrap on d_clean, no specific subset, because bootstrapping WILL lead to different data sets that have different 
     # patterns of always zero units. 
     
     # make the bootstraping "by hand", not with function boot::boot, because it does not handle NAs being split as the statistic for a particular boot replicate. 
     bootstraped_1 <- list()
     
     # Once on the original data, and make sure that this one converges
-    bootstraped_1$t0 <- ctrl_fun_endo(d_precleaned, 
+    bootstraped_1$t0 <- ctrl_fun_endo(d_clean, 
                                       fsf_list = fml_1st_list,
                                       ssf = fml_2nd, 
                                       num_iter = glm.iter)
     
     boot_ape_list <- list()
-    set.seed(8888)
-    for(b in 1:boot_rep){
-      boot_ape_list[[b]] <- ctrl_fun_endo(myfun_data = ran.gen_cluster(original_data = d_precleaned, 
-                                                                       arg_list = par_list), 
-                                          fsf_list = fml_1st_list,
-                                          ssf = fml_2nd)
+    
+    if(randomization_test){
+      set.seed(8888)
+      for(b in 1:boot_rep){
+        boot_ape_list[[b]] <- ctrl_fun_endo(myfun_data = randomize_endo(original_data = d_clean), 
+                                            fsf_list = fml_1st_list,
+                                            ssf = fml_2nd)
+      }
+      
+    } else{
+      set.seed(8888)
+      for(b in 1:boot_rep){
+        boot_ape_list[[b]] <- ctrl_fun_endo(myfun_data = ran.gen_cluster(original_data = d_clean, 
+                                                                         arg_list = par_list), 
+                                            fsf_list = fml_1st_list,
+                                            ssf = fml_2nd)
+      }
     }
     bootstraped_1$t <- matrix(nrow = boot_rep, ncol = max(lengths(boot_ape_list)), data = unlist(boot_ape_list), byrow = TRUE)
     
     # set.seed(8888)
-    # bootstraped_1 <- boot(data = d_precleaned, 
+    # bootstraped_1 <- boot(data = d_clean, 
     #                       statistic = ctrl_fun_endo, # 2 first arguments do not need to be called.
     #                       # the first one, arbitrarily called "myfun_data" is passed the previous "data" argument 
     #                       fsf_list = fml_1st_list,
@@ -1035,7 +1094,7 @@ make_IV_reg <- function(island,
     
     
     reg_res <- fixest::feglm(fe_model,
-                             data = d_precleaned, 
+                             data = d_clean, 
                              family = distribution, 
                              glm.iter = glm.iter,
                              #fixef.iter = 100000,
@@ -1103,7 +1162,7 @@ make_IV_reg <- function(island,
   #   
   #   
   #   reg_res <- fixest::feglm(reduced_form_fml,
-  #                            data = d_precleaned, 
+  #                            data = d_clean, 
   #                            family = distribution, 
   #                            glm.iter = 100,
   #                            #fixef.iter = 100000,
@@ -1154,12 +1213,150 @@ make_IV_reg <- function(island,
   toreturn[["APE_mat"]] <- mat
   
   
-  rm(d, d_nona, d_precleaned)
+  rm(d, d_nona, d_clean)
   return(toreturn)
   
 }
 
+#### REDUCED FORM REGRESSIONS #### 
+# infrastructure to store results
+iv_rf_contemp_cpo_main2604 <- list()
+elm <- 1
+
+isl_list <- list("both")#"Sumatra", "Kalimantan", 
+ISL <- "both"
+
+size_list <- list("i","sm", "a")
+
+# legality definition
+ill_def <- 2
+ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
+
+
+for(SIZE in size_list){
+  for(ILL in ill_status){
+    iv_rf_contemp_cpo_main2604[[elm]] <- make_base_reg(island = ISL,
+                                                       outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                                       illegal = ILL,
+                                                       reduced_form_iv = TRUE, 
+                                                       instru_share = "contemp",
+                                                       annual = FALSE,
+                                                       commo = "cpo",
+                                                       controls = c("wa_prex_cpo_imp1_4ya_lag1", # , "wa_prex_cpo_imp1_lag2", "wa_prex_cpo_imp1_lag3", "wa_prex_cpo_imp1_lag4"
+                                                                    "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml"), 
+                                                       fe = "reachable + district_year",
+                                                       offset = FALSE)
+    names(iv_rf_contemp_cpo_main2604)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    elm <- elm + 1
+  }
+}
+
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat <- lapply(iv_rf_lagged_cpo_main2604, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+iv_rf_lagged_cpo_main2604[[1]][[1]]
+
+
+
+
+### ANNUAL REDUCED FORM REGRESSION ### 
+iv_rf_lagged_lonlatdy_cpo_annual_main2604 <- list()
+elm <- 1
+
+isl_list <- list("both")#"Sumatra", "Kalimantan", 
+ISL <- "both"
+
+size_list <- list("i","sm", "a")
+
+# legality definition
+ill_def <- 2
+ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
+
+
+for(SIZE in size_list){
+  for(ILL in ill_status){
+    iv_rf_lagged_lonlatdy_cpo_annual_main2604[[elm]] <- make_base_reg(island = ISL,
+                                                                      outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                                                      illegal = ILL,
+                                                                      reduced_form_iv = TRUE, 
+                                                                      instru_share = "lagged",
+                                                                      annual = TRUE,
+                                                                      commo = "cpo",
+                                                                      controls = c(#"wa_avg_prex_cpo_imp1",
+                                                                        # "wa_prex_cpo_imp1_4ya_lag1", # 4ya_lag1 features prex in t-1 to t-4, so it's suitable for contemp
+                                                                        "wa_prex_cpo_imp1_lag2", "wa_prex_cpo_imp1_lag3", "wa_prex_cpo_imp1_lag4", "wa_prex_cpo_imp1_lag5",  # this suits lagged
+                                                                        "n_reachable_uml"), # "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", 
+                                                                      fe = "lonlat + district_year",
+                                                                      offset = FALSE)
+    names(iv_rf_lagged_lonlatdy_cpo_annual_main2604)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    elm <- elm + 1
+  }
+}
+
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat <- lapply(iv_rf_lagged_lonlatdy_cpo_annual_main2604, FUN = make_cumulative_APE) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+iv_rf_lagged_cpo_annual_main2604[[9]][[1]]
+iv_rf_contemp_cpo_annual_main2604[[10]][[1]]
+testing[[1]][[1]]
+
 ### IV REGRESSIONS ####
+# infrastructure to store results
+
+iv_lag_log_cpo_main2604 <- list()
+elm <- 1
+
+isl_list <- list("both")#"Sumatra", "Kalimantan", 
+ISL <- "both"
+
+size_list <- list("i","sm", "a")
+
+# legality definition
+ill_def <- 2
+ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
+
+
+for(SIZE in size_list){
+  for(ILL in ill_status){
+    #if(!(SIZE == "sm" & ILL == "ill2")){
+    iv_lag_log_cpo_main2604[[elm]] <- make_IV_reg(island = ISL,
+                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                                  illegal = ILL,
+                                                  commo = "cpo",
+                                                  instru_share = "contemp",
+                                                  controls = c("wa_prex_cpo_imp1_lag1", "wa_prex_cpo_imp1_lag2", "wa_prex_cpo_imp1_lag3", "wa_prex_cpo_imp1_lag4",  
+                                                               "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "n_reachable_uml"),#,wa_avg_prex_cpo_imp1  "wa_ffb_price_imp1_4ya_lag1", "wa_prex_cpo_imp1_4ya", 
+                                                  fe = "reachable + district_year",#  reachable + 
+                                                  annual = FALSE, 
+                                                  x_pya = 3,
+                                                  boot_rep = 1,
+                                                  glm.iter = 50,
+                                                  offset = FALSE)
+    names(iv_lag_log_cpo_main2604)[elm] <- paste0(ISL,"_",SIZE,"_",ILL)
+    elm <- elm + 1
+    #}
+  }
+}
+
+saveRDS(iv_lag_cpo_rapid_main1904, "temp_data/iv_lag_cpo_rapid_main1904.Rdata")
+
+iv_lag_cpo_prexallctrl_main1904 <- readRDS("temp_data/iv_lag_cpo_prexallctrl_main1904.Rdata")
+
+bind_cols(lapply(iv_lag_cpo_main2604, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
+
+bind_cols(lapply(iv_lag_log_cpo_main2604, FUN = function(x){x[["APE_mat"]]})) %>% as.matrix() 
+
+
 # infrastructure to store results
 
 iv_lag_cpo_main1904 <- list()
