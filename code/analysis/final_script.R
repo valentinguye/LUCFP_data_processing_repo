@@ -1470,13 +1470,13 @@ kable(des_table, booktabs = T, align = "c",
                    bold = TRUE,
                    align = "c",
                    strikeout = F) 
-  # pack_rows("Ownership signals (%)", 3, 5, 
-  #           italic = TRUE)  %>%
-  # column_spec(column = c(2,3,5,6,8,9),
-  #             width = "3em") %>%
-  # column_spec(column = c(4,7,10),
-  #             width = "9em") %>%
-  
+# pack_rows("Ownership signals (%)", 3, 5, 
+#           italic = TRUE)  %>%
+# column_spec(column = c(2,3,5,6,8,9),
+#             width = "3em") %>%
+# column_spec(column = c(4,7,10),
+#             width = "9em") %>%
+
 
 
 #### Table of deforestation in different catchment radius / sample ####
@@ -1861,7 +1861,7 @@ kable(des_table, booktabs = T, align = "c",
 as <- ibs[ibs$analysis_sample==TRUE,]
 # remove district-year variations 
 rm_fevar <- fixest::feols(fml = as.formula("cpo_price_imp1 ~ 1 | district^year"),
-                        data = as)
+                          data = as)
 
 # and take the standard deviation of remaining variation
 sd(rm_fevar$residuals)
@@ -1910,8 +1910,8 @@ ibs <- st_as_sf(ibs, coords = c("lon", "lat"), remove = FALSE, crs = 4326)
 # prepare backgroud layers with other countries
 countries <- st_read(file.path("input_data/Global_LSIB_Polygons_Detailed"))
 countries <- countries[countries$COUNTRY_NA == "Indonesia" | 
-                       countries$COUNTRY_NA == "Malaysia" | 
-                       countries$COUNTRY_NA == "Brunei", "geometry"]
+                         countries$COUNTRY_NA == "Malaysia" | 
+                         countries$COUNTRY_NA == "Brunei", "geometry"]
 # these two lines to speed up mapping
 countries <- st_transform(countries, crs = indonesian_crs) %>% st_simplify(dTolerance = 1000)
 countries <- st_transform(countries, crs = 4326)
@@ -2038,7 +2038,7 @@ kable(ape_mat, booktabs = T, align = "r",
                      "All" = 3),
                    align = "c",
                    strikeout = F) %>%
- # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
   column_spec(column = 1,
               width = "7em",
               latex_valign = "b") %>% 
@@ -2237,9 +2237,9 @@ kable(des_table, booktabs = T, align = "c",
                    align = "c", 
                    strikeout = F) %>% 
   add_header_above(c(" " = 1, 
-                     "# grid cells = 1979 \n # grid cell-year = 13081" = 3,
-                     "# grid cells = 781 \n # grid cell-year = 4951" = 3, 
-                     "# grid cells = 3853 \n # grid cell-year = 25249" = 3, 
+                     "# grid cells = 1957 \n # grid cell-year = 13006" = 3,
+                     "# grid cells = 815 \n # grid cell-year = 5196" = 3, 
+                     "# grid cells = 3870 \n # grid cell-year = 25511" = 3, 
                      " " = 2),
                    align = "c",
                    strikeout = F) %>% 
@@ -2283,9 +2283,9 @@ kable(des_table, booktabs = T, align = "c",
                    align = "c", 
                    strikeout = F) %>% 
   add_header_above(c(" " = 1, 
-                     "# grid cells = 385 \n # grid cell-year = 2971" = 3,
-                     "# grid cells = 522 \n # grid cell-year = 3412" = 3, 
-                     "# grid cells = 1189 \n # grid cell-year = 8611" = 3, 
+                     "# grid cells = 379 \n # grid cell-year = 2998" = 3,
+                     "# grid cells = 536 \n # grid cell-year = 3529" = 3, 
+                     "# grid cells = 1199 \n # grid cell-year = 8784" = 3, 
                      " " = 2),
                    align = "c",
                    strikeout = F) %>% 
@@ -2502,9 +2502,9 @@ ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
 for(SIZE in size_list){
   for(ILL in ill_status){
     res_data_list_full_2ndry[[elm]] <- make_base_reg(island = ISL,
-                                               outcome_variable = paste0("lucf",SIZE,"p_pixelcount"), # note the absence of "p": it is not primary forest data. 
-                                               illegal = ILL,
-                                               offset = FALSE)
+                                                     outcome_variable = paste0("lucf",SIZE,"p_pixelcount"), # note the absence of "p": it is not primary forest data. 
+                                                     illegal = ILL,
+                                                     offset = FALSE)
     names(res_data_list_full_2ndry)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
     elm <- elm + 1
   }
@@ -2512,7 +2512,7 @@ for(SIZE in size_list){
 
 ## PARTIAL EFFECTS
 rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat <- lapply(res_data_list_2ndry, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat <- lapply(res_data_list_full_2ndry, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
 ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
 row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
 ape_mat
@@ -2594,19 +2594,10 @@ comp_ape_mat <- matrix(ncol = length(groups), nrow = length(comparisons), data =
 colnames(comp_ape_mat) <- groups
 row.names(comp_ape_mat) <- comparisons
 
-ISL <- "both"
-for(SIZE in size_list){
-  for(ILL in ill_status){
-    
-    # make the APE
-    ape_mat_list[[elm]] <- make_APEs_1regr(res_data = res_data_list_full[[paste0(ISL,"_",SIZE, "_",ILL)]])
-    names(ape_mat_list)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-    elm <- elm + 1
-  }
-}
-
-rm(ape_mat)
-ape_mat <- bind_cols(ape_mat_list) %>% as.matrix()
+# make the APE. Note the difference: Standard errors are returnd with make_APEs_1regr, not CI95. 
+rm(ape_mat, d_clean)
+ape_mat <- lapply(res_data_list_full, FUN = make_APEs_1regr) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
 row.names(ape_mat) <- c(rep(c("Estimate","SE","p-value"), (nrow(ape_mat)-1)/3), "Observations")
 # keep ape_mat like this for later comparisons between APEs
 
@@ -2681,7 +2672,7 @@ for(SIZE in size_list){
 
 ## Partial effects
 rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat <- lapply(res_data_list_interact, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat <- lapply(res_data_list_interact, FUN = make_APEs, rounding = 4) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
 ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
 row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
 ape_mat
@@ -2941,8 +2932,11 @@ for(SIZE in size_list){
 }
 ## Partial effects
 rm(ape_mat)
-ape_mat1 <- lapply(res_data_list_prdyn[1:length(size_list)], FUN = make_APEs, K = 1) %>% bind_cols() %>% as.matrix()
-ape_mat2 <- lapply(res_data_list_prdyn[(length(size_list)+1):(2*length(size_list))], FUN = make_APEs, K = 2, rounding = 3) %>% bind_cols() %>% as.matrix()
+ape_mat1 <- lapply(res_data_list_prdyn[1:length(size_list)], FUN = make_APEs, K = 1) 
+ape_mat1 <- ape_mat1 %>% bind_cols() %>% as.matrix()
+
+ape_mat2 <- lapply(res_data_list_prdyn[(length(size_list)+1):(2*length(size_list))], FUN = make_APEs, K = 2, rounding = 3)
+ape_mat2 <- ape_mat2 %>% bind_cols() %>% as.matrix()
 
 # add 4 lines to ape_mat1 (equivalent to estimate and CI of MR and interaction)
 ape_mat1 <- rbind(ape_mat1,matrix(ncol = ncol(ape_mat1), nrow = 4))
@@ -2952,9 +2946,6 @@ ape_mat1[is.na(ape_mat1)] <- ""
 ape_mat <- cbind(ape_mat1, ape_mat2)
 ape_mat <- ape_mat[,c(1,4,2,5,3,6)]
 
-# tant qu'on en est à bricoler
-ape_mat[6, "both_a_prdyn"] <- "[0.003; 0.05]" # to check: rerun make_APEs function with rounding = 3
-ape_mat[6, "both_sm_prdyn"] <- "[0.003; 0.08]"
 row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
 
 ape_mat
@@ -3019,8 +3010,11 @@ for(SIZE in size_list){
 
 ## Partial effects
 rm(ape_mat)
-ape_mat1 <- lapply(res_data_list_commo[1:length(size_list)], FUN = make_APEs, K = 1) %>% bind_cols() %>% as.matrix()
-ape_mat2 <- lapply(res_data_list_commo[(length(size_list)+1):(2*length(size_list))], FUN = make_APEs, K = 2) %>% bind_cols() %>% as.matrix()
+ape_mat1 <- lapply(res_data_list_commo[1:length(size_list)], FUN = make_APEs, K = 1) 
+ape_mat1 <- ape_mat1 %>% bind_cols() %>% as.matrix()
+
+ape_mat2 <- lapply(res_data_list_commo[(length(size_list)+1):(2*length(size_list))], FUN = make_APEs, K = 2) 
+ape_mat2 <- ape_mat2 %>% bind_cols() %>% as.matrix()
 
 # add 4 lines to ape_mat1 (equivalent to estimate and CI of MR and interaction)
 ape_mat1 <- rbind(ape_mat1,matrix(ncol = ncol(ape_mat1), nrow = 4))
@@ -4167,8 +4161,8 @@ d_save <- d
 ## With some deforestation at least once 
 # If it's smallholders
 temp_est_removeObs <- feglm(fml = as.formula(paste0("lucpfsmp_pixelcount ~ lonlat")),
-                  data = d, 
-                  family = "poisson")
+                            data = d, 
+                            family = "poisson")
 
 d$smallholders <- (d$lonlat %in% d[unlist(temp_est_removeObs$obs_selection),]$lonlat )
 rm(temp_est_removeObs)
