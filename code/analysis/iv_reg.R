@@ -1239,11 +1239,12 @@ for(SIZE in size_list){
                                                        outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
                                                        illegal = ILL,
                                                        reduced_form_iv = TRUE, 
-                                                       instru_share = "contemp",
+                                                       instru_share = "sp2_contemp",
                                                        annual = FALSE,
                                                        commo = "cpo",
-                                                       controls = c("wa_prex_cpo_imp1_4ya_lag1", # , "wa_prex_cpo_imp1_lag2", "wa_prex_cpo_imp1_lag3", "wa_prex_cpo_imp1_lag4"
-                                                                    "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml"), 
+                                                       controls = c(# "wa_avg_prex_cpo_imp1",
+                                                         "wa_prex_cpo_imp1_4ya_lag1", # , "wa_prex_cpo_imp1_lag2", "wa_prex_cpo_imp1_lag3", "wa_prex_cpo_imp1_lag4"
+                                                         "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", "n_reachable_uml"), 
                                                        fe = "reachable + district_year",
                                                        offset = FALSE)
     names(iv_rf_contemp_cpo_main2604)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
@@ -1253,7 +1254,7 @@ for(SIZE in size_list){
 
 ## PARTIAL EFFECTS
 rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat <- lapply(iv_rf_lagged_cpo_main2604, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat <- lapply(iv_rf_contemp_cpo_main2604, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
 ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
 row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
 ape_mat
@@ -1284,14 +1285,14 @@ for(SIZE in size_list){
                                                                       outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
                                                                       illegal = ILL,
                                                                       reduced_form_iv = TRUE, 
-                                                                      instru_share = "lagged",
+                                                                      instru_share = "sp1_lagged",
                                                                       annual = TRUE,
                                                                       commo = "cpo",
-                                                                      controls = c(#"wa_avg_prex_cpo_imp1",
-                                                                        # "wa_prex_cpo_imp1_4ya_lag1", # 4ya_lag1 features prex in t-1 to t-4, so it's suitable for contemp
-                                                                        "wa_prex_cpo_imp1_lag2", "wa_prex_cpo_imp1_lag3", "wa_prex_cpo_imp1_lag4", "wa_prex_cpo_imp1_lag5",  # this suits lagged
+                                                                      controls = c(# "wa_avg_prex_cpo_imp1",
+                                                                         "wa_prex_cpo_imp1_4ya_lag1", # 4ya_lag1 features prex in t-1 to t-4, so it's suitable for contemp
+                                                                        # "wa_prex_cpo_imp1_lag2", "wa_prex_cpo_imp1_lag3", "wa_prex_cpo_imp1_lag4", "wa_prex_cpo_imp1_lag5",  # this suits lagged
                                                                         "n_reachable_uml"), # "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp", 
-                                                                      fe = "lonlat + district_year",
+                                                                      fe = "reachable_year",
                                                                       offset = FALSE)
     names(iv_rf_lagged_lonlatdy_cpo_annual_main2604)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
     elm <- elm + 1
@@ -1306,7 +1307,7 @@ row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Obs
 ape_mat
 colnames(ape_mat) <- NULL
 
-iv_rf_lagged_cpo_annual_main2604[[9]][[1]]
+iv_rf_lagged_lonlatdy_cpo_annual_main2604[[9]][[1]]
 iv_rf_contemp_cpo_annual_main2604[[10]][[1]]
 testing[[1]][[1]]
 

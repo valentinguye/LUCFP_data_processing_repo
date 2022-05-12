@@ -478,7 +478,8 @@ for(catchment_radius in catchment_radiuseS){
 
 ### TIME SERIES 
 ts <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
-ts <- dplyr::select(ts, year, spread, dom_blwn_cpo_y)
+# keep only necessary variables (domestic price because it adds to the spread in the IV construction, see below)
+ts <- dplyr::select(ts, year, spread1, spread2, dom_blwn_cpo_y) # 
 # taxeffectiverate,
 # ref_int_cpo_price,
 # cif_rtdm_cpo,
@@ -775,15 +776,15 @@ for(catchment_radius in catchment_radiuseS){
   # Make the SHIFT SHARE INSTRUMENTAL VARIABLES 
   
   for(IMP in c(1,2)){
-    # for(SP in c(1:6)){
+    for(SP in c(1:2)){
     # make the instrument based on contemporaneous export shares
-    parcels[,paste0("wa_iv_contemp_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP)]*parcels[,paste0("spread")] + parcels[,"dom_blwn_cpo_y"]
+    parcels[,paste0("wa_iv_sp",SP,"_contemp_imp",IMP)] <- parcels[,paste0("wa_prex_cpo_imp",IMP)]*parcels[,paste0("spread",SP)] + parcels[,"dom_blwn_cpo_y"]
     
     # make the instrument based on lagged export shares
-    parcels[,paste0("wa_iv_lagged_imp",IMP)] <- parcels[,paste0("wa_lag1_prex_cpo_imp",IMP)]*parcels[,paste0("spread")] + parcels[,"dom_blwn_cpo_y"]
+    parcels[,paste0("wa_iv_sp",SP,"_lagged_imp",IMP)] <- parcels[,paste0("wa_lag1_prex_cpo_imp",IMP)]*parcels[,paste0("spread",SP)] + parcels[,"dom_blwn_cpo_y"]
     
     # and on the average export share over time (at mill level)
-    parcels[,paste0("wa_iv_avged_imp",IMP)] <- parcels[,paste0("wa_avg_prex_cpo_imp",IMP)]*parcels[,paste0("spread")] + parcels[,"dom_blwn_cpo_y"]
+    parcels[,paste0("wa_iv_sp",SP,"_avged_imp",IMP)] <- parcels[,paste0("wa_avg_prex_cpo_imp",IMP)]*parcels[,paste0("spread",SP)] + parcels[,"dom_blwn_cpo_y"]
     
     # this is the average export shares of reachable mills over time at the parcel level -yields much less NA
     # not done because less representative of the spread shock at the mill level. 
@@ -799,12 +800,13 @@ for(catchment_radius in catchment_radiuseS){
     # # and make the instrument based on it
     # parcels[,paste0("iv_imp",IMP,"_avged")] <- parcels[,paste0("wa_prex_cpo_imp",IMP,"_avg")]*parcels[,paste0("spread")] 
     
-    #}
+    }
   }
   
   # lag the iv variables
   # ivS <- c(paste0("iv",c(1:6),"_imp1"), paste0("iv",c(1:6),"_imp2"))
-  ivS <- c(paste0("wa_iv_contemp_imp", c(1,2)), paste0("wa_iv_lagged_imp", c(1,2)), paste0("wa_iv_avged_imp", c(1,2)))
+  ivS <- c(paste0("wa_iv_sp1_contemp_imp", c(1,2)), paste0("wa_iv_sp1_lagged_imp", c(1,2)), paste0("wa_iv_sp1_avged_imp", c(1,2)), 
+           paste0("wa_iv_sp2_contemp_imp", c(1,2)), paste0("wa_iv_sp2_lagged_imp", c(1,2)), paste0("wa_iv_sp2_avged_imp", c(1,2)))
   
   parcels <- dplyr::arrange(parcels, lonlat, year)
   
@@ -1020,7 +1022,7 @@ rm(cns, llu, parcels, parcels_cs, rspo, rspo_cs, sgbp)
 
 #### MERGE ALL ADDITIONAL VARIABLES #### 
 
-for(catchment_radius in c(1e4, 3e4, 5e4)){
+for(catchment_radius in c(3e4, 5e4)){ # 1e4, 
   reachable <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_reachable_uml_",
                                         parcel_size/1000,"km_",
                                         catchment_radius/1000,"CR.rds")))

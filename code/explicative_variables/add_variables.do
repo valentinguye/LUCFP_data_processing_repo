@@ -4,24 +4,35 @@
 import excel "input_data/macro/fob_dom_prices_cpo.xlsx", firstrow clear
 *sheet("Sheet1")
 
-replace export_tax_effective = export_tax_effective/100
+* Impute FOB price in Belawan for 1998, based on the international price in malaysia (very similar to that in Rotterdam, as compared in 1999)
+* In 1999, the difference between c.i.f. Rotterdam and FOB Belawan is USD40/tCPO 
+replace fob_blwn_cpo = cif_rtdm_cpo - 40 if year == 1998
 
-gen double spread_monthly = fob_blwn_cpo - dom_blwn_cpo  - export_tax_effective*fob_blwn_cpo
-label variable spread_monthly "spread_cpo_fobblwn_domblwn"
+*replace export_tax_effective = export_tax_effective/100
+replace export_tax = export_tax/100
+
+* this is formula if we use an "effective tax rate"
+gen double spread1_monthly = fob_blwn_cpo - dom_blwn_cpo  - fob_blwn_cpo*export_tax
+
+gen double spread2_monthly = fob_blwn_cpo - dom_blwn_cpo  - check_price_hpe*export_tax
+
+
 
 * make annual average of monthly data 
 sort year 
-bys year: egen spread = mean(spread_monthly)
+bys year: egen spread1 = mean(spread1_monthly)
+bys year: egen spread2 = mean(spread2_monthly)
 
 
 bys year: egen fob_blwn_cpo_y = mean(fob_blwn_cpo)
 bys year: egen dom_blwn_cpo_y = mean(dom_blwn_cpo)
-bys year: egen export_tax_effective_y = mean(export_tax_effective)
+bys year: egen cif_rtdm_cpo_y = mean(cif_rtdm_cpo)
+bys year: egen export_tax_y = mean(export_tax)
 
 
 duplicates drop year, force
 
-keep year spread fob_blwn_cpo_y dom_blwn_cpo_y export_tax_effective_y
+keep year spread1 spread2 cif_rtdm_cpo_y fob_blwn_cpo_y dom_blwn_cpo_y export_tax_y
 
 drop if year > 2015
 
@@ -35,7 +46,7 @@ use "temp_data/processed_mill_geolocalization/IBS_UML_panel.dta", clear
 merge m:1 year using "temp_data/processed_macro/spread_cpo_fobblwn_domblwn.dta", nogenerate 
 sort firm_id year 
 
-global prices spread fob_blwn_cpo_y dom_blwn_cpo_y
+global prices spread1 spread2 cif_rtdm_cpo_y fob_blwn_cpo_y dom_blwn_cpo_y
 
 *label variable spread_int_dom_paspi "Paspi calculation of fob_blwn_cpo minus dom_blwn_cpo"			
 
@@ -144,7 +155,7 @@ workers_total workers_total_imp1 workers_total_imp2 workers_total_imp3 ///
 workers_prod workers_other workers_total_imp1 workers_prod_imp1 workers_other_imp1 workers_total_imp2 workers_prod_imp2 workers_other_imp2 ///
 wage_prod wage_oth wage_prod_imp wage_oth_imp wage_prod_imp1 wage_prod_imp2 wage_oth_imp1 wage_oth_imp2 wage_prod_imp3 wage_oth_imp3 ///
 kbli1 kbli2 ///
-fob_blwn_cpo_y dom_blwn_cpo_y export_tax_effective_y ///
+cif_rtdm_cpo_y fob_blwn_cpo_y dom_blwn_cpo_y export_tax_y ///
 using "temp_data/IBS_UML_panel_final.xlsx", firstrow(variables) replace 
 
 
