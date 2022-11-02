@@ -155,6 +155,7 @@ workers_total workers_total_imp1 workers_total_imp2 workers_total_imp3 ///
 workers_prod workers_other workers_total_imp1 workers_prod_imp1 workers_other_imp1 workers_total_imp2 workers_prod_imp2 workers_other_imp2 ///
 wage_prod wage_oth wage_prod_imp wage_oth_imp wage_prod_imp1 wage_prod_imp2 wage_oth_imp1 wage_oth_imp2 wage_prod_imp3 wage_oth_imp3 ///
 kbli1 kbli2 ///
+fc_est_tot_imp6co ///
 cif_rtdm_cpo_y fob_blwn_cpo_y dom_blwn_cpo_y export_tax_y ///
 using "temp_data/IBS_UML_panel_final.xlsx", firstrow(variables) replace 
 

@@ -42,7 +42,8 @@ merge 1:1 firm_id year using "input_data/IBS_kraus/IBS_final_panel.dta", generat
 	 workers_total workers_total_imp1 workers_total_imp2 workers_total_imp3 ///
 	 workers_prod workers_other workers_total_imp1 workers_prod_imp1 workers_other_imp1 workers_total_imp2 workers_prod_imp2 workers_other_imp2 ///
 	 wage_prod wage_oth wage_prod_imp wage_oth_imp wage_prod_imp1 wage_prod_imp2 wage_oth_imp1 wage_oth_imp2 wage_prod_imp3 wage_oth_imp3 ///
-	 kbli1 kbli2)
+	 kbli1 kbli2 ///
+	 fc_est_tot_imp6co )
 
 merge 1:1 firm_id year using "temp_data/processed_IBS/prepared_IO/IBSIO.dta", generate(merge_io)
 

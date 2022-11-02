@@ -55,12 +55,20 @@ indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +
 llu <- st_read(file.path("input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp"))
 # llu <- st_transform(llu, crs = indonesian_crs)
 
+# If one uses GFW data instead (very similar map) 
+# gfw <- st_read(file.path("input_data/Indonesia_legal_classification/Indonesia_legal_classification.shp"))
+# gfw <- gfw[!(gfw$legal_clas %in% c("Non-forest", "Water bodies", "Other")),]
+# llu <- gfw
+# names(llu)[names(llu) == "kh_fungsi_"] <- "llu"
+
+
 names(llu)[names(llu) == "Fungsi"] <- "llu"
 unique(llu$llu)
 llu <- llu[,"llu"]
 
 length(unique(llu$geometry))
 llu <- llu[!duplicated(llu$geometry),]
+
 
 # According to MoF 2020: https://kemlu.go.id/download/L1NoYXJlZCUyMERvY3VtZW50cy9Eb2t1bWVuX0luZm9ybWFzaS9UaGUlMjBTdGF0ZSUyMG9mJTIwSW5kb25lc2lhJTIwRm9yZXN0JTIwMjAyMCUyMChSZXByaW50ZWQpLnBkZg==
 
