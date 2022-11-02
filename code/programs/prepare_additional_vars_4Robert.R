@@ -1,9 +1,10 @@
 library(foreign)
+library(readstata13)
 library(dplyr)
 library(stringr)
 
 # Give here the names of the IBS variables to be added to workstream 
-names_raw_vars <- c("ICOVCU")
+names_raw_vars <- c("gifts" = "ICOVCU")
 
 # stock pre-processed cross sections in:
 cs_list <- list()
@@ -31,8 +32,17 @@ for(year in 1998:2015){
 }
 
 panel <- bind_rows(cs_list)
+names(panel)[names(panel)=="PSID"] <- "firm_id"
+for(var in names_raw_vars){
+  names(panel)[names(panel)==var] <- names(names_raw_vars[match(var, names_raw_vars)])
+}
 
 
+IBS_PO <- read.dta13(file = "C:/Users/GUYE/Desktop/LUCFP/data_processing/temp_data/processed_IBS/IBS_PO_98_15.dta")
+
+IBS_PO_morevars <- left_join(IBS_PO, panel, by = c("firm_id", "year"))
+
+write.dta(panel, file = "C:/Users/GUYE/Desktop/LUCFP/data_processing/temp_data/processed_IBS/IBS_PO_98_15.dta")
 
 
 
