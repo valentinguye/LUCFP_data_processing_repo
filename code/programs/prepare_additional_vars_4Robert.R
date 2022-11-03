@@ -1,10 +1,11 @@
 library(foreign)
-library(readstata13)
+# library(readstata13)
 library(dplyr)
 library(stringr)
 
 # Give here the names of the IBS variables to be added to workstream 
-names_raw_vars <- c("gifts" = "ICOVCU")
+names_raw_vars <- c("firm_id" = "PSID", 
+                    "gifts" = "ICOVCU")
 
 # stock pre-processed cross sections in:
 cs_list <- list()
@@ -24,25 +25,22 @@ for(year in 1998:2015){
                             ~as.numeric(.)))
   # this throws warnings 'NAs introduits lors de la conversion automatique" which normal: just saying it recognizes <NA> in character class and converts into NA numeric class
   
-  ibs <- ibs[,c("PSID", "year", names_raw_vars)]
+  ibs <- ibs[,c("year", names_raw_vars)]
   
   cs_list[[i]] <- ibs
   
   i <- i + 1
 }
-
+# stack cross sections
 panel <- bind_rows(cs_list)
-names(panel)[names(panel)=="PSID"] <- "firm_id"
+
+# Rename variables
 for(var in names_raw_vars){
   names(panel)[names(panel)==var] <- names(names_raw_vars[match(var, names_raw_vars)])
 }
+head(panel)
 
-
-IBS_PO <- read.dta13(file = "C:/Users/GUYE/Desktop/LUCFP/data_processing/temp_data/processed_IBS/IBS_PO_98_15.dta")
-
-IBS_PO_morevars <- left_join(IBS_PO, panel, by = c("firm_id", "year"))
-
-write.dta(panel, file = "C:/Users/GUYE/Desktop/LUCFP/data_processing/temp_data/processed_IBS/IBS_PO_98_15.dta")
+write.dta(panel, file = "C:/Users/GUYE/Desktop/LUCFP/data_processing/temp_data/processed_IBS/raw_IBS_shipment_panel_98_15.dta")
 
 
 
@@ -57,6 +55,8 @@ for(YRno in 0:15){
   year <- 2000+YRno
   ibs <- read.dbf(paste0("C:/Users/GUYE/Desktop/LUCFP/data_processing/input_data/IBS_shipment/IBS_",year,".dbf"), as.is = TRUE)
   
+  # to check Rothenberg data (no need loop over years, it's in panel)
+  # ibs <- read.dta13(file = "C:/Users/GUYE/Desktop/LUCFP/data_processing/input_data/IBS_rothenberg/si_panel.dta")
   
 lookfor <- c("ZPIVCU", "ZNIVCU", # bonus in cash and in kind and others
              "ZPPVCU", "ZNPVCU",  # pension allowance and insurance
@@ -64,7 +64,7 @@ lookfor <- c("ZPIVCU", "ZNIVCU", # bonus in cash and in kind and others
              # "OUTPUT", # test
              "ICOVCU",  # gifts 
              "IRRVCU", # "royalties"
-             "IOVCU", # others, among other expenses
+             "IOTVCU", # others, among other expenses
              "YISVCU") # manufacturing services
 
 if(YRno<10){YRno <- paste0("0",YRno)}

@@ -56,12 +56,18 @@ rsource using "install_R_project_packages.R"
 	* input: input_data/IBS_IO/IBS_outputs   downloaded here from C:/Users/guyv/ownCloud/opal (2)/download/output/IBS_IO
 	* output: temp_data/processed_IBS/prepared_IO/IBS_outputs_prep.dta
 
+	** intermediate, side script, for RSPO economics project, to extract some variables (like gifts) from raw IBS shipment data 
+	* script is code/programs/prepare_additional_vars_4Robert.R
+	* input 	input_data/IBS_shipment/IBS_YEAR.dbf with YEAR from 1998 to 2015
+	* output 	temp_data/processed_IBS/raw_IBS_shipment_panel_98_15.dta
+
 	** merge them together and with main IBS. 
 	do code/explicative_variables/merge_IBSmain_IBSIO.do
 	* input: temp_data/processed_IBS/prepared_IO/IBS_outputs_prep.dta
 	*		 temp_data/processed_IBS/prepared_IO/IBS_inputs_prep.dta
 	*		 input_data/si_panel.dta  		  (Rothenberg data) uploaded here from C:/Users/guyv/ownCloud/opal (2)/download/input/IBS_full/si_panel.dta
 	* 		 input_data/IBS_final_panel.dta  (Sebastian cleaned data) uploaded here from C:/Users/guyv/ownCloud/opal (2)/build/output/IBS_final_panel.dta
+	*		 temp_data/processed_IBS/raw_IBS_shipment_panel_98_15.dta 	(IBS shipment raw data, slightly processed and filtered in prepare_additional_vars_4Robert.R script), downloaded from https://www.dropbox.com/sh/5n8js8yjwdmq3v3/AADMQwFw-GJC4xUcXLN5w1Y2a?dl=0
 
 	* output: temp_data/processed_IBS/IBS_PO_98_15.dta
 
@@ -73,12 +79,6 @@ rsource using "install_R_project_packages.R"
 
 	* output:   temp_data/processed_indonesia_spatial/province_district_code_names_93_2016.dta
 	*		    temp_data/processed_indonesia_spatial/desa_code_names_98_2014.dta
-	
-	** and adding some raw variables from IBS_shipment - Not necessary for LUCFP project, but yet, data flow embeded there. 
-	* script is code/programs/prepare_additional_vars_4Robert.R
-	* input 	input_data/IBS_shipment/IBS_YEAR.dbf with YEAR from 1998 to 2015
-	* 			temp_data/processed_IBS/IBS_PO_98_15.dta
-	* output 	temp_data/processed_IBS/IBS_PO_98_15.dta
 
 
 	** clean IBS_PO_98_15 (including geographic variables)

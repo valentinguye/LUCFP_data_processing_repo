@@ -69,6 +69,11 @@ global output_vars out_ton_cpo out_val_cpo out_ton_pko out_val_pko out_ton_rpo o
 *NOTE: we add input_vars in output_vars because the rationale of their cleaning will be the same. 
 *this is a bit messy but now we have also added cpo as an input, distinctively from domestic, imported or total. 
 global in_cpo_vars in_dom_ton_cpo in_dom_val_cpo in_imp_ton_cpo in_imp_val_cpo in_tot_ton_cpo in_tot_val_cpo
+
+* actually not necessary, because duplicates are plausible  
+* global rspoproj_vars gifts bonus_prod bonus_oth pension_prod pension_oth royalties oth_expenses mfc_services
+
+
 *Creating indicators of validity for output variables: 1 for obs. that are neither 0 nor missing. 
 foreach var of varlist $output_vars {
 	gen valid_`var' = (`var' <. & `var'>0)
@@ -89,7 +94,12 @@ foreach br of global breakdown{
 	gen valid_`br'_cpo = (valid_`br'_ton_cpo==1 & valid_`br'_val_cpo==1)
 }
 
+/*
+foreach var of varlist $rspoproj_vars {
+	gen valid_`var' = (`var' <. & `var'>0)
+}
 */
+
 
 *Creating lags for all output variables. 
 sort firm_id year
@@ -105,6 +115,13 @@ foreach var of varlist $in_cpo_vars {
 }
 global lag_in_cpo_vars lag_in_dom_ton_cpo lag_in_dom_val_cpo lag_in_imp_ton_cpo lag_in_imp_val_cpo lag_in_tot_ton_cpo lag_in_tot_val_cpo
 
+/*
+sort firm_id year
+foreach var of varlist $rspoproj_vars {
+	bys firm_id : gen double lag_`var' = `var'[_n-1] 
+}
+global lag_rspoproj_vars lag_gifts lag_bonus_prod lag_bonus_oth lag_pension_prod lag_pension_oth lag_royalties lag_oth_expenses lag_mfc_services
+*/
 
 
 
@@ -122,7 +139,7 @@ global lag_in_cpo_vars lag_in_dom_ton_cpo lag_in_dom_val_cpo lag_in_imp_ton_cpo 
 	Or the mill itself did that because it did not know the exact amount at the time of the survey. 
 	Or it is a data manipulation error. 
 	In the two first cases, which are most likely, the copies still contain some information, if they are attempts of estimation of the real amount. 
-	So we will have to extreme logic: 
+	So we will have two extreme rationales: 
 	_imp1 will consider that these estimations are too noisy and should be rather missing; while 
 	_imp2 will keep some of them, considering they might still contain some actual info. 
 	*/
@@ -144,6 +161,16 @@ global lag_in_cpo_vars lag_in_dom_ton_cpo lag_in_dom_val_cpo lag_in_imp_ton_cpo 
 			replace `var'_imp1 = . if flag_du_firm_`var'==1 
 			drop flag_du_firm_`var'
 		}
+
+		/*
+		foreach var of varlist $rspoproj_vars {
+			gen double `var'_imp1 = `var'
+			order `var'_imp1, after(`var')
+			gen flag_du_firm_`var' = (`var'== lag_`var' & valid_`var'==1)
+			replace `var'_imp1 = . if flag_du_firm_`var'==1 
+			drop flag_du_firm_`var'
+		}	
+		*/
 
 	*_imp2: only duplicates in terms of both qty and value are too noisy, but when either one varies, there will be some information in the price that will be worth the noise. 
 		// So for out_ton_cpo_imp2 it is only 16 real changes to missing. 	
@@ -378,7 +405,15 @@ global monetary_vars in_val_ffb ///
 					 in_val_ffb_imp2 ///
 					 in_dom_val_cpo_imp2 ///
 					 in_imp_val_cpo_imp2 ///
-					 in_tot_val_cpo_imp2 
+					 in_tot_val_cpo_imp2 /// 
+					 	gifts ///
+					 	bonus_prod ///
+						bonus_oth ///
+						pension_prod ///
+						pension_oth ///
+						royalties ///
+						oth_expenses ///
+						mfc_services 
 /* 
 Convert to full IDR (monetary values are measured in 1000 IDR in survey)
 And deflate to 2010 price level. 

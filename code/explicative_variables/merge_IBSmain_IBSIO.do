@@ -14,6 +14,7 @@ save "temp_data/processed_IBS/prepared_IO/IBSIO.dta", replace
 /* 
 new way to merge: take rothenberg variables (kabu_code, startYear and EKSPOR PRPREX), add variables from final panel (i.e. actual order from Sebastian to BPS),
 and keep only palm related establishments (either selected based on commodity code - all observations in IBSIO.dta - or on industry code from either Rothenberg or IBS_final_panel). 
+and add the variables needed in other projects, that are in IBS shipment raw data but were not prepared by Sebastian in IBS_final_panel.dta
 */
 
 
@@ -29,8 +30,17 @@ replace industry_code = prod5_rev4 if mi(prod5_rev3)
 rename EKSPOR export_dummy
 rename PRPREX export_pct 
 */
+* variables for RSPO economics project 
+rename ZPIVCU bonus_prod
+rename ZNIVCU bonus_oth
+rename ZPPVCU pension_prod
+rename ZNPVCU pension_oth
+rename IRRVCU royalties
+rename IOTVCU oth_expenses
+rename YISVCU mfc_services
 
-keep firm_id year kabu_code industry_code startYear EKSPOR PRPREX 
+keep firm_id year kabu_code industry_code startYear EKSPOR PRPREX ///
+		bonus_prod bonus_oth pension_prod pension_oth royalties oth_expenses mfc_services
 
 merge 1:1 firm_id year using "input_data/IBS_kraus/IBS_final_panel.dta", generate(merge_fp) keepusing(export_dummy export_dummy_imp export_pct export_pct_imp /// 
 	 pct_own_cent_gov_imp pct_own_loc_gov_imp pct_own_nat_priv_imp pct_own_for_imp  /// 
@@ -53,6 +63,11 @@ keep if merge_io == 2 | merge_io == 3 | (merge_io == 1 & palm_oil == 1)
 
 drop palm_oil 
 
+* add the selection of variables available in IBS shipments but not available in IBS_final_panel.dta (Sebastian's panel)
+* currently it's only ICOVCU: the gifts and donations
+merge 1:1 firm_id year using "temp_data/processed_IBS/raw_IBS_shipment_panel_98_15.dta", generate(merge_raw)
+
+keep if merge_raw == 1 | merge_raw == 3 
 
 save "temp_data/processed_IBS/IBS_PO_98_15.dta", replace 
 *save "$base_path_wd/build/input/IBS_1998.dta", replace
