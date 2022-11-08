@@ -336,7 +336,7 @@ replace firm_id = 66746 if firm_id == 70267
 
 /*
 For BONANZA MEGAH LTD, there are two different refineries in the directories indeed, with different number of workers which each match with one of 18244 and 60758
-but they have exactly the same adress. Just had a prime in front of the string. 
+but they have exactly the same adress. Just add a prime in front of the string. 
 */
 replace mill_name = "'BONANZA MEGAH LTD, PT" if firm_id == 60758
 
