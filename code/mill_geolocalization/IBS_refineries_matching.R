@@ -28,9 +28,14 @@ dir.create("temp_data/processed_refinery_geolocalization")
 
 ### PACKAGES 
 # These are the packages needed in this particular script. 
-neededPackages = c("dplyr", "readxl", "foreign", "readstata13",
-                   "sf", "rgdal", 
-                   "here") 
+neededPackages = c(neededPackages = c("tibble", "plyr", "dplyr", "data.table",
+                                      "foreign", "readstata13", "readxl",
+                                      "raster", "rgdal",  "sp", "spdep", "sf",
+                                      "DataCombine",
+                                      "knitr", "kableExtra",
+                                      "car",  "fixest", "sandwich", "boot",
+                                      "ggplot2", 
+                                      "here") )
 
 renv::restore(packages = neededPackages)
 
@@ -43,39 +48,149 @@ here()
 
 ### ### ### 
 # READ AND PREPARE DATA 
-
-# read UML mills
-# uml <- read_excel(file.path("input_data/uml/traseMills_capEstyear.xlsx"))
-
-# read refineries
+# read refinerie
 refine <- read.csv(here("input_data", "trase_refineries.csv"))
-# read IBS mills - note that this is a cross section 
-ibs <- readRDS(file.path("temp_data/processed_mill_geolocalization/IBSmills_desageom.Rdata"))
-nrow(ibs[!duplicated(ibs$firm_id),]) == nrow(ibs)
 
-# Remove IBS manufactories that are matched with Universal Mill List (UML)
+# final IBS-UML panel 
 ibs_uml <- read.dta13(here("temp_data/IBS_UML_panel_final.dta"))
 
-ibs_uml_cs <- ibs_uml[!duplicated(ibs_uml$firm_id), c("firm_id", "mill_name", "uml_matched_sample", "is_mill") ]
-
-sum(ibs_uml_cs$uml_matched_sample)
-
-ibs_NO_uml <- left_join(ibs, ibs_uml_cs, by = "firm_id")
-
-# among the 17 firm_id that are manually changed in merging_geolocalization_works.do, 
-# 13 have a desa geom and thus, are present in IBSmills_desageom.Rdata BUT NOT in IBS_UML_panel_final.dta  
-# but we have identified them as being UML mills already (so we remove them here)
-nrow(ibs_NO_uml[is.na(ibs_NO_uml$uml_matched_sample),]) 
+# Remove IBS manufactories that are matched with Universal Mill List (UML)
 # --> KEEP only those firm_id that were NOT matched with UML, be they in the IBS_UML_panel_final (==0) or not (NA)
-ibs_NO_uml <- dplyr::filter(ibs_NO_uml, ibs_NO_uml$uml_matched_sample == 0 & !is.na(ibs_NO_uml$uml_matched_sample)) 
+ibs_noUML <- dplyr::filter(ibs_uml, ibs_uml$uml_matched_sample == 0) 
+# sum(ibs_noUML_cs$uml_matched_sample)  # 470
+# sum(ibs_noUML_cs$is_mill) # 930 (they sourced FFB at least once or sold CPO or PKO at least once, and that they are not located in Java or in Bali)
 
-unique(ibs_NO_uml$mill_name)
-# mill_name is actually useless (it has been wiped out when a firm_id was not UML)
-ibs_NO_uml <- dplyr::select(ibs_NO_uml, -mill_name)
+# collapse to cross section, based on some summarized values
+ibs_noUML_cs <- ddply(ibs_noUML, "firm_id", summarise, 
+                uml_matched_sample = unique(uml_matched_sample), 
+                is_mill = unique(is_mill),
+                mill_name = unique(mill_name),
+                avg_in_ton_cpo_imp1 = mean(in_ton_cpo_imp1, na.rm = TRUE), 
+                avg_out_ton_rpo_imp1 = mean(out_ton_rpo_imp1, na.rm = TRUE),
+                avg_out_ton_rpko_imp1 = mean(out_ton_rpko_imp1, na.rm = TRUE),
+                max_in_ton_cpo_imp1 = max(in_ton_cpo_imp1, na.rm = TRUE), 
+                max_out_ton_rpo_imp1 = max(out_ton_rpo_imp1, na.rm = TRUE),
+                max_out_ton_rpko_imp1 = max(out_ton_rpko_imp1, na.rm = TRUE),
+                unique_nwork = list(unique(workers_total_imp3)))
+# THE WARNINGS are for plants that have only NAs on some of these variables
 
-rm(ibs)
+ibs_noUML_cs <- dplyr::mutate(ibs_noUML_cs, 
+                         any_rpo = is.finite(avg_out_ton_rpo_imp1) & max_out_ton_rpo_imp1>0, 
+                         any_rpko = is.finite(avg_out_ton_rpko_imp1) & max_out_ton_rpko_imp1>0, 
+                         any_incpo = is.finite(avg_in_ton_cpo_imp1) & max_in_ton_cpo_imp1>0)
+ibs_noUML_cs <- dplyr::mutate(ibs_noUML_cs, is_refinery = any_rpo | any_rpko)
 
-### Make spatial 
+
+
+#### MATCH WITH MD #### 
+md <- read_excel(file.path("input_data/manufacturing_directories/direktori_industri_merged_cleaned.xlsx"))
+
+## Match to each unref record, all the records of MD that have the same number of workers (i.e. be it the same year or not, same district or not)
+#this adds a list column. There is one list element for each unref row. 
+match <- nest_join(unref, md, by = c("workers_total_imp3" = "no_workers"), keep = TRUE)
+# each list element is a dataframe
+class(match$y[[1]])
+
+## Restrict to matches that are in the same district
+#some cleaning of the district name variable (no need to bother about case, bc its handled in the function)
+match$district_name <- str_replace(string = match$district_name, pattern = "Kab. ", replacement = "")
+# not elegant but enables that empty district_names are not matched with adresses in MD
+match$district_name[match$district_name == ""] <- "123456789xyz"
+
+
+match$n_match <- NA
+for(i in 1:nrow(match)){
+  #specified as such (with switch = T), the function checks whether x is in any of the patterns (wierd phrasing but that's the way to go with this function)
+  kab_filter <- str_contains(x = match$district_name[i], pattern = match$y[[i]]$address, ignore.case = TRUE, switch = TRUE) 
+  # keep only the matches that are in the same district
+  match$y[[i]] <- dplyr::filter(match$y[[i]], kab_filter)
+  # report the number of different mills that matched
+  match$n_match[i] <- length(unique(match$y[[i]]$company_name)) 
+}
+
+
+# 
+# match$n_match2 <- NA
+# f <- function(i){
+#   kab_filter <- str_contains(x = match$district_name[i], pattern = match$y[[i]]$address, ignore.case = TRUE, switch = TRUE) 
+#   # keep only the matches that are in the same district
+#   match$y[[i]] <- filter(match$y[[i]], kab_filter)
+#   # report the number of different mills (based on COMPANY NAME) that matched
+#   match$n_match2[i] <- length(unique(match$y[[i]]$company_name)) 
+#   return(match$n_match2[i])
+# }
+# match$n_match2 <- sapply(1:nrow(match), f)
+# 
+# 
+# table(match$n_match2, match$any_cpo_output)
+
+
+## Make different categories of establishments, depending on how many different matches they have over their records with MD mills. 
+
+# make groups of establishments, based on how many matches they have repeatedly
+grp_n_match <- ddply(match, "firm_id", summarise, 
+                     # those establishments that never match
+                     no_match = length(n_match[n_match == 0])==length(year), 
+                     # one_match category allows for some records, but not for all, to have zero match. 
+                     # single matches can be different from one year to another. 
+                     one_match = length(n_match[(n_match == 1 | n_match == 0) & no_match == FALSE])==length(year), 
+                     # svl_match is true as soon as their is as least one year with 2 different matches. 
+                     svl_match = no_match == FALSE & one_match == FALSE)
+
+# ddply note: summarise is the .fun argument and then in ... we give the ... argument of summarise, 
+# i.e. we give the "name = value pairs" (see ?summarise). 
+match <- merge(match, grp_n_match, by = "firm_id") 
+
+
+# substract from the one_match category those that have different company name matches across years.
+for(i in unique(match[match$one_match == TRUE, "firm_id"])){
+  # extract the names of all the MD matches of establishment i within the one_match category 
+  names <- lapply(match[match$firm_id == i, "y"], function(i.elmt) i.elmt$company_name)
+  names <- unlist(names)
+  # for those who have matched different company names across years, switch one_match from TRUE to FALSE 
+  new_logicals <- rep(FALSE, nrow(match[match$firm_id == i,]))
+  match[match$firm_id == i, "one_match"][length(unique(names)) > 1] <- new_logicals
+  # for those who have matched different company names across years, switch svl_match from FALSE to TRUE
+  new_logicals <- rep(TRUE, nrow(match[match$firm_id == i,]))
+  match[match$firm_id == i, "svl_match"][length(unique(names)) > 1] <- new_logicals
+}
+# checks: 
+# when the company name is the same across annual matches, the one_match status remains unchanged
+match[match$firm_id == 2028, "y"]
+grp_n_match[grp_n_match$firm_id == 2028,]
+match[match$firm_id == 2028, c("no_match","one_match", "svl_match")]
+
+# when the company name is not the same across annual matches, the one_match status changes from TRUE to FALSE and the svl_match from FALSE to TRUE
+match[match$firm_id == 2076, "y"]
+grp_n_match[grp_n_match$firm_id == 2076,]
+match[match$firm_id == 2076, c("no_match","one_match", "svl_match")]
+
+# descriptive part
+describe(match[match$no_match == TRUE, "firm_id"]) # 371 establishments (1697 records)
+describe(match[match$one_match == TRUE, "firm_id"]) # 111 establishments (924 records)
+describe(match[match$svl_match == TRUE, "firm_id"]) # 110 establishments (1399 records)
+
+match$i_n_match <- "never matches with anything"
+match$i_n_match[match$one_match == TRUE] <- "matches always with the same company name or with nothing"
+match$i_n_match[match$svl_match == TRUE] <- "matches with several company names, either the same year or across years"
+
+ddply(match, c("i_n_match","any_cpo_output"), summarise, 
+      n_mills = length(unique(firm_id)))
+
+# la question est est-ce qu'on décide de valider systématiquement les cas où il n'y a zéro ou qu'un seul match toujours identique entre les années d'une mill ibs. 
+# on pourrait dire : oui a condition qu'il y ait au moins deux occurrences de ce match. 
+# ou même pas, manuellement on avait validé même quand il n'y avait qu'une obs. qui matchait.
+# une partie de ces cas sont écartés ensuite pendant la phase de résolution des conflits. 
+
+wtn_cfl <- match[match$svl_match == TRUE & match$any_cpo_output == TRUE, ]
+length(unique(wtn_cfl$firm_id))
+
+
+
+
+
+
+#### SPATIAL MATCHING #### 
 
 ## Indonesian CRS
 #   Following http://www.geo.hunter.cuny.edu/~jochen/gtech201/lectures/lec6concepts/map%20coordinate%20systems/how%20to%20choose%20a%20projection.htm
@@ -85,16 +200,36 @@ rm(ibs)
 #   which we center at Indonesian longitude with lat_ts = 0 and lon_0 = 115.0 
 indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
 
-#prepare the sfc of ibs mills and their most recently known villages. 
-ibs_na <- filter(ibs_NO_uml, is.na(geom))
-ibs_NO_uml <- filter(ibs_NO_uml, is.na(geom)== F)   
+# IBS desa geometries 
+ibs_desa <- readRDS(file.path("temp_data/processed_mill_geolocalization/IBSmills_desageom.Rdata"))
+# - note that this is a cross section
+nrow(ibs_desa[!duplicated(ibs_desa$firm_id),]) == nrow(ibs_desa)
+# and it goes only to 2010 at the latest. The desa variable was not shipped for years after 2010.
+# so missing geometries are not recent firms. 
+ibs_desa <- dplyr::select(ibs_desa, firm_id, village_name, kec_name, district_name, geom) 
+# import geo names from here, because they are the most recent valid ones. 
+ibs_desa <- dplyr::filter(ibs_desa, !is.na(geom))
 
-ibs_NO_uml <- st_as_sf(ibs_NO_uml, crs = 4326)
-ibs_NO_uml <- st_transform(ibs_NO_uml, crs = indonesian_crs)
+ibs_desa <- st_as_sf(ibs_desa, crs = 4326)
+ibs_desa <- st_transform(ibs_desa, crs = indonesian_crs)
 
-ibs_NO_uml
+# append it to the main data 
+ibs_noUML_cs <- left_join(ibs_noUML_cs, ibs_desa, by = "firm_id")
 
-# prepare UML dataset
+# split the ibs_noUML_cs data set into those with valid desa polygon, and those without (either bc they appeared after 2010, or because they have an invalid polygon)
+ibs_noUML_cs_nodesa <- dplyr::filter(ibs_noUML_cs, st_is_empty(geom)) # 544 - these are those that cannot be matched with spatial help 
+ibs_noUML_cs_wdesa <- dplyr::filter(ibs_noUML_cs, !st_is_empty(geom)) # 459
+
+# make those with desa a spatial data frame (it's already in indonesian crs)
+ibs_noUML_cs_wdesa <- st_as_sf(ibs_noUML_cs_wdesa, crs = indonesian_crs)
+ibs_noUML_cs_wdesa
+
+# remove the geom column from the other objects
+ibs_noUML_cs_nodesa <- dplyr::select(ibs_noUML_cs_nodesa, -geom)
+ibs_noUML_cs <- dplyr::select(ibs_noUML_cs, -geom)
+
+
+# prepare Trase refineries dataset
 refine$latitude <- as.numeric(refine$latitude)
 refine$longitude <- as.numeric(refine$longitude)
 refine$lat <- refine$latitude
@@ -106,9 +241,9 @@ refine <- st_transform(refine, crs = indonesian_crs)
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 #### MATCH IBS AND UML MILLS ####
 
-ibs_j <- st_join(x = ibs_NO_uml, y = refine, join = st_contains, left = T) # is equivalent to ibs_j <- st_join(x = ibs_NO_uml, y = refine) bc default is st_intersect.
+ibs_j <- st_join(x = ibs_noUML_cs_wdesa, y = refine, join = st_contains, left = T) # is equivalent to ibs_j <- st_join(x = ibs_noUML_wdesa, y = refine) bc default is st_intersect.
 
-#plot(st_geometry(ibs_NO_uml[ibs_NO_uml$firm_id == 1761,]))
+#plot(st_geometry(ibs_noUML[ibs_noUML$firm_id == 1761,]))
 #plot(st_geometry(uml[uml$mill_name == "PT. Socfin - Seumanyam",]), add = TRUE, col = "red")
 
 
@@ -148,7 +283,7 @@ total_potential <- no_nas[!duplicated(no_nas$lon),]
 #### Those that have a desa polygon but match with no Trase refinery (414)
 # It is useless to try to find them manually with the directory number of workers and uml's list. 
 # we can still find their names with directories and google-search them, and/or directly spot them manually within their villages. 
-ibs_unref <- left_join(x = ibs_NO_uml, y = st_set_geometry(oto[,c("firm_id","lat")], NULL), by = "firm_id")
+ibs_unref <- left_join(x = ibs_noUML_cs_wdesa, y = st_set_geometry(oto[,c("firm_id","lat")], NULL), by = "firm_id")
 ibs_unref <- filter(ibs_unref, is.na(ibs_unref$lat))
 
 ibs_unref <- left_join(x = ibs_unref, y = st_set_geometry(noto[,c("firm_id","lon")], NULL), by = "firm_id")
@@ -156,6 +291,19 @@ ibs_unref <- filter(ibs_unref, is.na(ibs_unref$lon))
 
 ibs_unref <-dplyr::select(ibs_unref, -lon, -lat)
 # (the use of "lat" and "lon" was just an arbitrary choice of non-empty variables to flag oto and noto resp.)
+
+# filter to those likely to be refineries
+head(ibs_unref)
+summary(ibs_unref$any_rpo)
+summary(ibs_unref$any_rpko)
+summary(ibs_unref$any_incpo)
+nrow(dplyr::filter(ibs_unref, any_rpo | any_rpko)) # "or rpko" adds 8 plants in addition to the 70 that sell rpo. 
+nrow(dplyr::filter(ibs_unref, any_rpo & any_incpo))
+nrow(dplyr::filter(ibs_unref, any_rpo | any_incpo))
+
+# here the criterion for being a refinery is to output at least some rpo OR some rpko. 
+
+
 
 # They are in 455 different polygons, of which 359 do not intersect with another one
 # (intersections but not equal likely when there is a split and a mill is associated with the polygon of the village before, and one or more 
@@ -228,4 +376,18 @@ st_crs(refine) <- 4326
 refine <- st_transform(refine, crs = 4326)
 refine <-dplyr::select(refine, -lat, -lon)
 st_write(refine, "temp_data/processed_refinery_geolocalization/trase_refineries", driver = "ESRI Shapefile", delete_dsn = TRUE)
+
+
+
+# ***** Note ********
+# Lines below are not a pb anymore, because it's ibs_noUML_cs on the left of the left join now (so keeping only final firm_id anyway)
+# among the 17 firm_id that are manually changed in merging_geolocalization_works.do, 
+# 13 have a desa geom and thus, are present in IBSmills_desageom.Rdata BUT NOT in IBS_UML_panel_final.dta  
+# but we have identified them as being UML mills already (so we remove them here)
+# nrow(ibs_noUML[is.na(ibs_noUML$uml_matched_sample),]) 
+# ******   *******
+
+unique(ibs_noUML_cs$mill_name)
+# mill_name is actually useless (it has been wiped out when a firm_id was not UML)
+# ibs_noUML <- dplyr::select(ibs_noUML, -mill_name)
 
