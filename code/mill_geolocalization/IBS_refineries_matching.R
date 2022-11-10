@@ -28,7 +28,7 @@ dir.create("temp_data/processed_refinery_geolocalization")
 
 ### PACKAGES 
 # These are the packages needed in this particular script. 
-neededPackages = c(neededPackages = c("tibble", "plyr", "dplyr", "data.table",
+neededPackages = c(neededPackages = c("tibble", "plyr", "dplyr", "data.table", "sjmisc", "stringr","Hmisc",
                                       "foreign", "readstata13", "readxl",
                                       "raster", "rgdal",  "sp", "spdep", "sf",
                                       "DataCombine",
@@ -60,34 +60,42 @@ ibs_noUML <- dplyr::filter(ibs_uml, ibs_uml$uml_matched_sample == 0)
 # sum(ibs_noUML_cs$uml_matched_sample)  # 470
 # sum(ibs_noUML_cs$is_mill) # 930 (they sourced FFB at least once or sold CPO or PKO at least once, and that they are not located in Java or in Bali)
 
+#### CONTEXTUAL VARIABLES ####  
 # collapse to cross section, based on some summarized values
 ibs_noUML_cs <- ddply(ibs_noUML, "firm_id", summarise, 
-                uml_matched_sample = unique(uml_matched_sample), 
-                is_mill = unique(is_mill),
-                mill_name = unique(mill_name),
-                avg_in_ton_cpo_imp1 = mean(in_ton_cpo_imp1, na.rm = TRUE), 
-                avg_out_ton_rpo_imp1 = mean(out_ton_rpo_imp1, na.rm = TRUE),
-                avg_out_ton_rpko_imp1 = mean(out_ton_rpko_imp1, na.rm = TRUE),
-                max_in_ton_cpo_imp1 = max(in_ton_cpo_imp1, na.rm = TRUE), 
-                max_out_ton_rpo_imp1 = max(out_ton_rpo_imp1, na.rm = TRUE),
-                max_out_ton_rpko_imp1 = max(out_ton_rpko_imp1, na.rm = TRUE),
-                unique_nwork = list(unique(workers_total_imp3)))
+                      uml_matched_sample = unique(uml_matched_sample), 
+                      is_mill = unique(is_mill),
+                      mill_name = unique(mill_name),
+                      avg_in_ton_cpo_imp1 = mean(in_ton_cpo_imp1, na.rm = TRUE), 
+                      avg_out_ton_rpo_imp1 = mean(out_ton_rpo_imp1, na.rm = TRUE),
+                      avg_out_ton_rpko_imp1 = mean(out_ton_rpko_imp1, na.rm = TRUE),
+                      max_in_ton_cpo_imp1 = max(in_ton_cpo_imp1, na.rm = TRUE), 
+                      max_out_ton_rpo_imp1 = max(out_ton_rpo_imp1, na.rm = TRUE),
+                      max_out_ton_rpko_imp1 = max(out_ton_rpko_imp1, na.rm = TRUE))
 # THE WARNINGS are for plants that have only NAs on some of these variables
 
 ibs_noUML_cs <- dplyr::mutate(ibs_noUML_cs, 
-                         any_rpo = is.finite(avg_out_ton_rpo_imp1) & max_out_ton_rpo_imp1>0, 
-                         any_rpko = is.finite(avg_out_ton_rpko_imp1) & max_out_ton_rpko_imp1>0, 
-                         any_incpo = is.finite(avg_in_ton_cpo_imp1) & max_in_ton_cpo_imp1>0)
-ibs_noUML_cs <- dplyr::mutate(ibs_noUML_cs, is_refinery = any_rpo | any_rpko)
+                              any_rpo = is.finite(avg_out_ton_rpo_imp1) & max_out_ton_rpo_imp1>0, 
+                              any_rpko = is.finite(avg_out_ton_rpko_imp1) & max_out_ton_rpko_imp1>0, 
+                              any_incpo = is.finite(avg_in_ton_cpo_imp1) & max_in_ton_cpo_imp1>0)
+ibs_noUML_cs <- dplyr::mutate(ibs_noUML_cs, any_refined = any_rpo | any_rpko)
 
+ibs_noUML <- merge(ibs_noUML,ibs_noUML_cs, by = "firm_id")
 
 
 #### MATCH WITH MD #### 
 md <- read_excel(file.path("input_data/manufacturing_directories/direktori_industri_merged_cleaned.xlsx"))
+unique(md$main_product)
+
+sjmisc::str_contains(unique(md$main_product), "olahan", ignore.case = T)
+sjmisc::str_contains(unique(md$main_product), "goreng", ignore.case = T)
+
+md[md$main_product=="MINYAK GORENG",]
+# ibs_noUML$workers_total_imp3[ibs_noUML$workers_total_imp3 %in% ]
 
 ## Match to each unref record, all the records of MD that have the same number of workers (i.e. be it the same year or not, same district or not)
 #this adds a list column. There is one list element for each unref row. 
-match <- nest_join(unref, md, by = c("workers_total_imp3" = "no_workers"), keep = TRUE)
+match <- dplyr::nest_join(ibs_noUML, md, by = c("workers_total_imp3" = "no_workers"), keep = TRUE, name = "y")
 # each list element is a dataframe
 class(match$y[[1]])
 
@@ -101,7 +109,9 @@ match$district_name[match$district_name == ""] <- "123456789xyz"
 match$n_match <- NA
 for(i in 1:nrow(match)){
   #specified as such (with switch = T), the function checks whether x is in any of the patterns (wierd phrasing but that's the way to go with this function)
-  kab_filter <- str_contains(x = match$district_name[i], pattern = match$y[[i]]$address, ignore.case = TRUE, switch = TRUE) 
+  kab_filter <- str_contains(x = match$district_name[i], pattern = match$y[[i]]$address, ignore.case = TRUE, switch = TRUE)
+  # it's null if address is empty. In this case, we don't want to match
+  if(length(match$y[[i]]$address)==0){kab_filter <- FALSE}
   # keep only the matches that are in the same district
   match$y[[i]] <- dplyr::filter(match$y[[i]], kab_filter)
   # report the number of different mills that matched
@@ -166,15 +176,15 @@ grp_n_match[grp_n_match$firm_id == 2076,]
 match[match$firm_id == 2076, c("no_match","one_match", "svl_match")]
 
 # descriptive part
-describe(match[match$no_match == TRUE, "firm_id"]) # 371 establishments (1697 records)
-describe(match[match$one_match == TRUE, "firm_id"]) # 111 establishments (924 records)
-describe(match[match$svl_match == TRUE, "firm_id"]) # 110 establishments (1399 records)
+describe(match[match$no_match == TRUE, "firm_id"]) # 821 establishments (2426 records)
+describe(match[match$one_match == TRUE, "firm_id"]) # 118 establishments (472 records)
+describe(match[match$svl_match == TRUE, "firm_id"]) # 64 establishments (356 records)
 
 match$i_n_match <- "never matches with anything"
 match$i_n_match[match$one_match == TRUE] <- "matches always with the same company name or with nothing"
 match$i_n_match[match$svl_match == TRUE] <- "matches with several company names, either the same year or across years"
 
-ddply(match, c("i_n_match","any_cpo_output"), summarise, 
+ddply(match, c("i_n_match","any_refined"), summarise, 
       n_mills = length(unique(firm_id)))
 
 # la question est est-ce qu'on décide de valider systématiquement les cas où il n'y a zéro ou qu'un seul match toujours identique entre les années d'une mill ibs. 
@@ -182,8 +192,147 @@ ddply(match, c("i_n_match","any_cpo_output"), summarise,
 # ou même pas, manuellement on avait validé même quand il n'y avait qu'une obs. qui matchait.
 # une partie de ces cas sont écartés ensuite pendant la phase de résolution des conflits. 
 
-wtn_cfl <- match[match$svl_match == TRUE & match$any_cpo_output == TRUE, ]
+wtn_cfl <- match[match$svl_match == TRUE & match$any_refined == TRUE, ]
 length(unique(wtn_cfl$firm_id))
+
+#### WITHIN CONFLICTS ####
+
+### Prepare the data to resolve "within" conflicts, i.e. conflicts in matched company names within each firm_id. 
+
+# add variables on the total different matches for one ibs establishment.  
+wtn_cfl$diff_names <- rep(NA, nrow(wtn_cfl))
+wtn_cfl$n_diff_names <- rep(NA, nrow(wtn_cfl))
+for(i in unique(wtn_cfl$firm_id)){
+  names <- lapply(wtn_cfl[wtn_cfl$firm_id == i, "y"], function(i.elmt) i.elmt$company_name)
+  wtn_cfl[wtn_cfl$firm_id == i, "diff_names"] <- paste(unique(unlist(names)), collapse = "; ")
+  wtn_cfl[wtn_cfl$firm_id == i, "n_diff_names"] <- length(unique(unlist(names)))
+}
+
+#wtn_cfl[wtn_cfl$firm_id == 1763, "y"]
+
+
+# extract all the matches from the list column 
+l <- list()
+for(i in 1:nrow(wtn_cfl)){
+  s <- wtn_cfl[i, "y"][[1]]
+  s$matched_firm_id <- rep(wtn_cfl[i, "firm_id"], nrow(wtn_cfl[i, "y"][[1]]))
+  s$matched_year <- rep(wtn_cfl[i, "year"], nrow(wtn_cfl[i, "y"][[1]]))
+  l[[i]]<- s
+}
+md_matches <- bind_rows(l)
+rm(l)
+
+
+# and merge them with the panel wtn_cfl
+# rename first the year variable in md_matches
+names(md_matches)[names(md_matches) == "year"] <- "md_year"
+wtn_cfl <- merge(wtn_cfl, md_matches, by.x = c("firm_id","year"), by.y = c("matched_firm_id", "matched_year"), all = TRUE)
+
+# export relevant variables to manual work
+wtn_cfl <- dplyr::select(wtn_cfl,	firm_id, min_year, year,	workers_total_imp3,	n_diff_names, diff_names,  
+                         md_year, company_name, no_workers, 
+                         district_name, kec_name,	village_name, address,
+                         main_product, 
+                         in_ton_ffb_imp1,	in_ton_ffb_imp2, out_ton_cpo_imp1,	out_ton_cpo_imp2,	out_ton_pko_imp1, out_ton_pko_imp2,	
+                         out_ton_rpo_imp1, out_ton_rpo_imp2, out_ton_rpko_imp1, out_ton_rpko_imp2,
+                         pct_own_cent_gov_imp,	pct_own_loc_gov_imp,	pct_own_nat_priv_imp,	pct_own_for_imp)
+
+
+
+#### BETWEEN CONFLICTS #### 
+
+### now we want to resolve "between" conflicts, i.e. conflicts in matched company names between IBS firm_ids. 
+# For this purpose, it is necessary to have all years for each ibs firm_id in the two categories 
+# (resolved conflict cases and one_match cases (only those who produced CPO at least once))
+
+## Within resolved conflicts
+# import mannually done work 
+wtn_cfl_resolved <- read_excel(file.path("input_data/manually_matched_ibs_uml/matching_unref/wtn_cfl_done.xlsx"))
+
+# for each firm_id, keep only the row with the mannually deemed correct company name. 
+# (because only one row per firm_id was given the resolved company name in the manual work in Excel)
+wtn_cfl_resolved <- wtn_cfl_resolved[is.na(wtn_cfl_resolved$company_name)== FALSE,] 
+
+length(unique(wtn_cfl_resolved$company_name)) 
+# So there was 104 different firm_id that had within conflicting md company names. 
+# For 102 of them, we could resolve the within conflict. 
+# Among them, there are only 100 unique company names, meaning that there are some between conflicts. 
+
+# rename the company name variable 
+names(wtn_cfl_resolved)[names(wtn_cfl_resolved) == "company_name"] <- "within_resolved_c_name"
+
+# merge it with the wtn_cfl data frame, 
+wtn_cfl_resolved <- merge(wtn_cfl, wtn_cfl_resolved[, c("firm_id", "within_resolved_c_name")], by = c("firm_id"), all = TRUE)
+
+# we don't keep only the records where the company_name is the one that was chosen mannually, because in some cases we might  
+# need records for the same mill but with a  differently spelled name. 
+
+
+## one_match cases
+# one should just reproduce the procedure applied to prepare data for resolution of within conflicts. 
+
+#keep only the one_match cases that are potential mills (they produced CPO at least once)
+no_cfl <- match[match$one_match == TRUE & match$any_cpo_output == TRUE,]
+
+# add variables on the total different matches for one ibs establishment.  
+no_cfl$diff_names <- rep(NA, nrow(no_cfl))
+no_cfl$n_diff_names <- rep(NA, nrow(no_cfl))
+for(i in unique(no_cfl$firm_id)){
+  names <- lapply(no_cfl[no_cfl$firm_id == i, "y"], function(i.elmt) i.elmt$company_name)
+  no_cfl[no_cfl$firm_id == i, "diff_names"] <- paste(unique(unlist(names)), collapse = "; ")
+  no_cfl[no_cfl$firm_id == i, "n_diff_names"] <- length(unique(unlist(names)))
+}
+
+#no_cfl[no_cfl$firm_id == 1763, "y"]
+
+# extract all the matches from the list column 
+l <- list()
+for(i in 1:nrow(no_cfl)){
+  s <- no_cfl[i, "y"][[1]] # there is always only one element anyways
+  s$matched_firm_id <- rep(no_cfl[i, "firm_id"], nrow(no_cfl[i, "y"][[1]]))
+  s$matched_year <- rep(no_cfl[i, "year"], nrow(no_cfl[i, "y"][[1]]))
+  l[[i]]<- s
+}
+md_matches <- bind_rows(l)
+rm(l)
+
+
+# and merge them with the panel no_cfl
+# rename first the year variable in md_matches
+names(md_matches)[names(md_matches) == "year"] <- "md_year"
+no_cfl <- merge(no_cfl, md_matches, by.x = c("firm_id","year"), by.y = c("matched_firm_id", "matched_year"), all = TRUE)
+
+# export relevant variables to manual work
+no_cfl <- dplyr::select(no_cfl,	firm_id, min_year, year,	workers_total_imp3,	n_diff_names, diff_names,  
+                        md_year, company_name, no_workers, 
+                        district_name, kec_name,	village_name, address,
+                        main_product, 
+                        in_ton_ffb_imp1,	in_ton_ffb_imp2, out_ton_cpo_imp1,	out_ton_cpo_imp2,	out_ton_pko_imp1, out_ton_pko_imp2,	
+                        out_ton_rpo_imp1, out_ton_rpo_imp2, out_ton_rpko_imp1, out_ton_rpko_imp2,
+                        pct_own_cent_gov_imp,	pct_own_loc_gov_imp,	pct_own_nat_priv_imp,	pct_own_for_imp)
+
+
+## Spot the between conflicts
+# have the within_resolved_c_name column in no_cfl data frame too.
+no_cfl$within_resolved_c_name <- no_cfl$company_name
+
+# merge them 
+unique_match <- merge(wtn_cfl_resolved, no_cfl, all = TRUE)
+
+# now identify duplicates across firm_id
+btw_duplicates <- ddply(unique_match, c("within_resolved_c_name"), summarise, 
+                        btw_duplicates = length(unique(firm_id)))
+
+unique_match <- merge(unique_match, btw_duplicates, by = "within_resolved_c_name", all = TRUE)
+
+describe(unique_match$btw_duplicates)
+# 79 firm_id have no within resolved company name. 
+all_na(unique_match[unique_match$btw_duplicates == 79,"within_resolved_c_name"])
+
+# keep only between conflicts
+btw_cfl <- unique_match[unique_match$btw_duplicates > 1 & is.na(unique_match$within_resolved_c_name) == FALSE,] 
+
+setorder(btw_cfl, within_resolved_c_name, firm_id, year)
 
 
 
@@ -304,6 +453,10 @@ nrow(dplyr::filter(ibs_unref, any_rpo | any_incpo))
 # here the criterion for being a refinery is to output at least some rpo OR some rpko. 
 
 
+#### Automatic conflict resolution #### 
+summary(refine$cap_mt) # this is expressed in metric tons, not in million tons, most likely 
+noto <- dplyr::mutate(noto, excess_cap = max_out_ton_rpo_imp1 > cap_mt)
+summary(noto$excess_cap)
 
 # They are in 455 different polygons, of which 359 do not intersect with another one
 # (intersections but not equal likely when there is a split and a mill is associated with the polygon of the village before, and one or more 
