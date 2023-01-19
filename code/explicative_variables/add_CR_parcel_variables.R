@@ -889,6 +889,9 @@ rspo$year <- rspo$year +1
 cns <- st_read(file.path("input_data/oil_palm_concessions"))
 cns <- st_transform(cns, crs = indonesian_crs)
 
+cns20 <- st_read(file.path("input_data/Greenpeace_Indonesia_Oil_Palm_Concessions_Map_Nov_2020"))
+cns20 <- st_transform(cns20, crs = indonesian_crs)
+
 ### LEGAL LAND USE 
 llu <- st_read(file.path("input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp"))
 llu <- st_transform(llu, crs = indonesian_crs)
@@ -944,20 +947,28 @@ for(catchment_radius in catchment_radiuseS){
   # We do not observe whether a grid cell is within a concession annually. 
   # Therefore we only proceed with a cross section
   parcels_cs <- parcels[!duplicated(parcels$lonlat),]
+  
   sgbp <- st_within(parcels_cs, cns)
   parcels_cs$concession <- rep(FALSE, nrow(parcels_cs))
   parcels_cs$concession[lengths(sgbp) > 0] <- TRUE
+  rm(sgbp)
+  
+  # repeat for 2020 concession map
+  sgbp <- st_within(parcels_cs, cns20)
+  parcels_cs$concession_2020 <- rep(FALSE, nrow(parcels_cs))
+  parcels_cs$concession_2020[lengths(sgbp) > 0] <- TRUE
+  rm(sgbp)
+
+  # note that some parcels fall within more than one concession record. There may be several reasons for concession overlaps 
+  # like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
+  # concession record.   
   
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "concession")], by = "lonlat")
+  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "concession", "concession_2020")], by = "lonlat")
   
-  # note that some parcels fall within more than one concession record. There may be several reasons for concession overlaps 
-  # like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
-  # concession record. 
-  
-  
+
   ### LEGAL LAND USE 
   parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
   # this is quite long (~5min)
@@ -980,32 +991,40 @@ for(catchment_radius in catchment_radiuseS){
   unique(parcels$llu)
   ### ILLEGAL LUCFP 
   # one possible link to shed light on accronyms http://documents1.worldbank.org/curated/pt/561471468197386518/pdf/103486-WP-PUBLIC-DOC-107.pdf
-  
+  parcels <- dplyr::mutate(parcels, 
+                           llu_protectforest = (llu == "HL" | 
+                                         
+                                                 llu == "HP" | # production forest : " these areas may be selectively logged in a normal manner".
+                                                 llu == "HPT" | # limited production forest : "These areas be logged less intensively than is permitted in the Permanent Production Forest" 
+                                                 
+                                                 llu=="HK" | # below are all categories of HK
+                                                 llu=="KSA/KPA" |
+                                                 llu=="KSA" | 
+                                                 llu=="CA" | 
+                                                 llu=="SM" | 
+                                                 llu=="KPA" | 
+                                                 llu=="TN" | 
+                                                 llu=="TWA" | 
+                                                 llu=="Tahura" | 
+                                                 llu=="SML" | 
+                                                 llu=="CAL" | 
+                                                 llu=="TNL" | 
+                                                 llu=="TWAL" | 
+                                                 llu=="KSAL" | 
+                                                 llu=="TB" | 
+                                                 llu=="Hutan Cadangan"))
   parcels <- dplyr::mutate(parcels,
-                           illegal1 = (!concession & (llu != "HPK" )), # it's not in concession and not in a convertible forest zone. Don't add the following code, because these NAs are for all places outside the forest estate, and it changes exactly nothing to add this condition | llu == "<NA>"
-                           illegal2 = (!concession & (llu == "HL" | # it's not in concession and it's in a permanent forest zone designation
-                                                      
-                                                      llu == "HP" | # production forest : " these areas may be selectively logged in a normal manner".
-                                                      llu == "HPT" | # limited production forest : "These areas be logged less intensively than is permitted in the Permanent Production Forest" 
-                                                        
-                                                      llu=="HK" | # below are all categories of HK
-                                                        llu=="KSA/KPA" |
-                                                        llu=="KSA" | 
-                                                        llu=="CA" | 
-                                                        llu=="SM" | 
-                                                        llu=="KPA" | 
-                                                        llu=="TN" | 
-                                                        llu=="TWA" | 
-                                                        llu=="Tahura" | 
-                                                        llu=="SML" | 
-                                                        llu=="CAL" | 
-                                                        llu=="TNL" | 
-                                                        llu=="TWAL" | 
-                                                        llu=="KSAL" | 
-                                                        llu=="TB" | 
-                                                        llu=="Hutan Cadangan")))
-  
-  # yields many missing in illegal because many grid cells are within a mising land use legal classification
+                           illegal1 = llu_protectforest, # it is in a protected forest estate
+                           illegal2010 = (!concession), # it's not in concessions as snapshot in 2010   
+                           illegal2_2020 = (!concession_2020 & llu_protectforest), # it's not in concessions, even issued after 2010   
+                           illegal2 = (!concession & llu_protectforest) # it's not in concession and it's in a protected forest zone designation 
+                           )
+  # yields many missing in illegal because many grid cells are within a mising land use legal classification. More precisely: 
+  # Places within a concession are considered legal (illegal = FALSE) even if llu is missing (because FALSE & NA = FALSE)
+  # but places outside a concession are considered NA if llu is missing (because TRUE & NA = NA) - which we keep as such, because concession map is known for being incomplete, so not being in a concession on the map does not strongly grant you are illegal.  
+  # And for this reason, there are much more legal places according to illegal2 than illegal1,
+  # because illegal1 does not deem as legal all those places in a missing llu but actually in a concession. 
+    
   # parcels[!duplicated(parcels$lonlat) & !is.na(parcels$llu), c("lonlat", "concession", "llu", "illegal1", "illegal2")]
   
   
@@ -1059,7 +1078,7 @@ for(catchment_radius in c(3e4, 5e4)){ # 1e4,
   
   parcels <- inner_join(parcels, 
                         land_des[,c("lonlat","year",
-                                    "rspo_cert", "concession", "llu", "illegal1", "illegal2")],
+                                    "rspo_cert", "concession", "llu", "illegal1", "illegal2010", "illegal2_2020", "illegal2")],
                         by = c("lonlat","year"))
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",

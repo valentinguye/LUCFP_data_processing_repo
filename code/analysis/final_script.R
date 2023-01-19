@@ -551,13 +551,17 @@ make_base_reg <- function(island,
     d <- d[!is.na(d$illegal1) & d$illegal1 == FALSE, ]
   }
   if(illegal == "no_ill2"){
-    d <- d[!is.na(d$illegal1) & d$illegal2 == FALSE, ]
+    d <- d[!is.na(d$illegal2) & d$illegal2 == FALSE, ]
   }
   if(illegal == "ill1"){
     d <- d[!is.na(d$illegal2) & d$illegal1 == TRUE, ]
   }  
   if(illegal == "ill2"){
     d <- d[!is.na(d$illegal2) & d$illegal2 == TRUE, ]
+  }
+  
+  if(illegal == "alt"){
+    d <- d[!is.na(d$illegal2_2020) & d$illegal2_2020 == TRUE, ]
   }
   
   # make the sample comparable, by requiring that the main regressor be not missing either 
@@ -1300,11 +1304,11 @@ make_desstats <- function(sample_1, sample_2){
   
   variables_1 <- c(dep_var_1,
                    "wa_cpo_price_imp1_4ya_lag1",
-                   "wa_pct_own_gov_imp_lag1", "wa_pct_own_nat_priv_imp_lag1", "wa_pct_own_for_imp_lag1",
+                   # "wa_pct_own_gov_imp_lag1", "wa_pct_own_nat_priv_imp_lag1", "wa_pct_own_for_imp_lag1",
                    "n_reachable_uml") 
   variables_2 <- c(dep_var_2,
                    "wa_cpo_price_imp1_4ya_lag1",
-                   "wa_pct_own_gov_imp_lag1", "wa_pct_own_nat_priv_imp_lag1", "wa_pct_own_for_imp_lag1",
+                   # "wa_pct_own_gov_imp_lag1", "wa_pct_own_nat_priv_imp_lag1", "wa_pct_own_for_imp_lag1",
                    "n_reachable_uml") 
   
   sample_1 <- left_join(sample_1[,c("lonlat","year")], d_all[,c("lonlat","year",variables_1)], by = c("lonlat","year"))#
@@ -1429,9 +1433,9 @@ make_desstats <- function(sample_1, sample_2){
   # row names
   row.names(des_table) <- c("Deforestation (ha)",
                             "Price signal ($/tCPO)", 
-                            "Public ownership (%)", 
-                            "Domestic private ownership (%)", 
-                            "Foreign ownership (%)", 
+                            #"Public ownership (%)", 
+                            #"Domestic private ownership (%)", 
+                            #"Foreign ownership (%)", 
                             #"Competition", 
                             "# reachable mills")
   
@@ -3160,6 +3164,55 @@ kable(ape_mat, booktabs = T, align = "r",
               latex_valign = "b") 
 
 rm(ape_mat)
+
+#### ILLEGAL MEASUREMENT ROBUSTNESS #### 
+res_data_list_illrob <- list()
+elm <- 1
+
+isl_list <- list("both")#"Sumatra", "Kalimantan", 
+ISL <- "both"
+
+size_list <- list("i","sm", "a")
+
+# legality definition
+ILL <- "alt"
+
+for(SIZE in size_list){
+  res_data_list_illrob[[elm]] <- make_base_reg(island = ISL,
+                                             outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                             illegal = ILL,
+                                             offset = FALSE)
+  names(res_data_list_illrob)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+  elm <- elm + 1
+}
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat <- lapply(res_data_list_illrob, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "r",
+      caption = "Price elasticities of illegal deforestation according to 2020 concession map") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 3, 
+                     "All" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  column_spec(column = 1,
+              width = "7em",
+              latex_valign = "b") %>% 
+  column_spec(column = c(2:(ncol(ape_mat))),
+              width = "7em",
+              latex_valign = "b") 
+
+rm(ape_mat)
+
 ##### SPECIFICATION CHARTS #####
 
 
