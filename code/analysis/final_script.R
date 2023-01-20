@@ -432,6 +432,11 @@ make_base_reg <- function(island,
     controls <- gsub("wa_", "", controls)
   }
   
+  # add price level controls, in price variability regression 
+  if(price_variation){
+    controls <- c(controls, paste0("wa_", commo,"_price_imp",imp,"_",x_pya+1,"ya",lag_or_not))
+  }
+  
   # ### WEIGHTS
   # if(weights){
   #   d$sample_coverage <- d$n_reachable_ibs/d$n_reachable_uml
@@ -3118,12 +3123,13 @@ for(SIZE in size_list){
                                                       outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
                                                       illegal = ILL,
                                                       price_variation = TRUE,
-                                                      n_iter_glm = 200,
+                                                      n_iter_glm = 500,
                                                       offset = FALSE)
     names(res_data_list_variability)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
     elm <- elm + 1
   }
 }
+lapply(res_data_list_variability, FUN = function(x)print(x[[1]]$convStatus))
 
 ## PARTIAL EFFECTS
 rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
@@ -3198,9 +3204,9 @@ kable(ape_mat, booktabs = T, align = "r",
       caption = "Price elasticities of illegal deforestation according to 2020 concession map") %>% #of 1 percentage change in medium-run price signal
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c(" " = 1,
-                     "Industrial plantations" = 3,
-                     "Smallholder plantations" = 3, 
-                     "All" = 3),
+                     "Industrial plantations" = 1,
+                     "Smallholder plantations" = 1, 
+                     "All" = 1),
                    align = "c",
                    strikeout = F) %>%
   # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
