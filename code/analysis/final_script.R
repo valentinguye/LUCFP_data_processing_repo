@@ -569,6 +569,13 @@ make_base_reg <- function(island,
     d <- d[!is.na(d$illegal2_2020) & d$illegal2_2020 == TRUE, ]
   }
   
+  if(illegal == "in_concession"){
+    d <- d[!is.na(d$illegal2010) & d$illegal2010 == FALSE, ]
+  }
+  if(illegal == "out_concession"){
+    d <- d[!is.na(d$illegal2010) & d$illegal2010 == TRUE, ]
+  }
+  
   # make the sample comparable, by requiring that the main regressor be not missing either 
   if(reduced_form_iv){
     used_vars <- c(used_vars, paste0("wa_cpo_price_imp",imp,"_4ya",lag_or_not))
@@ -3014,6 +3021,144 @@ kable(ape_mat, booktabs = T, align = "r",
 
 
 rm(res_data_list_prdyn)
+
+
+
+### FFB IN SMALLHOLDERS -----------------------------------------------------------------------------------------
+# infrastructure to store results
+res_data_list_ffbsm <- list()
+elm <- 1
+
+SIZE <- "sm"
+ill_status <- c("in_concession", "out_concession", "all")
+
+## With CPO only 
+for(ILL in ill_status){
+  #for(ILL in ill_status){
+  res_data_list_ffbsm[[elm]] <- make_base_reg(island = "both",
+                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                              illegal = ILL,
+                                              commo = "cpo",
+                                              offset = FALSE)
+  names(res_data_list_ffbsm)[elm] <- paste0("both_",SIZE,"_",ILL,"_cpo")
+  elm <- elm + 1
+}
+## With FFB *and* CPO prices, but no interaction
+for(ILL in ill_status){
+  res_data_list_ffbsm[[elm]] <- make_base_reg(island = "both",
+                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                              illegal = ILL,
+                                              commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
+                                              interact_regressors = FALSE,
+                                              offset = FALSE)
+  names(res_data_list_ffbsm)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpo")
+  elm <- elm + 1
+}
+## With FFB *and* CPO prices, WITH interaction
+for(ILL in ill_status){
+  res_data_list_ffbsm[[elm]] <- make_base_reg(island = "both",
+                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                              illegal = ILL,
+                                              commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
+                                              interact_regressors = TRUE,
+                                              offset = FALSE)
+  names(res_data_list_ffbsm)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpointeract")
+  elm <- elm + 1
+}
+
+rm(ape_mat)
+ape_mat1 <- lapply(res_data_list_ffbsm[1:3], FUN = make_APEs, K = 1) 
+ape_mat1 <- ape_mat1 %>% bind_cols() %>% as.matrix()
+
+ape_mat2 <- lapply(res_data_list_ffbsm[4:6], FUN = make_APEs, K = 1, controls_pe = TRUE)  
+ape_mat2 <- ape_mat2 %>% bind_cols() %>% as.matrix()
+
+ape_mat3 <- lapply(res_data_list_ffbsm[7:9], FUN = make_APEs, K = 2) 
+ape_mat3 <- ape_mat3 %>% bind_cols() %>% as.matrix()
+
+# add 4 lines to ape_mat1 (equivalent to estimate and CI of MR and interaction)
+ape_mat1 <- rbind(ape_mat1,matrix(ncol = ncol(ape_mat1), nrow = 4))
+ape_mat1 <- ape_mat1[c(1,2,5,6,7,8,3,4),]
+ape_mat1[is.na(ape_mat1)] <- ""
+
+ape_mat <- cbind(ape_mat1, ape_mat2)
+ape_mat <- ape_mat[,c(1,4,2,5,3,6)]
+
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+
+ape_mat
+colnames(ape_mat) <- NULL
+
+
+
+### FFB IN INDUSTRIAL -----------------------------------------------------------------------------------------
+# infrastructure to store results
+res_data_list_ffbi <- list()
+elm <- 1
+
+SIZE <- "i"
+ill_status <- c("in_concession", "out_concession", "all")
+
+## With CPO only 
+for(ILL in ill_status){
+  #for(ILL in ill_status){
+  res_data_list_ffbi[[elm]] <- make_base_reg(island = "both",
+                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                              illegal = ILL,
+                                              margin = "intensive",
+                                              commo = "cpo",
+                                              offset = FALSE)
+  names(res_data_list_ffbi)[elm] <- paste0("both_",SIZE,"_",ILL,"_cpo")
+  elm <- elm + 1
+}
+## With FFB *and* CPO prices, but no interaction
+for(ILL in ill_status){
+  res_data_list_ffbi[[elm]] <- make_base_reg(island = "both",
+                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                              illegal = ILL,
+                                              margin = "intensive",
+                                              commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
+                                              interact_regressors = FALSE,
+                                              offset = FALSE)
+  names(res_data_list_ffbi)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpo")
+  elm <- elm + 1
+}
+## With FFB *and* CPO prices, WITH interaction
+for(ILL in ill_status){
+  res_data_list_ffbi[[elm]] <- make_base_reg(island = "both",
+                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                              illegal = ILL,
+                                              margin = "intensive",
+                                              commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
+                                              interact_regressors = TRUE,
+                                              offset = FALSE)
+  names(res_data_list_ffbi)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpointeract")
+  elm <- elm + 1
+}
+
+rm(ape_mat)
+ape_mat1 <- lapply(res_data_list_ffbi[1:3], FUN = make_APEs, K = 1) 
+ape_mat1 <- ape_mat1 %>% bind_cols() %>% as.matrix()
+
+ape_mat2 <- lapply(res_data_list_ffbi[4:6], FUN = make_APEs, K = 1, controls_pe = TRUE)  
+ape_mat2 <- ape_mat2 %>% bind_cols() %>% as.matrix()
+
+ape_mat3 <- lapply(res_data_list_ffbi[7:9], FUN = make_APEs, K = 2) 
+ape_mat3 <- ape_mat3 %>% bind_cols() %>% as.matrix()
+
+# add 4 lines to ape_mat1 (equivalent to estimate and CI of MR and interaction)
+ape_mat1 <- rbind(ape_mat1,matrix(ncol = ncol(ape_mat1), nrow = 4))
+ape_mat1 <- ape_mat1[c(1,2,5,6,7,8,3,4),]
+ape_mat1[is.na(ape_mat1)] <- ""
+
+ape_mat <- cbind(ape_mat1, ape_mat2)
+ape_mat <- ape_mat[,c(1,4,2,5,3,6)]
+
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+
+ape_mat
+colnames(ape_mat) <- NULL
+
 
 ### COMMODITY -----------------------------------------------------------------------------------------
 # infrastructure to store results
