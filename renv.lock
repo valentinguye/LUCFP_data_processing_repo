@@ -2394,7 +2394,7 @@
     },
     "sp": {
       "Package": "sp",
-      "Version": "1.3-2",
+      "Version": "1.6-0",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -2407,7 +2407,7 @@
         "stats",
         "utils"
       ],
-      "Hash": "803f04b858b8520ac243d38e09741de6"
+      "Hash": "6674e075a078d9c3bde8ba800367347c"
     },
     "spData": {
       "Package": "spData",

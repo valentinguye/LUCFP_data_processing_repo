@@ -15,7 +15,7 @@
 # renv/library is not provided with the project, but created the first time R is launched from this project, either 
 # from master.do, or within R_project_for_individual_runs.Rproj 
 # because the project .Rprofile calls renv/activate.R which, in particular, 
-# downloads, installs, and updates, if necessary, the renv package; and creates renv/library. 
+# downloads, installs, or updates, if necessary, the renv package; and creates renv/library. 
 
 # Then, upon renv::restore() command, packages recorded in renv.lock are installed in renv/library, if necessary 
 # (i.e. if not available from the renv cache, see https://rstudio.github.io/renv/articles/renv.html#cache-1 ) 

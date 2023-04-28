@@ -112,7 +112,7 @@ instru_share = "contemp"
 commo = c("cpo")
 x_pya = 3
 dynamics = FALSE
-annual = TRUE
+annual = FALSE
 price_variation = FALSE
 log_prices = TRUE
 yoyg = FALSE
@@ -125,6 +125,7 @@ offset = FALSE
 lag_or_not = "_lag1"
 controls = c("n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
 remaining_forest = FALSE
+control_lncpo = FALSE # should the CPO price treatment of interest be included in the controls (for regressions on FFB price)
 interaction_terms = NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
 interact_regressors = TRUE
 interacted = "regressors"
@@ -165,6 +166,7 @@ make_base_reg <- function(island,
                           offset = FALSE, # Logical. Should the log of the remaining forest be added as an offset.  
                           lag_or_not = "_lag1", # either "_lag1", or  "", should the 
                           controls = c("n_reachable_uml"), # , "wa_prex_cpo_imp1"character vectors of names of control variables (don't specify lags in their names)
+                          control_lncpo = FALSE, # should the CPO price treatment of interest be included in the controls (for regressions on FFB price)
                           remaining_forest = FALSE, # Logical. If TRUE, the remaining forest is added as a control
                           interaction_terms = NULL, # c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1"), # may be one or several of the controls specified above. 
                           interacted = "regressors",
@@ -435,6 +437,14 @@ make_base_reg <- function(island,
   # add price level controls, in price variability regression 
   if(price_variation){
     controls <- c(controls, paste0("wa_", commo,"_price_imp",imp,"_",x_pya+1,"ya",lag_or_not))
+  }
+  # and log cpo price control, in regression on FFB price, if asked. 
+  if(control_lncpo){
+    # this is the equivalent to how the ffb price treatment is constructed
+    cpo_ctrl <- paste0("wa_cpo_price_imp",imp,"_",x_pya+1,"ya",lag_or_not)
+    lncpo_ctrl <- paste0("ln_",cpo_ctrl)
+    d[,lncpo_ctrl] <- log(d[,cpo_ctrl])
+    controls <- c(lncpo_ctrl, controls) # put it first, for make_APEs
   }
   
   # ### WEIGHTS
@@ -947,12 +957,21 @@ make_APEs <- function(res_data, K=1,
     linear_ape_fml_list[[k]] <- linear_ape_fml
   }# closes loop over k. 
   
+  
   ### COMPUTE THE PARTIAL EFFECTS OF CONTROLS
   
-  if(controls_pe & K == 1 & length(interaction_terms) == 0){ # we provide controls' partial effects only in the simplest case 
-    for(coi in others[!grepl("price",others)]){
+  if(controls_pe & K == 1){ # we provide controls' partial effects only in the simplest case 
+   
+    for(coi in others[-K]){ # !grepl("price",others)
+      
       # make the linear formula 
       ape_fml_coi <- paste0("(exp(",coi,"*",1,") - 1)*100")
+      
+      if(grepl("ln_",coi)){
+        ape_fml_coi <- paste0("((",1+rel_price_change,")^(",coi,") - 1)*100")#*fv_bar*",pixel_area_ha)
+      } else{
+        ape_fml_coi <- paste0("(exp(",coi,"*",abs_price_change,") - 1)*100")#*fv_bar*",pixel_area_ha)
+      } 
       
       dM_ape_coi <- deltaMethod(object = coef(reg_res), 
                                 vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE, 
@@ -1853,7 +1872,7 @@ des_table <- make_des_table_ibs(ibs)
 # we cannot automate headers, with a paste0, it does not work, hence n mills manually specified...  
 length(unique(ibs[ibs$analysis_sample==TRUE, "firm_id"]))
 length(unique(ibs[ibs$is_mill==TRUE, "firm_id"]))
-
+des_table
 colnames(des_table) <- NULL
 
 options(knitr.table.format = "latex") 
@@ -2003,7 +2022,7 @@ ur.kpss(diff(prices_ts, differences = 1)) %>% summary() # --> first differencing
 
 arima(prices_ts, order = c(length_panel - 1,1,0)) 
 
-ur.df(prices_ts)
+# ur.df(prices_ts)
 # this does not handle properly the specific structure of our time series (with NA sequences separating grid cells' respective time series)
 # pacf_14 <- pacf(diff(prices_ts, differences = 1), na.action = na.exclude, lag.max = length_panel - 1)
 
@@ -2700,7 +2719,7 @@ for(SIZE in size_list){
                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
                                                    interaction_terms = c("n_reachable_uml"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
                                                    illegal = ILL,
-                                                   n_iter_glm = 2000,
+                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
                                                    offset = FALSE)
     names(res_data_list_interact)[elm] <- paste0("both_",SIZE,"_",ILL)
     elm <- elm + 1
@@ -3028,207 +3047,113 @@ rm(res_data_list_prdyn)
 # infrastructure to store results
 res_data_list_ffbsm <- list()
 elm <- 1
-
 SIZE <- "sm"
-ill_status <- c("in_concession", "out_concession", "all")
+ILL <- "all"
 
-## With CPO only 
-for(ILL in ill_status){
-  #for(ILL in ill_status){
-  res_data_list_ffbsm[[elm]] <- make_base_reg(island = "both",
-                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                              illegal = ILL,
-                                              commo = "cpo",
-                                              offset = FALSE)
-  names(res_data_list_ffbsm)[elm] <- paste0("both_",SIZE,"_",ILL,"_cpo")
-  elm <- elm + 1
-}
-## With FFB *and* CPO prices, but no interaction
-for(ILL in ill_status){
-  res_data_list_ffbsm[[elm]] <- make_base_reg(island = "both",
-                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-                                              illegal = ILL,
-                                              commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
-                                              interact_regressors = FALSE,
-                                              offset = FALSE)
-  names(res_data_list_ffbsm)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpo")
-  elm <- elm + 1
-}
-## With FFB *and* CPO prices, WITH interaction
-for(ILL in ill_status){
-  res_data_list_ffbsm[[elm]] <- make_base_reg(island = "both",
-                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-                                              illegal = ILL,
-                                              commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
-                                              interact_regressors = TRUE,
-                                              offset = FALSE)
-  names(res_data_list_ffbsm)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpointeract")
-  elm <- elm + 1
-}
-
-rm(ape_mat)
-ape_mat1 <- lapply(res_data_list_ffbsm[1:3], FUN = make_APEs, K = 1) 
-ape_mat1 <- ape_mat1 %>% bind_cols() %>% as.matrix()
-
-ape_mat2 <- lapply(res_data_list_ffbsm[4:6], FUN = make_APEs, K = 1, controls_pe = TRUE)  
-ape_mat2 <- ape_mat2 %>% bind_cols() %>% as.matrix()
-
-ape_mat3 <- lapply(res_data_list_ffbsm[7:9], FUN = make_APEs, K = 2) 
-ape_mat3 <- ape_mat3 %>% bind_cols() %>% as.matrix()
-
-# add 4 lines to ape_mat1 (equivalent to estimate and CI of MR and interaction)
-ape_mat1 <- rbind(ape_mat1,matrix(ncol = ncol(ape_mat1), nrow = 4))
-ape_mat1 <- ape_mat1[c(1,2,5,6,7,8,3,4),]
-ape_mat1[is.na(ape_mat1)] <- ""
-
-ape_mat <- cbind(ape_mat1, ape_mat2)
-ape_mat <- ape_mat[,c(1,4,2,5,3,6)]
-
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-
-ape_mat
-colnames(ape_mat) <- NULL
+## FFB price, NOT controlling for CPO prices
+res_data_list_ffbsm[[elm]] <- make_base_reg(island = "both",
+                                            outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                            illegal = ILL,
+                                            commo = c("ffb"), 
+                                            offset = FALSE)
+names(res_data_list_ffbsm)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffb")
+elm <- elm + 1
 
 
-
-### FFB IN INDUSTRIAL -----------------------------------------------------------------------------------------
-# infrastructure to store results
-res_data_list_ffbi <- list()
-elm <- 1
-
-SIZE <- "i"
-ill_status <- c("in_concession", "out_concession", "all")
-
-## With CPO only 
-for(ILL in ill_status){
-  #for(ILL in ill_status){
-  res_data_list_ffbi[[elm]] <- make_base_reg(island = "both",
-                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                              illegal = ILL,
-                                              margin = "intensive",
-                                              commo = "cpo",
-                                              offset = FALSE)
-  names(res_data_list_ffbi)[elm] <- paste0("both_",SIZE,"_",ILL,"_cpo")
-  elm <- elm + 1
-}
-## With FFB *and* CPO prices, but no interaction
-for(ILL in ill_status){
-  res_data_list_ffbi[[elm]] <- make_base_reg(island = "both",
-                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-                                              illegal = ILL,
-                                              margin = "intensive",
-                                              commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
-                                              interact_regressors = FALSE,
-                                              offset = FALSE)
-  names(res_data_list_ffbi)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpo")
-  elm <- elm + 1
-}
-## With FFB *and* CPO prices, WITH interaction
-for(ILL in ill_status){
-  res_data_list_ffbi[[elm]] <- make_base_reg(island = "both",
-                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-                                              illegal = ILL,
-                                              margin = "intensive",
-                                              commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
-                                              interact_regressors = TRUE,
-                                              offset = FALSE)
-  names(res_data_list_ffbi)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpointeract")
-  elm <- elm + 1
-}
-
-rm(ape_mat)
-ape_mat1 <- lapply(res_data_list_ffbi[1:3], FUN = make_APEs, K = 1) 
-ape_mat1 <- ape_mat1 %>% bind_cols() %>% as.matrix()
-
-ape_mat2 <- lapply(res_data_list_ffbi[4:6], FUN = make_APEs, K = 1, controls_pe = TRUE)  
-ape_mat2 <- ape_mat2 %>% bind_cols() %>% as.matrix()
-
-ape_mat3 <- lapply(res_data_list_ffbi[7:9], FUN = make_APEs, K = 2) 
-ape_mat3 <- ape_mat3 %>% bind_cols() %>% as.matrix()
-
-# add 4 lines to ape_mat1 (equivalent to estimate and CI of MR and interaction)
-ape_mat1 <- rbind(ape_mat1,matrix(ncol = ncol(ape_mat1), nrow = 4))
-ape_mat1 <- ape_mat1[c(1,2,5,6,7,8,3,4),]
-ape_mat1[is.na(ape_mat1)] <- ""
-
-ape_mat <- cbind(ape_mat1, ape_mat2)
-ape_mat <- ape_mat[,c(1,4,2,5,3,6)]
-
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-
-ape_mat
-colnames(ape_mat) <- NULL
+## FFB price, controlling for CPO prices
+res_data_list_ffbsm[[elm]] <- make_base_reg(island = "both",
+                                            outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                            illegal = ILL,
+                                            commo = c("ffb"), # important that ffb is indeed in first position of the vector. 
+                                            control_lncpo = TRUE,
+                                            offset = FALSE)
+names(res_data_list_ffbsm)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpo")
+elm <- elm + 1
 
 
-### COMMODITY -----------------------------------------------------------------------------------------
-# infrastructure to store results
-res_data_list_commo <- list()
-elm <- 1
+## FFB price, controlling for CPO prices AND LUCPFIP
+res_data_list_ffbsm[[elm]] <- make_base_reg(island = "both",
+                                            outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                            illegal = ILL,
+                                            commo = c("ffb"), # important that ffb is indeed in first position of the vector. 
+                                            control_lncpo = TRUE,
+                                            controls = c("n_reachable_uml", "lucpfip_rapid_pixelcount"),
+                                            offset = FALSE)
+names(res_data_list_ffbsm)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpo")
+elm <- elm + 1
 
-size_list <- list("i", "sm", "a")
 
-## With FFB only 
-for(SIZE in size_list){
-  #for(ILL in ill_status){
-  res_data_list_commo[[elm]] <- make_base_reg(island = "both",
-                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                              commo = "ffb",
-                                              offset = FALSE)
-  names(res_data_list_commo)[elm] <- paste0("both_",SIZE,"_ffb")
-  elm <- elm + 1
-}
-## With FFB *and* CPO prices  
-for(SIZE in size_list){
-  res_data_list_commo[[elm]] <- make_base_reg(island = "both",
-                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-                                              commo = c("ffb","cpo"), # important that ffb is indeed in first position of the vector. 
-                                              interact_regressors = TRUE,
-                                              offset = FALSE)
-  names(res_data_list_commo)[elm] <- paste0("both_",SIZE,"_ffbcpo")
-  elm <- elm + 1
-}
+## FFB price, controlling for CPO prices, and interacting FFB AND CPO with LUCPFIP  
+res_data_list_ffbsm[[elm]] <- make_base_reg(island = "both",
+                                            outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                            illegal = ILL,
+                                            commo = c("ffb"), # important that ffb is indeed in first position of the vector. 
+                                            control_lncpo = TRUE,
+                                            controls = c("n_reachable_uml", "lucpfip_rapid_pixelcount"),
+                                            interaction_terms = c("lucpfip_rapid_pixelcount"),
+                                            offset = FALSE)
+names(res_data_list_ffbsm)[elm] <- paste0("both_",SIZE,"_",ILL,"_ffbcpo_interactreachable")
+elm <- elm + 1
 
-## Partial effects
-rm(ape_mat)
-ape_mat1 <- lapply(res_data_list_commo[1:length(size_list)], FUN = make_APEs, K = 1) 
-ape_mat1 <- ape_mat1 %>% bind_cols() %>% as.matrix()
+# Compute APEs and select only FFB and CPO estimates, as well as # obs. and clusters 
+rm(ape_mat1)
+ape_mat1 <- lapply(res_data_list_ffbsm[1], FUN = make_APEs, K = 1) 
+ape_mat1 <- ape_mat1[[1]] %>% as.matrix()
+# add 2 rows to ape_mat1, equivalent to the estimate and CI for CPO control missing here.
+ape_mat1 <- rbind(ape_mat1, matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""))
+# add 2 rows to indicate whether we control
+ape_mat1 <- rbind(ape_mat1, matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""))
+ # sort rows
+ape_mat1 <- ape_mat1[c(1,2,5:8,3,4),]
 
-ape_mat2 <- lapply(res_data_list_commo[(length(size_list)+1):(2*length(size_list))], FUN = make_APEs, K = 2) 
-ape_mat2 <- ape_mat2 %>% bind_cols() %>% as.matrix()
+ape_mat2 <- lapply(res_data_list_ffbsm[2], FUN = make_APEs, K = 1, controls_pe=TRUE) 
+ape_mat2 <- ape_mat2[[1]][c(1,2,3,4,7,8)] %>% as.matrix()
+# add 2 rows to indicate whether we control
+ape_mat2 <- rbind(ape_mat2, matrix(ncol = ncol(ape_mat2), nrow = 2, data = ""))
+# sort rows
+ape_mat2 <- ape_mat2[c(1:4,7:8,5:6),]
+ape_mat2
 
-# add 4 lines to ape_mat1 (equivalent to estimate and CI of MR and interaction)
-ape_mat1 <- rbind(ape_mat1,matrix(ncol = ncol(ape_mat1), nrow = 4))
-ape_mat1 <- ape_mat1[c(1,2,5,6,7,8,3,4),]
-ape_mat1[is.na(ape_mat1)] <- ""
+ape_mat3 <- lapply(res_data_list_ffbsm[3], FUN = make_APEs, K = 1, controls_pe=TRUE) 
+ape_mat3 <- ape_mat3[[1]][c(1,2,3,4,9,10)] %>% as.matrix()
+# add 2 rows to indicate whether we control
+ape_mat3 <- rbind(ape_mat3, matrix(ncol = ncol(ape_mat3), nrow = 2, data = c("", "Yes")))
+# sort rows
+ape_mat3 <- ape_mat3[c(1:4,7:8,5:6),]
+ape_mat3
 
-ape_mat <- cbind(ape_mat1, ape_mat2)
-ape_mat <- ape_mat[,c(1,4,2,5,3,6)]
+# order of variables differ in this case, due to where make_APEs computes interaction effects
+ape_mat4 <- lapply(res_data_list_ffbsm[4], FUN = make_APEs, K = 1, controls_pe=TRUE) 
+ape_mat4 <- ape_mat4[[1]][c(1,2,5,6,11,12)] %>% as.matrix()
+# add 2 rows to indicate whether we control
+ape_mat4 <- rbind(ape_mat4, matrix(ncol = ncol(ape_mat4), nrow = 2, data = c("Yes", "Yes")))
+# sort rows
+ape_mat4 <- ape_mat4[c(1:4,7:8,5:6),]
+ape_mat4
 
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-
+ape_mat <- cbind(ape_mat1, ape_mat2, ape_mat3, ape_mat4)
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"),2),
+                        "Industrial expansion proxy",
+                        "... interacted with FFB price",
+                        "Observations", 
+                        "Clusters") 
 ape_mat
 colnames(ape_mat) <- NULL
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
-      caption = "Partial effects of FFB and CPO prices on deforestation across Indonesian oil palm plantations") %>% #of 1 percentage change in medium-run price signal
+      caption = "Partial effects of FFB prices on deforestation for smallholder oil palm plantations") %>% #of 1 percentage change in medium-run price signal
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   
-  add_header_above(c(" " = 1,
-                     "Industrial plantations" = 2,
-                     "Smallholder plantations" = 2, 
-                     "All plantations" = 2),
-                   align = "c",
-                   strikeout = F) %>%
   pack_rows("FFB price signal", 1, 2, # short run is indeed always before MR in the regressor vector construction in make_base_reg
             italic = TRUE, bold = TRUE)  %>%
   pack_rows("CPO price signal", 3, 4, 
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Interaction", 5, 6, 
+  pack_rows("Additional controls", 5, 6, 
             italic = TRUE, bold = TRUE)  %>%
   # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.1em", hline_before = TRUE) %>% 
   column_spec(column = 1,
-              width = "9em",
+              width = "14em",
               latex_valign = "b") %>% 
   column_spec(column = c(2:(ncol(ape_mat))),
               width = "5em",
@@ -3237,7 +3162,7 @@ kable(ape_mat, booktabs = T, align = "r",
 
 
 
-rm(res_data_list_commo)
+rm(res_data_list_ffbsm)
 
 
 
