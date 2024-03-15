@@ -134,8 +134,7 @@ names(trase) <- paste0("trase_", names(trase))
 trase <- st_as_sf(trase,	coords	=	c("trase_longitude",	"trase_latitude"), crs = 4326, remove = FALSE)
 trase <- st_transform(trase, crs = indonesian_crs)
 
-
-trase_ibs_bydesa <- st_join(x = trase, y = ibs_noUML_cs_wdesa, join = st_within, left = T) # is equivalent to ibs_j <- st_join(x = ibs_noUML_wdesa, y = trase) bc default is st_intersect.
+trase_ibs_bydesa <- st_join(x = trase, y = ibs_noUML_cs_wdesa, left = T) # the default is st_intersect.
 # it's a left join, so it keeps all refineries from x, and only those of y that match.  
 # trase_ids <- unique(trase$ref_id)
 # all(trase_ids %in% unique(trase_ibs_bydesa$ref_id))
@@ -262,9 +261,11 @@ for(i in unique(ibs_md$firm_id)){
 
 # Keep only useful variables
 ibs_md <- ibs_md %>% 
-  dplyr::select(firm_id, min_year, year,	workers_total_imp3,	n_diff_names, diff_names,  
+  dplyr::select(firm_id, min_year, year, no_md_match, one_md_match, svl_md_match,
+                diff_names, n_diff_names,   
                 y,
-                district_name, kec_name,	village_name, 
+                district_name, kec_name, village_name, 
+              	workers_total_imp3,	
                 in_ton_ffb_imp1,	in_ton_ffb_imp2, out_ton_cpo_imp1,	out_ton_cpo_imp2,	out_ton_pko_imp1, out_ton_pko_imp2,	
                 out_ton_rpo_imp1, out_ton_rpo_imp2, out_ton_rpko_imp1, out_ton_rpko_imp2,
                 pct_own_cent_gov_imp,	pct_own_loc_gov_imp,	pct_own_nat_priv_imp,	pct_own_for_imp)
@@ -289,6 +290,63 @@ trase_ibs_by_desaname <-
             by = "dummy") %>% 
   filter(trase_company %in% diff_names) %>% 
   dplyr::select(-dummy)
+
+## VARIABLES TO RESOLVE CONFLICTS ####
+
+# We identify differently matched subsets 
+
+no_nas <- ibs_j[is.na(ibs_j$lon)==F,] # 76 non-missings
+nrow(no_nas[unique(no_nas$firm_id),])
+# 45 IBS "manufactories" are in a village where at least one Trase refinery stands. 
+
+pot_otm <- no_nas[!(duplicated(no_nas$firm_id) | duplicated(no_nas$firm_id, fromLast = TRUE)), ] 
+# these are the 29 potential one-to-many matches (the IBS manufactory is the sole one from IBS (we know the desa of) to be in this village and 
+# there may be several Trase refineries in this same village.). 
+# Among them, there are:
+oto <- pot_otm[!(duplicated(pot_otm$company) | duplicated(pot_otm$company, fromLast = TRUE)), ] 
+# 10 IBS manufactories we know the desa of, are the only IBS manufactories in their villages while there is only one Trase refinery in each village.  
+
+otm <- pot_otm[duplicated(pot_otm$company) | duplicated(pot_otm$company, fromLast = TRUE), ]
+# 19 IBS mills with identified desa in which they are the only IBS manufactories, but where there is more than one Trase refinery. 
+nrow(distinct(otm, lat, lon)) # 12 Trase refineries are involved.
+
+du <- no_nas[(duplicated(no_nas$firm_id) | duplicated(no_nas$firm_id, fromLast = TRUE)), ] 
+# these are the 47 IBS manufactories with identified desa that are in the same desa with at least another IBS one.
+# These villages with many IBS may encompass either one or many Trase refineries. 
+
+noto <- rbind(otm, du)
+# these are the 66 IBS manufactories (19 + 47) that have an identified desa and are either m:m, o:m or m:o with Trase refineries. 
+
+total_potential <- no_nas[!duplicated(no_nas$lon),]
+# these are the 45 manufactories of which we know the coordinates, and that are within the villages of IBS manufactories. 
+
+
+## So, the maximum number of pre-2011 IBS manufactories we can hope to geolocalize with this desa matching technique is 45
+## The minimum number is 10 (unless we double-check them with workers and some don't match). 
+
+
+## Those that have a desa polygon but match with no Trase refinery (414) ####
+# It is useless to try to find them manually with the directory number of workers and uml's list. 
+# we can still find their names with directories and google-search them, and/or directly spot them manually within their villages. 
+ibs_unref <- left_join(x = ibs_noUML_cs_wdesa, y = st_set_geometry(oto[,c("firm_id","lat")], NULL), by = "firm_id")
+ibs_unref <- filter(ibs_unref, is.na(ibs_unref$lat))
+
+ibs_unref <- left_join(x = ibs_unref, y = st_set_geometry(noto[,c("firm_id","lon")], NULL), by = "firm_id")
+ibs_unref <- filter(ibs_unref, is.na(ibs_unref$lon))
+
+ibs_unref <-dplyr::select(ibs_unref, -lon, -lat)
+# (the use of "lat" and "lon" was just an arbitrary choice of non-empty variables to flag oto and noto resp.)
+
+# filter to those likely to be refineries
+head(ibs_unref)
+summary(ibs_unref$any_rpo)
+summary(ibs_unref$any_rpko)
+summary(ibs_unref$any_incpo)
+nrow(dplyr::filter(ibs_unref, any_rpo | any_rpko)) # "or rpko" adds 8 plants in addition to the 70 that sell rpo. 
+nrow(dplyr::filter(ibs_unref, any_rpo & any_incpo))
+nrow(dplyr::filter(ibs_unref, any_rpo | any_incpo))
+
+# here the criterion for being a refinery is to output at least some rpo OR some rpko. 
 
 
 
@@ -397,63 +455,6 @@ btw_cfl <- unique_match[unique_match$btw_duplicates > 1 & is.na(unique_match$wit
 setorder(btw_cfl, within_resolved_c_name, firm_id, year)
 
 
-
-
-########################################### IDENTIFY DIFFERENTLY MATCHED SUBSETS ######################################################
-
-# variable lon (or lat) comes from trase_refineries data 
-no_nas <- ibs_j[is.na(ibs_j$lon)==F,] # 76 non-missings
-nrow(no_nas[unique(no_nas$firm_id),])
-# 45 IBS "manufactories" are in a village where at least one Trase refinery stands. 
-
-pot_otm <- no_nas[!(duplicated(no_nas$firm_id) | duplicated(no_nas$firm_id, fromLast = TRUE)), ] 
-# these are the 29 potential one-to-many matches (the IBS manufactory is the sole one from IBS (we know the desa of) to be in this village and 
-# there may be several Trase refineries in this same village.). 
-# Among them, there are:
-oto <- pot_otm[!(duplicated(pot_otm$company) | duplicated(pot_otm$company, fromLast = TRUE)), ] 
-# 10 IBS manufactories we know the desa of, are the only IBS manufactories in their villages while there is only one Trase refinery in each village.  
-
-otm <- pot_otm[duplicated(pot_otm$company) | duplicated(pot_otm$company, fromLast = TRUE), ]
-# 19 IBS mills with identified desa in which they are the only IBS manufactories, but where there is more than one Trase refinery. 
-nrow(distinct(otm, lat, lon)) # 12 Trase refineries are involved.
-
-du <- no_nas[(duplicated(no_nas$firm_id) | duplicated(no_nas$firm_id, fromLast = TRUE)), ] 
-# these are the 47 IBS manufactories with identified desa that are in the same desa with at least another IBS one.
-# These villages with many IBS may encompass either one or many Trase refineries. 
-
-noto <- rbind(otm, du)
-# these are the 66 IBS manufactories (19 + 47) that have an identified desa and are either m:m, o:m or m:o with Trase refineries. 
-
-total_potential <- no_nas[!duplicated(no_nas$lon),]
-# these are the 45 manufactories of which we know the coordinates, and that are within the villages of IBS manufactories. 
-
-
-## So, the maximum number of pre-2011 IBS manufactories we can hope to geolocalize with this desa matching technique is 45
-## The minimum number is 10 (unless we double-check them with workers and some don't match). 
-
-
-## Those that have a desa polygon but match with no Trase refinery (414) ####
-# It is useless to try to find them manually with the directory number of workers and uml's list. 
-# we can still find their names with directories and google-search them, and/or directly spot them manually within their villages. 
-ibs_unref <- left_join(x = ibs_noUML_cs_wdesa, y = st_set_geometry(oto[,c("firm_id","lat")], NULL), by = "firm_id")
-ibs_unref <- filter(ibs_unref, is.na(ibs_unref$lat))
-
-ibs_unref <- left_join(x = ibs_unref, y = st_set_geometry(noto[,c("firm_id","lon")], NULL), by = "firm_id")
-ibs_unref <- filter(ibs_unref, is.na(ibs_unref$lon))
-
-ibs_unref <-dplyr::select(ibs_unref, -lon, -lat)
-# (the use of "lat" and "lon" was just an arbitrary choice of non-empty variables to flag oto and noto resp.)
-
-# filter to those likely to be refineries
-head(ibs_unref)
-summary(ibs_unref$any_rpo)
-summary(ibs_unref$any_rpko)
-summary(ibs_unref$any_incpo)
-nrow(dplyr::filter(ibs_unref, any_rpo | any_rpko)) # "or rpko" adds 8 plants in addition to the 70 that sell rpo. 
-nrow(dplyr::filter(ibs_unref, any_rpo & any_incpo))
-nrow(dplyr::filter(ibs_unref, any_rpo | any_incpo))
-
-# here the criterion for being a refinery is to output at least some rpo OR some rpko. 
 
 
 #### Automatic conflict resolution #### 
