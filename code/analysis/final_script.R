@@ -1905,12 +1905,69 @@ kable(des_table, booktabs = T, align = "c",
 #### VARIATIONS IN PRICES WITHIN DISTRICT YEAR #### 
 # Restrict to analysis sample 
 as <- ibs[ibs$analysis_sample==TRUE,]
+
 # remove district-year variations 
 rm_fevar <- fixest::feols(fml = as.formula("cpo_price_imp1 ~ 1 | district^year"),
                           data = as)
+# and take the standard deviation of remaining variation (which is also the RMSE of this reg)
+sd(rm_fevar$residuals) # That is 20% relative to average price. 
 
+# remove no variation 
+rm_fevar <- fixest::feols(fml = as.formula("cpo_price_imp1 ~ 1"),
+                          data = as)
 # and take the standard deviation of remaining variation
 sd(rm_fevar$residuals)
+# which is exactly equal to:
+sd(as$cpo_price_imp1, na.rm= T)
+
+# Repeat in FFB prices - same order of magnitude relative to average price (22%)
+rm_fevar_ffb <- fixest::feols(fml = as.formula("ffb_price_imp1 ~ 1 | district^year"),
+                          data = as)
+# and take the standard deviation of remaining variation
+sd(rm_fevar_ffb$residuals)
+
+# Removing province level variation, 
+# which is the level at which prices are supposed to be collectively determined 
+rm_province_var_ffb <- fixest::feols(fml = as.formula("ffb_price_imp1 ~ 1 | province^year"),
+                              data = as)
+# and take the standard deviation of remaining variation
+sd(rm_province_var_ffb$residuals)
+
+# Removing no variation, 
+sd(as$ffb_price_imp1, na.rm = T)
+
+
+
+### Mill-level falsification test ####
+# make lagged var at mill level 
+for(LAG in 1:4){
+as <- 
+  DataCombine::slide(as,
+                     Var = "in_ton_ffb_imp1",
+                     TimeVar = "year",
+                     GroupVar = "firm_id",
+                     NewVar = paste0("in_ton_ffb_imp1_lag",LAG), 
+                     slideBy = -LAG,
+                     keepInvalid = TRUE)
+}
+
+as <- 
+  as %>% 
+  mutate(in_ton_ffb_imp1_4pya = rowMeans(across(.cols = starts_with("in_ton_ffb_imp1")), na.rm = FALSE))
+
+as %>% dplyr::select(firm_id, year, starts_with("in_ton_ffb_imp1")) %>% View()
+
+fals_1 <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 | district^year"),
+                data = as)
+
+
+fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1_4pya | district^year"),
+              data = as)
+
+fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 | district^year"),
+              data = as %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+
 
 #### DESCRIPTIVE MAP #####
 res_data_both_a_all <- make_base_reg(island = "both",
@@ -1934,9 +1991,6 @@ d_geo <- st_transform(d_geo, crs = 4326)
 #               accu_lucfp = sum(lucpfap_pixelcount))
 # 
 # d_cs <- left_join(d_cs, d_clean_cs[,c("lonlat", "lon", "lat")], by = "lonlat")
-
-
-
 
 
 ### MILLs
@@ -1987,8 +2041,8 @@ ggplot() +
 #   addCircleMarkers(data = ibs, radius = 0.001, fillOpacity = 1, fillColor = "black", stroke = FALSE, weight = 0) 
 # # exported in width = 1150 and height = 560 and zoom once 
 
-
 rm(d_clean_cs, d_cs, d_geo, ibs)
+
 
 #### DESCRIPTIVE PARTIAL AUTOCORRELATION FUNCTION OF PRICES #### 
 # read this panel, as it still features the annual price observations from 1998 (final data only from 2001)
