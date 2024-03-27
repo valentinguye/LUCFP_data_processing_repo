@@ -1906,12 +1906,6 @@ kable(des_table, booktabs = T, align = "c",
 # Restrict to analysis sample 
 as <- ibs[ibs$analysis_sample==TRUE,]
 
-# remove district-year variations 
-rm_fevar <- fixest::feols(fml = as.formula("cpo_price_imp1 ~ 1 | district^year"),
-                          data = as)
-# and take the standard deviation of remaining variation (which is also the RMSE of this reg)
-sd(rm_fevar$residuals) # That is 20% relative to average price. 
-
 # remove no variation 
 rm_fevar <- fixest::feols(fml = as.formula("cpo_price_imp1 ~ 1"),
                           data = as)
@@ -1920,21 +1914,41 @@ sd(rm_fevar$residuals)
 # which is exactly equal to:
 sd(as$cpo_price_imp1, na.rm= T)
 
-# Repeat in FFB prices - same order of magnitude relative to average price (22%)
-rm_fevar_ffb <- fixest::feols(fml = as.formula("ffb_price_imp1 ~ 1 | district^year"),
+# remove year variation 
+rm_fevar <- fixest::feols(fml = as.formula("cpo_price_imp1 ~ 1 | year"),
                           data = as)
+# and take the standard deviation of remaining variation (which is also the RMSE of this reg)
+sd(rm_fevar$residuals) # That is 20% relative to average price. 
+
+# remove district-year variation
+rm_fevar <- fixest::feols(fml = as.formula("cpo_price_imp1 ~ 1 | district^year"),
+                          data = as)
+# and take the standard deviation of remaining variation (which is also the RMSE of this reg)
+sd(rm_fevar$residuals) # That is 20% relative to average price. 
+
+
+# Repeat in FFB prices 
+# Removing no variation, 
+sd(as$ffb_price_imp1, na.rm = T)
+
+# Removing year variation, 
+rm_fevar <- fixest::feols(fml = as.formula("ffb_price_imp1 ~ 1 | year"),
+                                     data = as)
 # and take the standard deviation of remaining variation
-sd(rm_fevar_ffb$residuals)
+sd(rm_fevar$residuals)
 
 # Removing province level variation, 
 # which is the level at which prices are supposed to be collectively determined 
-rm_province_var_ffb <- fixest::feols(fml = as.formula("ffb_price_imp1 ~ 1 | province^year"),
+rm_fevar <- fixest::feols(fml = as.formula("ffb_price_imp1 ~ 1 | province^year"),
                               data = as)
 # and take the standard deviation of remaining variation
-sd(rm_province_var_ffb$residuals)
+sd(rm_fevar$residuals)
 
-# Removing no variation, 
-sd(as$ffb_price_imp1, na.rm = T)
+# check district-year
+rm_fevar_ffb <- fixest::feols(fml = as.formula("ffb_price_imp1 ~ 1 | district^year"),
+                              data = as)
+# same order of magnitude relative to average price (22%)
+sd(rm_fevar_ffb$residuals)
 
 
 
@@ -2002,8 +2016,12 @@ ibs <- ibs[!duplicated(ibs$firm_id),]
 ibs <- ibs[!is.na(ibs$lat),]
 ibs <- st_as_sf(ibs, coords = c("lon", "lat"), remove = FALSE, crs = 4326)
 
+uml <- read.dta13(file.path("temp_data/processed_UML/UML_valentin_imputed_est_year.dta"))
+# count the number of UML mills
+uml$uml_id %>% unique() %>% length()
+uml$trase_code %>% unique() %>% length()
+
 # we do not plot uml actually, it's too much. 
-# uml <- read.dta13(file.path("temp_data/processed_UML/UML_valentin_imputed_est_year.dta"))
 # uml <- uml[!is.na(uml$lat),]
 # uml <- st_as_sf(uml, coords = c("lon", "lat"), remove = FALSE, crs = 4326)
 # # remove those matched with ibs
