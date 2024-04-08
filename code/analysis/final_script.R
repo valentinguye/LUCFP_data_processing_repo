@@ -2073,26 +2073,85 @@ prices <- RHS_50[,c("lonlat", "year", "cpo_price_imp1")]
 
 nrow(prices)/length(unique(prices$year))
 
+# # keep only series with non-missing values
+prices_nona <-
+  prices %>%
+  filter(year >= 2000 & year <= 2015) %>%
+  group_by(lonlat) %>%
+  mutate(never_missing = !anyNA(cpo_price_imp1)) %>%
+  ungroup() %>%
+  filter(never_missing) %>%
+  dplyr::select(-never_missing)
+prices_nona$lonlat %>% unique() %>% length()
+
+# keep only one
+sample_ids <- prices_nona$lonlat %>% sample(size = 1) # 700 this is roughly 1% of the grid cells. 
+prices_nona <- prices_nona[prices_nona$lonlat %in% sample_ids,]
+
+prices_ts <- 
+  prices_nona %>% 
+  dplyr::arrange(lonlat, year) %>% 
+  pull(cpo_price_imp1) %>% 
+  ts()
+
+length_panel <- length(prices_ts)
+ur.kpss(prices_ts) %>% summary() # --> data need to be differenced
+ur.kpss(diff(prices_ts, differences = 1)) %>% summary() # --> first differencing suffices
+ur.kpss(diff(prices_ts, differences = 5)) %>% summary() # --> first differencing suffices
+store <- list()
+for(ar in 1:11){
+  res <- stats::arima(prices_ts, order = c(ar,1,0), method = "ML") 
+  store[[ar]] <- BIC(res)
+}
+
+# opt_ar <- which(max(unlist(store)))
+BIC(unlist(store))
+
+arima_res <- 
+arima_res
+stargazer(arima_res, font.size = "footnotesize")
+
+
+
 # Apply descriptive statistics to a sample of plantations, because neighboring plantations can have spatially correlated price time series, 
 # that would conflate the inference performed here.
-sample_ids <- prices$lonlat %>% sample(size = 700) # 700 this is roughly 1% of the grid cells. 
+sample_ids <- prices$lonlat %>% sample(size = 700, replace = FALSE) # 700 this is roughly 1% of the grid cells. 
 prices <- prices[prices$lonlat %in% sample_ids,]
 
-fp <- prices[,c("lonlat", "year")]
+# we need it to be balanced
+nrow(prices) == length(unique(prices$lonlat)) * length(unique(prices$year))
+length(unique(prices$lonlat))
+
+length_panel <- length(unique(prices$year))
+
+prices_extd <- dplyr::arrange(prices, lonlat, year)
+# prices_ts <- matrix(prices_extd[,c("cpo_price_imp1")], 
+#                     nrow = length_panel, 
+#                     byrow = FALSE) # this fills by colum, i.e. 1 lonlat id by one. 
+# prices_ts <- ts(prices_ts, frequency = length_panel)
+
+prices_ts <- ts(prices_extd[,c("cpo_price_imp1")], frequency = length_panel)
+
+
+
+# fp <- prices[,c("lonlat", "year")]
 
 # separate each time series (of each plantation) by an "empty" (NA) time series, to isolate them from each others. 
-length_panel <- length(unique(prices$year))
-fp <- mutate(fp, year = year + length_panel)
-fp$cpo_price_imp1 <- NA
-prices_extd <- rbind(prices, fp)
-prices_extd <- dplyr::arrange(prices_extd, lonlat, year)
-prices_ts <- prices_extd[,c("cpo_price_imp1")]
-prices_ts <- ts(prices_ts, frequency = length_panel*2)#
+# length_panel <- length(unique(prices$year))
+# fp <- mutate(fp, year = year + length_panel)
+# fp$cpo_price_imp1 <- NA
+# prices_extd <- rbind(prices, fp)
+# prices_extd <- dplyr::arrange(prices_extd, lonlat, year)
+# prices_ts <- prices_extd[,c("cpo_price_imp1")]
+# prices_ts <- ts(prices_ts, deltat = 1/length_panel*2)#frequency = length_panel
 
 ur.kpss(prices_ts) %>% summary() # --> data need to be differenced
 ur.kpss(diff(prices_ts, differences = 1)) %>% summary() # --> first differencing suffices
+# ur.kpss(diff(prices_ts, differences = 2)) %>% summary() # --> first differencing suffices
 
-arima(prices_ts, order = c(length_panel - 1,1,0)) 
+arima_res <- stats::arima(prices_ts, order = c(length_panel - 1,1,0), method = "ML") 
+arima_res
+stargazer(arima_res, font.size = "footnotesize")
 
 # ur.df(prices_ts)
 # this does not handle properly the specific structure of our time series (with NA sequences separating grid cells' respective time series)
@@ -3433,6 +3492,81 @@ kable(ape_mat, booktabs = T, align = "r",
               latex_valign = "b") 
 
 rm(ape_mat)
+
+#### IN-LEVEL PRICES ROBUSTNESS ####
+# infrastructure to store results
+res_data_list_level <- list()
+elm <- 1
+
+isl_list <- list("both")#"Sumatra", "Kalimantan", 
+ISL <- "both"
+
+size_list <- list("i","sm", "a")
+
+# legality definition
+ill_def <- 2
+ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
+
+
+for(SIZE in size_list){
+  for(ILL in ill_status){ 
+    # if(SIZE == "sm" & ILL == "ill2"){# this is necessary to handle some convergence issue
+      higher_iter_glm <- 2000 
+    # } else {
+    #   higher_iter_glm <- 200
+    # } 
+    res_data_list_level[[elm]] <- make_base_reg(island = ISL,
+                                                log_prices = FALSE,
+                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                               illegal = ILL,
+                                               n_iter_glm = higher_iter_glm,
+                                               offset = FALSE)
+    names(res_data_list_level)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    elm <- elm + 1
+  }
+}
+
+
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat <- lapply(res_data_list_level, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "r",
+      caption = "Price semi-elasticities of deforestation across the Indonesian oil palm sector") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 3, 
+                     "All" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  column_spec(column = 1,
+              width = "7em",
+              latex_valign = "b") %>% 
+  column_spec(column = c(2:(ncol(ape_mat))),
+              width = "7em",
+              latex_valign = "b") 
+
+rm(ape_mat)
+
 
 ##### SPECIFICATION CHARTS #####
 

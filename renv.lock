@@ -310,32 +310,6 @@
       ],
       "Hash": "84dffc44f23c419537c1c79cc46347a5"
     },
-    "TSA": {
-      "Package": "TSA",
-      "Version": "1.3.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "R",
-        "leaps",
-        "locfit",
-        "mgcv",
-        "tseries"
-      ],
-      "Hash": "8136a0b19b9bbe4f4961a7e8ba514619"
-    },
-    "TTR": {
-      "Package": "TTR",
-      "Version": "0.24.4",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "curl",
-        "xts",
-        "zoo"
-      ],
-      "Hash": "1acd2b3db6e118dd161ee6cabedc4d4e"
-    },
     "abind": {
       "Package": "abind",
       "Version": "1.4-5",
@@ -1426,13 +1400,6 @@
       ],
       "Hash": "3f3f5e5603fc791dfb77279ad84cc711"
     },
-    "leaps": {
-      "Package": "leaps",
-      "Version": "3.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "e7023edcf59fd695d92eb01a7f37f991"
-    },
     "lifecycle": {
       "Package": "lifecycle",
       "Version": "0.2.0",
@@ -1483,17 +1450,6 @@
         "zoo"
       ],
       "Hash": "c108129ded5ffdb129064ec1d7ba77d0"
-    },
-    "locfit": {
-      "Package": "locfit",
-      "Version": "1.5-9.9",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "R",
-        "lattice"
-      ],
-      "Hash": "3885127e04b35dafded049075057ad83"
     },
     "lubridate": {
       "Package": "lubridate",
@@ -1933,26 +1889,6 @@
       ],
       "Hash": "ec0e5ab4e5f851f6ef32cd1d1984957f"
     },
-    "pmisc": {
-      "Package": "pmisc",
-      "Version": "0.0.1",
-      "Source": "GitHub",
-      "RemoteType": "github",
-      "RemoteHost": "api.github.com",
-      "RemoteUsername": "pwkraft",
-      "RemoteRepo": "pmisc",
-      "RemoteRef": "master",
-      "RemoteSha": "62baee44f07ad68cb2b4fd21f3c1d14cb551ceea",
-      "Requirements": [
-        "MASS",
-        "R",
-        "TSA",
-        "lmtest",
-        "sandwich",
-        "xtable"
-      ],
-      "Hash": "1cabc10d38c8f37ebbaeaea4519e9515"
-    },
     "praise": {
       "Package": "praise",
       "Version": "1.0.0",
@@ -2019,32 +1955,6 @@
         "rlang"
       ],
       "Hash": "97def703420c8ab10d8f0e6c72101e02"
-    },
-    "quadprog": {
-      "Package": "quadprog",
-      "Version": "1.5-8",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "R"
-      ],
-      "Hash": "5f919ae5e7f83a6f91dcf2288943370d"
-    },
-    "quantmod": {
-      "Package": "quantmod",
-      "Version": "0.4.26",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "R",
-        "TTR",
-        "curl",
-        "jsonlite",
-        "methods",
-        "xts",
-        "zoo"
-      ],
-      "Hash": "59321b609790f8ccf92145810e4dd507"
     },
     "quantreg": {
       "Package": "quantreg",
@@ -2474,6 +2384,17 @@
       ],
       "Hash": "e220c93e8a62be165fb5b56983ca2339"
     },
+    "stargazer": {
+      "Package": "stargazer",
+      "Version": "5.2.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "stats",
+        "utils"
+      ],
+      "Hash": "d313fa83180f3376229f98633813cd31"
+    },
     "statmod": {
       "Package": "statmod",
       "Version": "1.4.35",
@@ -2670,23 +2591,6 @@
       ],
       "Hash": "db6477efcfbffcd9b3758c3c2882cf58"
     },
-    "tseries": {
-      "Package": "tseries",
-      "Version": "0.10-55",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "R",
-        "graphics",
-        "jsonlite",
-        "quadprog",
-        "quantmod",
-        "stats",
-        "utils",
-        "zoo"
-      ],
-      "Hash": "8a3928cb53aca9921f0db707550dfa84"
-    },
     "tzdb": {
       "Package": "tzdb",
       "Version": "0.3.0",
@@ -2866,30 +2770,6 @@
         "methods"
       ],
       "Hash": "40682ed6a969ea5abfd351eb67833adc"
-    },
-    "xtable": {
-      "Package": "xtable",
-      "Version": "1.8-4",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "R",
-        "stats",
-        "utils"
-      ],
-      "Hash": "b8acdf8af494d9ec19ccb2481a9b11c2"
-    },
-    "xts": {
-      "Package": "xts",
-      "Version": "0.13.2",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "R",
-        "methods",
-        "zoo"
-      ],
-      "Hash": "7a7e2b2f6ef5fa41fb766d2a885af39e"
     },
     "yaml": {
       "Package": "yaml",
