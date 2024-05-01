@@ -388,18 +388,56 @@ make_base_reg <- function(island,
     d <- dplyr::arrange(d, lonlat, year)
   }
   # for 4 year lag
-  if(any(grepl(pattern = paste0(outcome_variable,"_lag4"), x = controls))){
-    d <- dplyr::arrange(d, lonlat, year)
-    d <- DataCombine::slide(d,
-                            Var = outcome_variable,
-                            TimeVar = "year",
-                            GroupVar = "lonlat",
-                            NewVar = paste0(outcome_variable,"_lag4"), # the name passed in controls should correspond. 
-                            slideBy = -4,
-                            keepInvalid = TRUE)
-    d <- dplyr::arrange(d, lonlat, year)
+  # if(any(grepl(pattern = paste0(outcome_variable,"_lag4"), x = controls))){
+  #   d <- dplyr::arrange(d, lonlat, year)
+  #   d <- DataCombine::slide(d,
+  #                           Var = outcome_variable,
+  #                           TimeVar = "year",
+  #                           GroupVar = "lonlat",
+  #                           NewVar = paste0(outcome_variable,"_lag4"), # the name passed in controls should correspond.
+  #                           slideBy = -4,
+  #                           keepInvalid = TRUE)
+  #   d <- dplyr::arrange(d, lonlat, year)
+  # }
+  if(any(grepl(pattern = paste0("lucpfap_pixelcount_lag4"), x = controls))){ 
+    for(LAG in 1:4){
+    d <- 
+      DataCombine::slide(d,
+                         Var = "lucpfap_pixelcount_lag4",
+                         TimeVar = "year",
+                         GroupVar = "lonlat",
+                         NewVar = paste0("lucpfap_pixelcount_lag4", "_lag", LAG), 
+                         slideBy = -LAG,
+                         keepInvalid = TRUE)
+  }
+  d <- 
+  d %>% 
+  mutate(lucpfap_pixelcount_lag4_4pya = rowMeans(across(.cols = c("lucpfap_pixelcount_lag4_lag1", # t-5
+                                                                  "lucpfap_pixelcount_lag4_lag2", # t-6
+                                                                  "lucpfap_pixelcount_lag4_lag3", # ...
+                                                                  "lucpfap_pixelcount_lag4_lag4")), na.rm = FALSE))
   }
   
+  if(any(grepl(pattern = paste0("ngb_ov_lag4"), x = controls))){
+    for(LAG in 1:4){
+    d <- 
+      DataCombine::slide(d,
+                         Var = "ngb_ov_lag4",
+                         TimeVar = "year",
+                         GroupVar = "lonlat",
+                         NewVar = paste0("ngb_ov_lag4", "_lag", LAG), 
+                         slideBy = -LAG,
+                         keepInvalid = TRUE)
+  }
+  d <- 
+  d %>% 
+  mutate(
+  ngb_ov_lag4_4pya = rowMeans(across(.cols = c("ngb_ov_lag4_lag1",
+                                               "ngb_ov_lag4_lag2",
+                                               "ngb_ov_lag4_lag3",
+                                               "ngb_ov_lag4_lag4")), na.rm = FALSE))
+
+  }
   
   # lag controls that are from IBS 
   select_ibs_controls <- grepl("wa", controls) & !grepl("prex", controls) # !grepl("wa_avg_", controls) & !grepl("wa_lag1_", controls) # | grepl("prex_", controls)
@@ -1715,7 +1753,7 @@ rm(res_data_list_des)
 #            escape = TRUE) 
 
 
-### Descriptive IBS ####
+### DESCRIPTIVE IBS ####
 
 # all IBS oil palm related establishments. 
 ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
@@ -1950,38 +1988,7 @@ rm_fevar_ffb <- fixest::feols(fml = as.formula("ffb_price_imp1 ~ 1 | district^ye
 # same order of magnitude relative to average price (22%)
 sd(rm_fevar_ffb$residuals)
 
-
-
-### Mill-level falsification test ####
-# make lagged var at mill level 
-for(LAG in 1:4){
-as <- 
-  DataCombine::slide(as,
-                     Var = "in_ton_ffb_imp1",
-                     TimeVar = "year",
-                     GroupVar = "firm_id",
-                     NewVar = paste0("in_ton_ffb_imp1_lag",LAG), 
-                     slideBy = -LAG,
-                     keepInvalid = TRUE)
-}
-
-as <- 
-  as %>% 
-  mutate(in_ton_ffb_imp1_4pya = rowMeans(across(.cols = starts_with("in_ton_ffb_imp1")), na.rm = FALSE))
-
-as %>% dplyr::select(firm_id, year, starts_with("in_ton_ffb_imp1")) %>% View()
-
-fals_1 <-
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 | district^year"),
-                data = as)
-
-
-fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1_4pya | district^year"),
-              data = as)
-
-fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 | district^year"),
-              data = as %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
-
+rm(as)
 
 #### DESCRIPTIVE MAP #####
 res_data_both_a_all <- make_base_reg(island = "both",
@@ -2007,7 +2014,7 @@ d_geo <- st_transform(d_geo, crs = 4326)
 # d_cs <- left_join(d_cs, d_clean_cs[,c("lonlat", "lon", "lat")], by = "lonlat")
 
 
-### MILLs
+### MILLS
 ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
 # keep only those that are used in analysis. 
 ibs <- ibs[ibs$analysis_sample ==1,]
@@ -2062,102 +2069,102 @@ ggplot() +
 rm(d_clean_cs, d_cs, d_geo, ibs)
 
 
-#### DESCRIPTIVE PARTIAL AUTOCORRELATION FUNCTION OF PRICES #### 
-# read this panel, as it still features the annual price observations from 1998 (final data only from 2001)
-# 50km CR because it is the most general
-RHS_50 <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
-                                    parcel_size/1000,"km_",
-                                    "50CR.rds")))
-
-prices <- RHS_50[,c("lonlat", "year", "cpo_price_imp1")]
-
-nrow(prices)/length(unique(prices$year))
-
-# # keep only series with non-missing values
-prices_nona <-
-  prices %>%
-  filter(year >= 2000 & year <= 2015) %>%
-  group_by(lonlat) %>%
-  mutate(never_missing = !anyNA(cpo_price_imp1)) %>%
-  ungroup() %>%
-  filter(never_missing) %>%
-  dplyr::select(-never_missing)
-prices_nona$lonlat %>% unique() %>% length()
-
-# keep only one
-sample_ids <- prices_nona$lonlat %>% sample(size = 1) # 700 this is roughly 1% of the grid cells. 
-prices_nona <- prices_nona[prices_nona$lonlat %in% sample_ids,]
-
-prices_ts <- 
-  prices_nona %>% 
-  dplyr::arrange(lonlat, year) %>% 
-  pull(cpo_price_imp1) %>% 
-  ts()
-
-length_panel <- length(prices_ts)
-ur.kpss(prices_ts) %>% summary() # --> data need to be differenced
-ur.kpss(diff(prices_ts, differences = 1)) %>% summary() # --> first differencing suffices
-ur.kpss(diff(prices_ts, differences = 5)) %>% summary() # --> first differencing suffices
-store <- list()
-for(ar in 1:11){
-  res <- stats::arima(prices_ts, order = c(ar,1,0), method = "ML") 
-  store[[ar]] <- BIC(res)
-}
-
-# opt_ar <- which(max(unlist(store)))
-BIC(unlist(store))
-
-arima_res <- 
-arima_res
-stargazer(arima_res, font.size = "footnotesize")
-
-
-
-# Apply descriptive statistics to a sample of plantations, because neighboring plantations can have spatially correlated price time series, 
-# that would conflate the inference performed here.
-sample_ids <- prices$lonlat %>% sample(size = 700, replace = FALSE) # 700 this is roughly 1% of the grid cells. 
-prices <- prices[prices$lonlat %in% sample_ids,]
-
-# we need it to be balanced
-nrow(prices) == length(unique(prices$lonlat)) * length(unique(prices$year))
-length(unique(prices$lonlat))
-
-length_panel <- length(unique(prices$year))
-
-prices_extd <- dplyr::arrange(prices, lonlat, year)
-# prices_ts <- matrix(prices_extd[,c("cpo_price_imp1")], 
-#                     nrow = length_panel, 
-#                     byrow = FALSE) # this fills by colum, i.e. 1 lonlat id by one. 
-# prices_ts <- ts(prices_ts, frequency = length_panel)
-
-prices_ts <- ts(prices_extd[,c("cpo_price_imp1")], frequency = length_panel)
-
-
-
-# fp <- prices[,c("lonlat", "year")]
-
-# separate each time series (of each plantation) by an "empty" (NA) time series, to isolate them from each others. 
+#### DESCRIPTIVE PARTIAL AUTOCORRELATION FUNCTION OF PRICES 
+# # read this panel, as it still features the annual price observations from 1998 (final data only from 2001)
+# # 50km CR because it is the most general
+# RHS_50 <-  readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_w_dyn_",
+#                                     parcel_size/1000,"km_",
+#                                     "50CR.rds")))
+# 
+# prices <- RHS_50[,c("lonlat", "year", "cpo_price_imp1")]
+# 
+# nrow(prices)/length(unique(prices$year))
+# 
+# # # keep only series with non-missing values
+# prices_nona <-
+#   prices %>%
+#   filter(year >= 2000 & year <= 2015) %>%
+#   group_by(lonlat) %>%
+#   mutate(never_missing = !anyNA(cpo_price_imp1)) %>%
+#   ungroup() %>%
+#   filter(never_missing) %>%
+#   dplyr::select(-never_missing)
+# prices_nona$lonlat %>% unique() %>% length()
+# 
+# # keep only one
+# sample_ids <- prices_nona$lonlat %>% sample(size = 1) # 700 this is roughly 1% of the grid cells. 
+# prices_nona <- prices_nona[prices_nona$lonlat %in% sample_ids,]
+# 
+# prices_ts <- 
+#   prices_nona %>% 
+#   dplyr::arrange(lonlat, year) %>% 
+#   pull(cpo_price_imp1) %>% 
+#   ts()
+# 
+# length_panel <- length(prices_ts)
+# ur.kpss(prices_ts) %>% summary() # --> data need to be differenced
+# ur.kpss(diff(prices_ts, differences = 1)) %>% summary() # --> first differencing suffices
+# ur.kpss(diff(prices_ts, differences = 5)) %>% summary() # --> first differencing suffices
+# store <- list()
+# for(ar in 1:11){
+#   res <- stats::arima(prices_ts, order = c(ar,1,0), method = "ML") 
+#   store[[ar]] <- BIC(res)
+# }
+# 
+# # opt_ar <- which(max(unlist(store)))
+# BIC(unlist(store))
+# 
+# arima_res <- 
+# arima_res
+# stargazer(arima_res, font.size = "footnotesize")
+# 
+# 
+# 
+# # Apply descriptive statistics to a sample of plantations, because neighboring plantations can have spatially correlated price time series, 
+# # that would conflate the inference performed here.
+# sample_ids <- prices$lonlat %>% sample(size = 700, replace = FALSE) # 700 this is roughly 1% of the grid cells. 
+# prices <- prices[prices$lonlat %in% sample_ids,]
+# 
+# # we need it to be balanced
+# nrow(prices) == length(unique(prices$lonlat)) * length(unique(prices$year))
+# length(unique(prices$lonlat))
+# 
 # length_panel <- length(unique(prices$year))
-# fp <- mutate(fp, year = year + length_panel)
-# fp$cpo_price_imp1 <- NA
-# prices_extd <- rbind(prices, fp)
-# prices_extd <- dplyr::arrange(prices_extd, lonlat, year)
-# prices_ts <- prices_extd[,c("cpo_price_imp1")]
-# prices_ts <- ts(prices_ts, deltat = 1/length_panel*2)#frequency = length_panel
-
-ur.kpss(prices_ts) %>% summary() # --> data need to be differenced
-ur.kpss(diff(prices_ts, differences = 1)) %>% summary() # --> first differencing suffices
-# ur.kpss(diff(prices_ts, differences = 2)) %>% summary() # --> first differencing suffices
-
-arima_res <- stats::arima(prices_ts, order = c(length_panel - 1,1,0), method = "ML") 
-arima_res
-stargazer(arima_res, font.size = "footnotesize")
-
-# ur.df(prices_ts)
-# this does not handle properly the specific structure of our time series (with NA sequences separating grid cells' respective time series)
-# pacf_14 <- pacf(diff(prices_ts, differences = 1), na.action = na.exclude, lag.max = length_panel - 1)
-
-rm(RHS_50)
+# 
+# prices_extd <- dplyr::arrange(prices, lonlat, year)
+# # prices_ts <- matrix(prices_extd[,c("cpo_price_imp1")], 
+# #                     nrow = length_panel, 
+# #                     byrow = FALSE) # this fills by colum, i.e. 1 lonlat id by one. 
+# # prices_ts <- ts(prices_ts, frequency = length_panel)
+# 
+# prices_ts <- ts(prices_extd[,c("cpo_price_imp1")], frequency = length_panel)
+# 
+# 
+# 
+# # fp <- prices[,c("lonlat", "year")]
+# 
+# # separate each time series (of each plantation) by an "empty" (NA) time series, to isolate them from each others. 
+# # length_panel <- length(unique(prices$year))
+# # fp <- mutate(fp, year = year + length_panel)
+# # fp$cpo_price_imp1 <- NA
+# # prices_extd <- rbind(prices, fp)
+# # prices_extd <- dplyr::arrange(prices_extd, lonlat, year)
+# # prices_ts <- prices_extd[,c("cpo_price_imp1")]
+# # prices_ts <- ts(prices_ts, deltat = 1/length_panel*2)#frequency = length_panel
+# 
+# ur.kpss(prices_ts) %>% summary() # --> data need to be differenced
+# ur.kpss(diff(prices_ts, differences = 1)) %>% summary() # --> first differencing suffices
+# # ur.kpss(diff(prices_ts, differences = 2)) %>% summary() # --> first differencing suffices
+# 
+# arima_res <- stats::arima(prices_ts, order = c(length_panel - 1,1,0), method = "ML") 
+# arima_res
+# stargazer(arima_res, font.size = "footnotesize")
+# 
+# # ur.df(prices_ts)
+# # this does not handle properly the specific structure of our time series (with NA sequences separating grid cells' respective time series)
+# # pacf_14 <- pacf(diff(prices_ts, differences = 1), na.action = na.exclude, lag.max = length_panel - 1)
+# 
+# rm(RHS_50)
 
 
 #### MAIN : REGRESSIONS DES STATS AND EQUALITY TESTS OVER INDUS, SM, LEGAL AND ILLEGAL,  ####
@@ -2608,12 +2615,12 @@ kable(stacked_ape_mat, booktabs = T, align = "r",
 # elm <- 1
 # for(SIZE in size_list){
 #   for(ILL in ill_status){
-#     res_data_list_bd[[elm]] <- make_base_reg(island = ISL,
-#                                              start_year = 2009,
-#                                              end_year = 2014,
-#                                              outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-#                                              illegal = ILL,
-#                                              offset = FALSE)
+    # res_data_list_bd[[elm]] <- make_base_reg(island = ISL,
+    #                                          start_year = 2009,
+    #                                          end_year = 2014,
+    #                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+    #                                          illegal = ILL,
+    #                                          offset = FALSE)
 #     names(res_data_list_bd)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
 #     elm <- elm + 1
 #   }
@@ -3568,6 +3575,343 @@ kable(ape_mat, booktabs = T, align = "r",
 rm(ape_mat)
 
 
+#### LAGGED OUTCOME ROBUSTNESS CHECKS ####
+
+res_data_list_lagov <- list()
+SIZE <- "a"
+ISL <- "both"
+i <- 1
+
+# Control for 5-year lagged deforestation 
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml",
+                                                       "lucpfap_pixelcount_lag4_lag1"))
+
+
+# Control for 5-year lagged deforestation in the neighbor grid cells
+i <- i + 1
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml",
+                                                       "ngb_ov_lag4_lag1"))
+
+min_year_with_lags <- res_data_list_lagov[[i]][[2]] %>% pull(year) %>% min()
+min_year_with_lags
+
+# The main specification, on the same time period as with lags
+i <- i + 1
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          start_year = min_year_with_lags,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml"))
+
+
+# control for t-5 to t-8 average deforestation 
+i <- i + 1
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml",
+                                                       "lucpfap_pixelcount_lag4_4pya"))
+
+# control for t-5 to t-8 average deforestation in the neighbor grid cells
+i <- i + 1
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml",
+                                                       "ngb_ov_lag4_4pya"))
+
+min_year_with_lags <- res_data_list_lagov[[i]][[2]] %>% pull(year) %>% min()
+min_year_with_lags
+
+## The main specification, on the same time period as with lags
+i <- i + 1
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          start_year = min_year_with_lags,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml"))
+i
+
+rm(i)
+
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat <- lapply(res_data_list_lagov, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "c",
+      caption = "Price elasticities of deforestation conditional on past deforestation") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Sample period: 2006-2014" = 3,
+                     "Sample period: 2009-2014" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "In plantation site i" = 1,
+                     "In i and i's 8 neighbors" = 1,
+                     " " = 1,
+                     "In plantation site i" = 1,
+                     "In i and i's 8 neighbors" = 1,
+                     " " = 1),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "The year preceding price signals" = 2,
+                     "No past deforestation control" = 1,
+                     "The four years preceding price signals" = 2,
+                     "No past deforestation control" = 1),
+                   align = "c",
+                   strikeout = F) %>%
+  # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  column_spec(column = 1,
+              width = "7em",
+              latex_valign = "b") %>% 
+  column_spec(column = c(2:(ncol(ape_mat))),
+              width = "7em",
+              latex_valign = "b") 
+
+rm(ape_mat)
+
+
+# Below are regressions of lagged deforestation on CPO price. 
+# They do not produce a table for the paper but led to the robustness check above.
+d <- rbind(d_30_suma, d_50_kali)
+
+# make several lags of outcome var
+for(ov in c("lucpfap_pixelcount_lag4", "ngb_ov_lag4")){
+  for(LAG in 1:3){
+    d <- 
+      DataCombine::slide(d,
+                         Var = ov,
+                         TimeVar = "year",
+                         GroupVar = "lonlat",
+                         NewVar = paste0(ov, "_lag", LAG), 
+                         slideBy = -LAG,
+                         keepInvalid = TRUE)
+  }}
+for(LEAD in 1:3){
+  d <- 
+    DataCombine::slide(d,
+                       Var = "lucpfap_pixelcount",
+                       TimeVar = "year",
+                       GroupVar = "lonlat",
+                       NewVar = paste0("lucpfap_pixelcount_lead", LEAD), 
+                       slideBy = LEAD,
+                       keepInvalid = TRUE)
+}
+d <- 
+  DataCombine::slide(d,
+                     Var = "wa_cpo_price_imp1",
+                     TimeVar = "year",
+                     GroupVar = "lonlat",
+                     NewVar = paste0("wa_cpo_price_imp1_lead8"), 
+                     slideBy = 8,
+                     keepInvalid = TRUE)
+names(d)
+d %>% filter(!is.na(lucpfap_pixelcount_lag4_lag3)) %>% pull(year) %>% summary()
+d %>% filter(!is.na(wa_cpo_price_imp1_lead8)) %>% pull(year) %>% summary()
+
+d <- 
+  d %>% 
+  mutate(lucpfap_pixelcount_lag4_4pya = rowMeans(across(.cols = c("lucpfap_pixelcount_lag4", 
+                                                                  "lucpfap_pixelcount_lag4_lag1",
+                                                                  "lucpfap_pixelcount_lag4_lag2",
+                                                                  "lucpfap_pixelcount_lag4_lag3")), na.rm = FALSE),
+         lucpfap_pixelcount_4fya = rowMeans(across(.cols = c("lucpfap_pixelcount", 
+                                                             "lucpfap_pixelcount_lead1",
+                                                             "lucpfap_pixelcount_lead2",
+                                                             "lucpfap_pixelcount_lead3")), na.rm = FALSE),
+         ngb_ov_lag4_4pya = rowMeans(across(.cols = c("ngb_ov_lag4", 
+                                                      "ngb_ov_lag4_lag1",
+                                                      "ngb_ov_lag4_lag2",
+                                                      "ngb_ov_lag4_lag3")), na.rm = FALSE))
+
+d %>% filter(!is.na(lucpfap_pixelcount_lag4_lag3)) %>% pull(year) %>% min()
+
+# d$wa_cpo_price_imp1 <- d$lucpfap_pixelcount
+
+# first end of period
+fals_1 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1_lead8 ~ lucpfap_pixelcount + lucpfap_pixelcount_lead1 + lucpfap_pixelcount_lead2 + lucpfap_pixelcount_lead3 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(lucpfap_pixelcount_lag4_4pya)))
+fals_2 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1_lead8 ~ lucpfap_pixelcount_lead1 + lucpfap_pixelcount_lead2 + lucpfap_pixelcount_lead3 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(lucpfap_pixelcount_lag4_4pya)))
+fals_3 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1_lead8 ~ lucpfap_pixelcount_lead2 + lucpfap_pixelcount_lead3 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(lucpfap_pixelcount_lag4_4pya)))
+fals_4 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1_lead8 ~ lucpfap_pixelcount_lead3 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(lucpfap_pixelcount_lag4_4pya)))
+fals_5 <- 
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1_lead8 ~ lucpfap_pixelcount_4fya | reachable + district^year"),
+                data = d) # %>% filter(!is.na(lucpfap_pixelcount_lag4_4pya)))
+
+
+etable(
+  fals_1,
+  fals_2,
+  fals_3,
+  fals_4,
+  fals_5,
+  tex = F
+)
+
+# Second end of period
+fals_1 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1 ~ lucpfap_pixelcount_lag4 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(lucpfap_pixelcount_lag4_4pya)))
+
+fals_2 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1 ~ lucpfap_pixelcount_lag4 + lucpfap_pixelcount_lag4_lag1 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(lucpfap_pixelcount_lag4_4pya)))
+
+fals_3 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1 ~ lucpfap_pixelcount_lag4 + lucpfap_pixelcount_lag4_lag1 + lucpfap_pixelcount_lag4_lag2 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(lucpfap_pixelcount_lag4_4pya)))
+
+fals_4 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1 ~ lucpfap_pixelcount_lag4 + lucpfap_pixelcount_lag4_lag1 + lucpfap_pixelcount_lag4_lag2 + lucpfap_pixelcount_lag4_lag3 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(lucpfap_pixelcount_lag4_4pya)))
+
+fals_5 <- 
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1 ~ lucpfap_pixelcount_lag4_4pya | reachable + district^year"),
+                data = d) # %>% filter(!is.na(lucpfap_pixelcount_lag4_4pya)))
+
+
+etable(
+  fals_1,
+  fals_2,
+  fals_3,
+  fals_4,
+  fals_5,
+  tex = F
+)
+
+# with neighbors
+
+fals_1 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1 ~ ngb_ov_lag4 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(ngb_ov_lag4_4pya)))
+
+fals_2 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1 ~ ngb_ov_lag4 + ngb_ov_lag4_lag1 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(ngb_ov_lag4_4pya)))
+
+fals_3 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1 ~ ngb_ov_lag4 + ngb_ov_lag4_lag1 + ngb_ov_lag4_lag2 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(ngb_ov_lag4_4pya)))
+
+fals_4 <-
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1 ~ ngb_ov_lag4 + ngb_ov_lag4_lag1 + ngb_ov_lag4_lag2 + ngb_ov_lag4_lag3 | reachable + district^year"),
+                data = d) # %>% filter(!is.na(ngb_ov_lag4_4pya)))
+
+fals_5 <- 
+  fixest::feols(fml = as.formula("wa_cpo_price_imp1 ~ ngb_ov_lag4_4pya | reachable + district^year"),
+                data = d) # %>% filter(!is.na(ngb_ov_lag4_4pya)))
+
+
+etable(
+  fals_1,
+  fals_2,
+  fals_3,
+  fals_4,
+  fals_5,
+  tex = F
+)
+
+rm(d)
+
+### FALSIFICATION TEST (MILL-LEVEL) ####
+
+ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
+
+# Restrict to analysis sample 
+as <- ibs[ibs$analysis_sample==TRUE,] 
+
+# make lagged var at mill level 
+for(LAG in 1:3){
+  as <- 
+    DataCombine::slide(as,
+                       Var = "in_ton_ffb_imp1",
+                       TimeVar = "year",
+                       GroupVar = "firm_id",
+                       NewVar = paste0("in_ton_ffb_imp1_lag",LAG), 
+                       slideBy = -LAG,
+                       keepInvalid = TRUE)
+}
+
+as <- 
+  as %>% 
+  mutate(in_ton_ffb_imp1_4pya = rowMeans(across(.cols = starts_with("in_ton_ffb_imp1")), na.rm = FALSE))
+
+as %>% dplyr::select(firm_id, year, starts_with("in_ton_ffb_imp1")) %>% View()
+
+fals_1 <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 | district^year"),
+                data = as) # %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+fals_1_wth <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 | district^year + firm_id"),
+                data = as) # %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+
+fals_2 <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 + in_ton_ffb_imp1_lag1 | district^year"),
+                data = as) # %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+fals_2_wth <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 + in_ton_ffb_imp1_lag1 | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+
+fals_3 <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 + in_ton_ffb_imp1_lag1 + in_ton_ffb_imp1_lag2 | district^year"),
+                data = as) # %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+fals_3_wth <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 + in_ton_ffb_imp1_lag1 + in_ton_ffb_imp1_lag2 | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+
+fals_4 <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 + in_ton_ffb_imp1_lag1 + in_ton_ffb_imp1_lag2 + in_ton_ffb_imp1_lag3 | district^year"),
+                data = as) # %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+fals_4_wth <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1 + in_ton_ffb_imp1_lag1 + in_ton_ffb_imp1_lag2 + in_ton_ffb_imp1_lag3 | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+
+fals_5 <- 
+fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1_4pya | district^year"),
+              data = as) # %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+fals_5_wth <- 
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_ton_ffb_imp1_4pya | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_ton_ffb_imp1_4pya)))
+
+
+etable(
+fals_1,
+fals_1_wth,
+fals_2,
+fals_2_wth,
+fals_3,
+fals_3_wth,
+fals_4,
+fals_4_wth,
+fals_5,
+fals_5_wth,
+tex = T, 
+dict = c(cpo_price_imp1 = "CPO price",
+         in_ton_ffb_imp1 = "FFB input",
+         in_ton_ffb_imp1_lag1 = "FFB input t-1",
+         in_ton_ffb_imp1_lag2 = "FFB input t-2",
+         in_ton_ffb_imp1_lag3 = "FFB input t-3",
+         in_ton_ffb_imp1_4pya = "FFB input 4 past year average", 
+         firm_id = "mill")
+)
+
+
+
+
 ##### SPECIFICATION CHARTS #####
 
 
@@ -3890,8 +4234,8 @@ make_spec_chart_df <- function(island,
     "n_reachable_uml_control" = FALSE, 
     "control_own" = FALSE,
     "ov_lag1" = FALSE,
-    "ov_lag4" = FALSE,
-    "ngb_ov_lag4" = FALSE,
+    # "ov_lag4" = FALSE,
+    # "ngb_ov_lag4" = FALSE,
     "prex_cpo_control" = FALSE,
     "baseline_forest_trend" = FALSE,
     #"remaining_forest" = FALSE,
@@ -3972,10 +4316,10 @@ make_spec_chart_df <- function(island,
   if(any(grepl("n_reachable_uml", controls))){ind_var[,"n_reachable_uml_control"] <- TRUE}
   # 1-year lagged outcome variable
   if(any(grepl(paste0(outcome_variable, "_lag1"), controls))){ind_var[,"ov_lag1"] <- TRUE}
-  # 4-year lagged outcome variable
-  if(any(grepl(paste0(outcome_variable, "_lag4"), controls))){ind_var[,"ov_lag4"] <- TRUE}
-  # spatial lag deforestation
-  if(any(grepl("ngb_ov_lag4", controls))){ind_var[,"ngb_ov_lag4"] <- TRUE}
+  # # 4-year lagged outcome variable
+  # if(any(grepl(paste0(outcome_variable, "_lag4"), controls))){ind_var[,"ov_lag4"] <- TRUE}
+  # # spatial lag deforestation
+  # if(any(grepl("ngb_ov_lag4", controls))){ind_var[,"ngb_ov_lag4"] <- TRUE}
   # prex_cpo
   if(any(grepl("prex_cpo", controls))){ind_var[,"prex_cpo_control"] <- TRUE}
   # baseline forest trend
@@ -3995,12 +4339,15 @@ make_spec_chart_df <- function(island,
   #if(distribution == "negbin"){ind_var[,"weights"] <- FALSE} # turn it back to FALSE if negbin distribution
   
   # clustering
-  if(length(cluster) == 1 & cluster == "lonlat"){ind_var[,"unit_cluster"] <- TRUE}
-  if(length(cluster) == 1 & cluster == "reachable"){ind_var[,"reachable_cluster"] <- TRUE}
-  if(length(cluster) == 1 & cluster == "village"){ind_var[,"village_cluster"] <- TRUE}
-  if(length(cluster) == 1 & cluster == "district"){ind_var[,"district_cluster"] <- TRUE}
-  if(length(cluster) == 1 & cluster == "subdistrict"){ind_var[,"subdistrict_cluster"] <- TRUE}
-  if(length(cluster) == 2){ind_var[,"twoway_cluster"] <- TRUE}
+  if(length(cluster) == 1){
+    if(cluster == "lonlat"){ind_var[,"unit_cluster"] <- TRUE}
+    if(cluster == "reachable"){ind_var[,"reachable_cluster"] <- TRUE}
+    if(cluster == "village"){ind_var[,"village_cluster"] <- TRUE}
+    if(cluster == "district"){ind_var[,"district_cluster"] <- TRUE}
+    if(cluster == "subdistrict"){ind_var[,"subdistrict_cluster"] <- TRUE}
+  }else if(length(cluster) == 2){
+    ind_var[,"twoway_cluster"] <- TRUE
+  }
   
   ### Bind together coeff, SE, and specification labels
   spec_df <- cbind(ape_mat[1,],ape_mat[2,], ind_var)
@@ -4238,20 +4585,20 @@ for(ctrl in control_sets_list){
   c <- c + 1
 }
 
-## Add the control set with the 4-year lagged deforestation 
-reg_stats_indvar_list[[paste0("ctrl_",c)]] <- make_spec_chart_df(island = ISL,
-                                                                 outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                                 controls = c("n_reachable_uml",
-                                                                              ov_lag4))
-c <- c + 1
-
-## Add the control set with the 4-lagged deforestation in the neighbor grid cells
-reg_stats_indvar_list[[paste0("ctrl_",c)]] <- make_spec_chart_df(island = ISL,
-                                                                 outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                                 controls = c("n_reachable_uml",
-                                                                              "ngb_ov_lag4"))
-c <- c + 1
-
+# We don't feature these two specifications (lagged deforestation) anymore, as they are handled in a dedicated table. 
+# ## Add the control set with the 4-year lagged deforestation 
+# reg_stats_indvar_list[[paste0("ctrl_",c)]] <- make_spec_chart_df(island = ISL,
+#                                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+#                                                                  controls = c("n_reachable_uml",
+#                                                                               ov_lag4))
+# c <- c + 1
+# 
+# ## Add the control set with the 4-lagged deforestation in the neighbor grid cells
+# reg_stats_indvar_list[[paste0("ctrl_",c)]] <- make_spec_chart_df(island = ISL,
+#                                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+#                                                                  controls = c("n_reachable_uml",
+#                                                                               "ngb_ov_lag4"))
+# c <- c + 1
 
 
 # # two basic + wa_prex_cpo_imp1 and remain_pf_pixelcount
@@ -4337,7 +4684,7 @@ reg_stats_indvar <- bind_rows(reg_stats_indvar_list)
 
 # save it 
 if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_indvar)+1 == i
-  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_10052022")))
+  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_30042024")))
 } else{print(paste0("SOMETHING WENT WRONG in spec_chart_df_",ISL,"_",SIZE))}
 
 #}else{reg_stats_indvar <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",ISL)))}
@@ -4356,7 +4703,7 @@ if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_
 
 ### PLOTTING 
 ### GIVE HERE THE ISLAND, THE OUTCOME AND THE DATE FOR WHICH YOU WANT THE SPEC CHART TO BE PLOTTED
-scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a_10052022")))
+scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_both_a_30042024")))
 
 # some modifications for now because scdf run with some "mistakes"
 # scdf <- dplyr::select(scdf, -weights)
@@ -4398,8 +4745,8 @@ schart_labels <- list(#"Dependent variable:" = c("Larger forest definition"),
     "# reachable mills", 
     "Ownership",
     "1-y lag deforestation",
-    "4-y lag deforestation",
-    "4-y neighbors' deforestation",
+    # "4-y lag deforestation",
+    # "4-y neighbors' deforestation",
     "% CPO exported", 
     "Baseline forest trend"),#"Remaining forest""Neighbors' outcomes, 4-year lagged"
   # "Interaction with:" = c(#paste0(toupper(c("ffb", "cpo")[!grepl(VAR, c("ffb", "cpo"))]), " price signal"), 
@@ -4457,8 +4804,8 @@ a <- a[#a$larger_forest_def==FALSE &
     a$n_reachable_uml_control  &
     a$control_own == FALSE & 
     a$ov_lag1 == FALSE &
-    a$ov_lag4 == FALSE &
-    a$ngb_ov_lag4 == FALSE & 
+    # a$ov_lag4 == FALSE &
+    # a$ngb_ov_lag4 == FALSE & 
     a$prex_cpo_control == FALSE &
     a$baseline_forest_trend == FALSE &
     # a$remaining_forest == FALSE & 
