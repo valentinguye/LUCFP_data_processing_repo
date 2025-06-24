@@ -13,7 +13,7 @@
 # These are the packages needed in this particular script. *** these are those that we now not install: "rlist","lwgeom","htmltools", "iterators", 
 neededPackages = c("tibble", "plyr", "dplyr", "data.table",
                    "foreign", "readstata13", "readxl",
-                   "raster", "rgdal",  "sp", "spdep", "sf",
+                   "raster", "sp", "spdep", "sf",
                    "DataCombine",
                    "knitr", "kableExtra",
                    "car",  "fixest", "sandwich", "boot", "multcomp", "urca",# 
@@ -99,7 +99,7 @@ rm(d_30, d_50)
 # Commented out below are the arguments of the regression making function. 
 # They may be useful to run parts of the operations within the function. 
 catchment = "CR"
-outcome_variable = "lucpfap_pixelcount"
+outcome_variable = "lucpfunrp_pixelcount"
 island = "both"
 start_year = 2002
 end_year = 2014
@@ -233,6 +233,54 @@ make_base_reg <- function(island,
   
   
   ### SPECIFICATIONS  
+  
+  # Build the outcome and sample of unregulated deforestation, i.e. illegal indus or smallholder
+  if(grepl("lucpfunrp", outcome_variable)){
+    if(illegal %in% c("all", "illegal2")){
+    d <- 
+      d %>% 
+      dplyr::mutate(
+      lucpfunrp_pixelcount = if_else(
+        # in illegal pixels, count indus + smallholders (all)
+        (!is.na(illegal2) & illegal2),
+        lucpfap_pixelcount,
+        # otherwise (legal or unknown legal status), count only smallholders
+        lucpfsmp_pixelcount
+        )) %>% 
+        # AND REMOVE OBS. WITH NO SMALLHOLDERS NOR ILLEGAL 
+        # i.e. keep obs either illegal, or legal but with smallholders
+        group_by(lonlat) %>% 
+        mutate(any_sm_in_cell = any(lucpfsmp_pixelcount>0)) %>% 
+        ungroup() %>% 
+        filter((!is.na(illegal2) & illegal2) | (!is.na(illegal2) & !illegal2 & any_sm_in_cell)) %>% 
+        as.data.frame()
+      # equivalent: 
+        # lucpfunrp_pixelcount = if_else(
+        #   # in illegal pixels, count indus + smallholders
+        #   is.na(illegal2) | !illegal2, 
+        #   lucpfsmp_pixelcount,
+        #   # otherwise (legal and unknown legal status), count only smallholders
+        #   lucpfap_pixelcount)
+      }
+    # d %>% filter(illegal2) %>% pull(illegal2) %>% summary()
+    # d %>% filter(is.na(illegal2) | !illegal2) %>% pull(illegal2) %>% summary()
+    # d %>% filter(is.na(illegal2) | !illegal2) %>% pull(lucpfunrp_pixelcount) %>% summary()
+    # d %>% filter(is.na(illegal2) | !illegal2) %>% pull(lucpfsmp_pixelcount) %>% summary()
+    # 
+    # d %>% filter(illegal2) %>% pull(lucpfunrp_pixelcount) %>% summary()
+    # d %>% filter(illegal2) %>% pull(lucpfap_pixelcount) %>% summary()
+    
+    if(illegal == "illegal1"){
+    d <- 
+      d %>% 
+      dplyr::mutate(
+        lucpfunrp_pixelcount = case_when(
+          # in illegal pixels, count indus + smallholders
+          illegal1 ~ lucpfip_pixelcount + lucpfsmp_pixelcount,
+          # otherwise (legal and unknown legal status), count only smallholders
+          TRUE ~ lucpfsmp_pixelcount)
+      )}
+    }
   
   if(offset & grepl("lucpf", outcome_variable)){offset_fml <- ~log(remain_pf_pixelcount)}
   #if(offset & grepl("lucf", outcome_variable)){offset_fml <- ~log(remain_f30th_pixelcount)}
@@ -490,6 +538,8 @@ make_base_reg <- function(island,
   #   d$sample_coverage <- d$n_reachable_ibs/d$n_reachable_uml
   # }
   
+  
+  
   ### SELECT DATA FOR REGRESSION
   
   ## group all the variables necessary in the regression
@@ -531,7 +581,7 @@ make_base_reg <- function(island,
     d <- dplyr::filter(d, fc2000_30th_pixelcount*pixel_area_ha/900 > min_forest_2000)
     # d <- d[d$fc2000_30th_pixelcount*pixel_area_ha/900 > min_forest_2000,]
   }
-  
+
   # # in years after grid cells get completely deforested)
   if(grepl("lucpf", outcome_variable)){
     d <- dplyr::filter(d, remain_pf_pixelcount > 0,)
@@ -668,14 +718,15 @@ make_base_reg <- function(island,
   # it's possible that the removal of always zero dep.var in some FE dimensions above is equal to with the FE currently implemented
   if(length(temp_est$obs_selection)>0){
     d_clean <- d_nona[unlist(temp_est$obs_selection),]
-  }  else { 
+  }  else {
     d_clean <- d_nona
   }
   rm(temp_est)
+  # d_clean <- d_nona
   
-  # make the interaction variables in the data
   
   ## INTERACTIONS
+  # make the interaction variables in the data
   interaction_vars <- c()
   
   # here we produce the names of the actual interaction variables
@@ -830,7 +881,7 @@ make_base_reg <- function(island,
 # for the K first regressors in the models fitted by make_base_reg 
 # If there are interactions in the models, the APEs (and SEs) of the interaction effects are computed (may not work if K > 1 then)
 
-# res_data <- res_data_list_full[[3]]
+# res_data <- res_data_list_full[[1]]
 # k = 1
 # K=1
 # cumulative <- TRUE
@@ -842,7 +893,9 @@ make_base_reg <- function(island,
 # abs_price_change = 1
 # rounding = 2
 
-make_APEs <- function(res_data, K=1, 
+make_APEs <- function(#res_data, 
+                      reg_elm = 1,
+                      K=1, 
                       controls_pe = FALSE, 
                       #SE = "cluster", 
                       CLUSTER = "reachable",#"subdistrict",
@@ -854,9 +907,12 @@ make_APEs <- function(res_data, K=1,
   # store APEs and their deltaMethod statistics in this list 
   dM_ape_roi_list <- list()
   
-  # get estimation results and data 
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation. 
+  # get estimation results and data
+  # this is done outside the function now (R >= 4.5), otherwise not working  
+  # res_data <- res_data_list_full[[reg_elm]]
+  # reg_res <- res_data[[1]]
+  # d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation. 
+  # rm(res_data)
   
   ## Redefine changes in regressor to one standard deviation if asked 
   if(stddev){
@@ -935,17 +991,22 @@ make_APEs <- function(res_data, K=1,
       ape_fml_roi <- paste0("(exp(",linear_ape_fml,"*",abs_price_change,") - 1)*100")#*fv_bar*",pixel_area_ha)
     } 
     
-    dM_ape_roi <- deltaMethod(object = coef(reg_res), 
-                              vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE, 
-                              g. = ape_fml_roi, 
+    dM_ape_roi <- deltaMethod(object = coef(reg_res),
+                              vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE,
+                              g. = ape_fml_roi,
                               rhs = 0)
+    
+    # dM_ape_roi <- matrix(c(1,1,3), 1)
+    # colnames(dM_ape_roi) = c("Estimate","2.5 %","97.5 %")
     
     row.names(dM_ape_roi) <- NULL
     dM_ape_roi <- as.matrix(dM_ape_roi)
     dM_ape_roi <- dM_ape_roi[,c("Estimate","2.5 %","97.5 %")]
+    # dM_ape_roi_list[[k]]
+
+    dM_ape_roi_list[[k]] <- dM_ape_roi
     
-    dM_ape_roi_list[[k]] <- dM_ape_roi  
-    
+
     
     ### COMPUTE PARTIAL EFFECTS OF INTERACTION TERMS 
     dM_ape_roi_list[[K + k]] <- list()
@@ -2048,7 +2109,7 @@ ggplot() +
         panel.background = element_blank()) +
   geom_sf(data=st_geometry(d_geo), color=alpha("grey",0.2))+
   geom_sf(data = ibs, color = "black", size = 0.05) + 
-  geom_sf(data = countries, fill = FALSE) +
+  geom_sf(data = countries, fill = "transparent") +
   coord_sf(xlim = c(94, 120), ylim = c(-7, 7), expand = FALSE) 
 
 # leaflet() %>% 
@@ -2177,32 +2238,71 @@ elm <- 1
 isl_list <- list("both")#"Sumatra", "Kalimantan", 
 ISL <- "both"
 
-size_list <- list("i","sm", "a")
+# size_list <- list("i","sm", "a")
+size_list <- list("i","sm", "unr", "a")
 
 # legality definition
 ill_def <- 2
 ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
 
-
 for(SIZE in size_list){
-  for(ILL in ill_status){ 
-    if(SIZE == "sm" & ILL == "ill2"){# this is necessary to handle some convergence issue
-      higher_iter_glm <- 2000 
-    } else {
-      higher_iter_glm <- 200
-    } 
-    res_data_list_full[[elm]] <- make_base_reg(island = ISL,
-                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-                                               illegal = ILL,
-                                               n_iter_glm = higher_iter_glm,
-                                               offset = FALSE)
-    names(res_data_list_full)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-    elm <- elm + 1
-  }
-}
+  if(SIZE == "i"){
+    # Industrial by illegal status
+    for(ILL in ill_status){
+      res_data_list_full[[elm]] <- make_base_reg(island = ISL,
+                                                 outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                 illegal = ILL,
+                                                 offset = FALSE)
+      names(res_data_list_full)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+      elm <- elm + 1
+    }
+  } else {
+  # If size == sm or a, we do want to include all legal statuses.
+  # If size == unr, the selection of illegal indus is handled in make_base_reg 
+  ILL <- "all"
+
+  res_data_list_full[[elm]] <- make_base_reg(island = ISL,
+                                             outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                             illegal = ILL,
+                                             offset = FALSE)
+  names(res_data_list_full)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+  elm <- elm + 1
+}}
+
+# for(SIZE in size_list){
+#   for(ILL in ill_status){ 
+#     if(SIZE == "sm" & ILL == "ill2"){# this is necessary to handle some convergence issue
+#       higher_iter_glm <- 2000 
+#     } else {
+#       higher_iter_glm <- 200
+#     } 
+#     res_data_list_full[[elm]] <- make_base_reg(island = ISL,
+#                                                outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+#                                                illegal = ILL,
+#                                                n_iter_glm = higher_iter_glm,
+#                                                offset = FALSE)
+#     names(res_data_list_full)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+#     elm <- elm + 1
+#   }
+# }
+
 ## PARTIAL EFFECTS
 rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat <- lapply(res_data_list_full, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_full)){
+  # get estimation results and data
+  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+  res_data <- res_data_list_full[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+# ape_mat <- lapply(res_data_list_full, FUN = make_APEs) # this was the way to do it until it stopped working, on R 4.5 
+
 ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
 row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
 ape_mat

@@ -29,12 +29,12 @@
 neededPackages <- c("data.table", "plyr", "tidyr", "dplyr",  "Hmisc", "sjmisc", "stringr",
                     "readstata13", "foreign", "readxl", "writexl",
                     "httr", "haven",
-                    "raster", "rgdal", "sp", "spdep", "sf","gfcanalysis", "osrm", "osrmr", "nngeo",
+                    "raster", "sp", "spdep", "sf","gfcanalysis", "osrm", "osrmr", "nngeo", # "rgdal"
                     "lubridate","exactextractr",
                     "doParallel", "foreach", "snow", 
                     "knitr", "kableExtra",
                     "DataCombine", 
-                    "multcomp", "car", "fixest", "sandwich", "broom", "glmhdfe", "urca",
+                    "multcomp", "car", "fixest", "sandwich", "broom",  "urca", # "glmhdfe",
                     "ggeffects",
                     "ggplot2", "leaflet")
 
@@ -46,6 +46,8 @@ renv::status()
 
 # This installs, if necessary, in renv/library, the project-specific packages as recorded in renv.lockpackages = neededPackages
 renv::restore()
+
+# To install rgdal, see https://stackoverflow.com/questions/78746226/how-to-install-rgdal-in-r-version-4-4-1
 
 #### /!\ IF renv::restore() FAILS TO INSTALL SOME PACKAGES FROM neededPackages /!\ #### 
 
@@ -95,7 +97,6 @@ if(FALSE){
   library(foreign)
   library(readxl)
   library(writexl)
-  library(rgdal)
   library(raster)
   library(sp)
   library(spdep)
