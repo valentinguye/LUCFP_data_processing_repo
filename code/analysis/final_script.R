@@ -17,7 +17,7 @@ neededPackages = c("tibble", "plyr", "dplyr", "data.table",
                    "DataCombine",
                    "knitr", "kableExtra",
                    "car",  "fixest", "sandwich", "boot", "multcomp", "urca",# 
-                   "ggplot2")#,"leaflet", "htmltools"
+                   "ggplot2", "viridis")#,"leaflet", "htmltools"
 # "pglm", "multiwayvcov", "clusterSEs", "alpaca", "clubSandwich",
 
 # Install them in their project-specific versions
@@ -1701,10 +1701,7 @@ for(island in c("Sumatra", "Kalimantan")){
     
     # Add up annual aggregated LUCFP (result is a single layer with cell values = the sum of annual cell values over the selected time period)
     r_accu_lucfp <- calc(brick_lucpfip, fun = sum, na.rm = TRUE)
-    
-    
-    
-    
+
     defo_dyna[[match(DYNA, c("rapid", "slow"))]] <- raster::extract(x = r_accu_lucfp, 
                                                                     y = island_sf_prj[island_sf_prj$shape_des==island,] %>% st_geometry() %>% as("Spatial"), 
                                                                     fun = sum, 
@@ -2103,7 +2100,19 @@ sd(rm_fevar_ffb$residuals)
 
 rm(as)
 
-#### DESCRIPTIVE MAP #####
+#### MAPS #####
+# prepare backgroud layers with other countries
+countries <- st_read(file.path("input_data/Global_LSIB_Polygons_Detailed"))
+countries <- countries[countries$COUNTRY_NA == "Indonesia" | 
+                         countries$COUNTRY_NA == "Malaysia" | 
+                         countries$COUNTRY_NA == "Thailand" | 
+                         countries$COUNTRY_NA == "Singapore" | 
+                         countries$COUNTRY_NA == "Brunei", ]
+# these two lines to speed up mapping
+countries <- st_transform(countries, crs = indonesian_crs) %>% st_simplify(dTolerance = 1000)
+countries <- st_transform(countries, crs = 4326)
+indonesia_sf <- countries %>% filter(COUNTRY_NA == "Indonesia")
+
 res_data_both_a_all <- make_base_reg(island = "both",
                                      outcome_variable = paste0("lucpfap_pixelcount"), 
                                      illegal = "all",
@@ -2115,7 +2124,7 @@ d_clean_cs <- d_clean[!duplicated(d_clean$lonlat),]
 d_cs <- st_as_sf(d_clean_cs, coords = c("lon", "lat"), crs = 4326)
 d_cs <- st_transform(d_cs, crs = indonesian_crs)
 
-d_cs <- st_buffer(d_cs, dist = 1500)
+d_cs <- st_buffer(d_cs, dist = 1600)
 st_geometry(d_cs) <- sapply(st_geometry(d_cs), FUN = function(x){st_as_sfc(st_bbox(x))}) %>% st_sfc(crs = indonesian_crs)
 d_geo <- st_union(st_geometry(d_cs))
 d_geo <- st_transform(d_geo, crs = 4326)
@@ -2125,7 +2134,6 @@ d_geo <- st_transform(d_geo, crs = 4326)
 #               accu_lucfp = sum(lucpfap_pixelcount))
 # 
 # d_cs <- left_join(d_cs, d_clean_cs[,c("lonlat", "lon", "lat")], by = "lonlat")
-
 
 ### MILLS
 ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
@@ -2147,21 +2155,13 @@ uml$trase_code %>% unique() %>% length()
 # # remove those matched with ibs
 # uml <- uml[!(uml$trase_code %in% ibs$trase_code),]
 
-# prepare backgroud layers with other countries
-countries <- st_read(file.path("input_data/Global_LSIB_Polygons_Detailed"))
-countries <- countries[countries$COUNTRY_NA == "Indonesia" | 
-                         countries$COUNTRY_NA == "Malaysia" | 
-                         countries$COUNTRY_NA == "Brunei", "geometry"]
-# these two lines to speed up mapping
-countries <- st_transform(countries, crs = indonesian_crs) %>% st_simplify(dTolerance = 1000)
-countries <- st_transform(countries, crs = 4326)
 
 ggplot() +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank()) +
   geom_sf(data=st_geometry(d_geo), color=alpha("grey",0.2))+
   geom_sf(data = ibs, color = "black", size = 0.05) + 
-  geom_sf(data = countries, fill = "transparent") +
+  geom_sf(data = st_geometry(countries), fill = "transparent") +
   coord_sf(xlim = c(94, 120), ylim = c(-7, 7), expand = FALSE) 
 
 # leaflet() %>% 
@@ -2179,7 +2179,148 @@ ggplot() +
 #   addCircleMarkers(data = ibs, radius = 0.001, fillOpacity = 1, fillColor = "black", stroke = FALSE, weight = 0) 
 # # exported in width = 1150 and height = 560 and zoom once 
 
-rm(d_clean_cs, d_cs, d_geo, ibs)
+rm(d_clean_cs, d_cs, ibs)
+
+##### Accumulated deforestation #####  
+loss_types <- c("i","sm", "unr", "a")
+
+# Choice to display all cells in catchement radius (broader than the sample, but not wall-to-wall). 
+d <- 
+  rbind(d_30_suma, d_50_kali) %>% 
+  filter(year >= 2002 & year <= 2014) 
+
+
+# Or Grid cells within 82km of a known (UML) mill. 
+lucpfip <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+                                    parcel_size/1000,"km_",
+                                    "82km_UML_CR.rds")))
+lucpfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",
+                                     parcel_size/1000,"km_",
+                                     "82km_UML_CR.rds")))
+
+# Or the full raster
+brick_lucpfsmp <- brick(file.path(paste0("temp_data/processed_lu/parcel_lucpf",size,"p_",island,"_",parcel_size/1000,"km_total.tif")))
+# select 2002-2014 layers 
+layer_names <- paste0("parcel_lucpf",size,"p_",island,"_",parcel_size/1000,"km_total.",c(2:14))
+brick_lucpfsmp <- raster::subset(brick_lucpfsmp, layer_names)
+# Add up annual aggregated LUCFP (result is a single layer with cell values = the sum of annual cell values over the selected time period)
+r_accu_lucfp <- calc(brick_lucpfsmp, fun = sum, na.rm = TRUE)
+
+# Produce unregulated deforestation 
+d <- 
+  d %>% 
+  dplyr::mutate(
+    lucpfunrp_pixelcount = if_else(
+      # in illegal pixels, count indus + smallholders (all)
+      (!is.na(illegal2) & illegal2),
+      lucpfap_pixelcount,
+      # otherwise (legal or unknown legal status), count only smallholders
+      lucpfsmp_pixelcount
+    ))
+
+# Compute cumulative defo for each plantation type, in percentage of cell area. 
+d_cs_list <- list()
+elm <- 1 
+for(LT in loss_types){
+  d_accu = 
+    d %>% 
+    summarise(.by = lonlat, 
+              lon = unique(lon),
+              lat = unique(lat), 
+              accu_LT_cellpct := round(100*sum(!!as.symbol(paste0("lucpf",LT,"p_pixelcount")))*pixel_area_ha/900, 0))
+  # the rounding to 0 decimales on percentage points means that cells with less 
+  # than 0.5% (4.5ha) of deforestation are rounded to 0 and then converted to NA (transparent).  
+  
+  d_accu$accu_LT_cellpct <- na_if(d_accu$accu_LT_cellpct, 0)
+  d_accu$loss_type <- LT
+  
+  d_cs_list[[LT]] = d_accu
+  elm <- elm + 1
+}
+d_stack <- bind_rows(d_cs_list)
+
+# Spatialize to 3km grid cells
+d_stack <- st_as_sf(d_stack, coords = c("lon", "lat"), crs = 4326)
+d_stack <- st_transform(d_stack, crs = indonesian_crs)
+d_stack <- st_buffer(d_stack, dist = 1600) # half the size of a cell + TAKING SOME MARGIN TO PREVENT WHITE LINES BETWEEN GRIDS nearer to the equator
+st_geometry(d_stack) <- sapply(st_geometry(d_stack), FUN = function(x){st_as_sfc(st_bbox(x))}) %>% st_sfc(crs = indonesian_crs)
+d_stack <- st_transform(d_stack, crs = 4326)
+
+d_stack %>% filter(loss_type == "i") %>% pull(accu_LT_cellpct) %>% summary()
+d_stack %>% filter(loss_type == "sm") %>% pull(accu_LT_cellpct) %>% summary()
+d_stack %>% filter(loss_type == "a") %>% pull(accu_LT_cellpct) %>% summary()
+
+d_stack = 
+  d_stack %>% 
+  mutate(
+    loss_type = case_when(
+      loss_type=="i"   ~ "Industrial plantations", 
+      loss_type=="sm"  ~ "Smallholder plantations", 
+      loss_type=="unr" ~ "Unregulated plantations",
+      loss_type=="a"   ~ "All plantations"
+    ), 
+    loss_type = factor(loss_type, levels=c("Industrial plantations",
+                                           "Smallholder plantations",
+                                           "Unregulated plantations", 
+                                           "All plantations"))
+  ) 
+
+ibs_cr_sf = 
+  rbind(
+    ibs %>%
+      filter(island_name == "Sumatra") %>% 
+      st_transform(crs = indonesian_crs) %>%
+      st_buffer(dist = 30*1e3) %>% 
+      st_transform(crs = 4326),
+    ibs %>%
+      filter(island_name == "Kalimantan") %>% 
+      st_transform(crs = indonesian_crs) %>%
+      st_buffer(dist = 50*1e3) %>% 
+      st_transform(crs = 4326)
+  ) %>% 
+  st_geometry() %>% 
+  st_union()
+
+label_cr = "Catchment radius \nof mills in analysis"# 
+# ibs_cr_sf <- ibs_cr_sf %>% st_as_sf() %>% mutate(label = label_cr)
+legend_df <- data.frame(x = 0, y = 0, label = "Catchment radius \nof mills in analysis") %>% 
+  st_as_sf(coords = c("x", "y"), crs = 4326)
+
+ggplot() +
+  geom_sf(data = countries, fill = "grey", col = "black") +
+  geom_sf(data = indonesia_sf, fill = "white", col = "black") +
+  geom_sf(data = d_stack, aes(fill = accu_LT_cellpct), col = "transparent") + # , lwd = NA this would prevent the key in the legend to appear in case of factors 
+  scale_fill_viridis(name = "% of 900 ha cell",
+                     discrete = FALSE, # TRUE,
+                     option="A",
+                     direction = -1, 
+                     na.value = "transparent") +
+  facet_wrap(facets = ~loss_type, ncol = 2, nrow = 2, 
+             strip.position = "top") +
+  
+  geom_sf(data=ibs_cr_sf , color = "darkgrey", fill = NA, linewidth = 0.5, show.legend = FALSE) +
+  # Dummy point layer to force a circular legend key
+  geom_sf(data = legend_df, aes(shape = label, color = label), fill = NA, size = 5) +
+  scale_shape_manual(
+    name = " ",
+    values = c("Catchment radius \nof mills in analysis" = 21)
+    ) +
+  scale_color_manual(
+    name = " ",
+    values = c("Catchment radius \nof mills in analysis" = "darkgrey")
+    ) +
+  coord_sf(xlim = c(94, 118.5), ylim = c(-4, 5), expand = FALSE) +
+  # Zoom in 
+  coord_sf(xlim = c(94, 118.5), ylim = c(-4, 5), expand = FALSE) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_rect(colour = "lightgrey"), 
+        legend.key = element_blank(), 
+        strip.text = element_text(face = "bold"), 
+        strip.background = element_rect(fill = "white", colour = "lightgrey")) 
+
+ggsave(filename = "map_accu_inCR_bytype.png", 
+       width=6, height=6)
+
 
 
 #### DESCRIPTIVE PARTIAL AUTOCORRELATION FUNCTION OF PRICES 
@@ -3978,33 +4119,56 @@ size_list <- list("i","sm", "unr", "a")
 ill_def <- 2
 ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
 
-
 for(SIZE in size_list){
-  for(ILL in ill_status){ 
-    # if(SIZE == "sm" & ILL == "ill2"){# this is necessary to handle some convergence issue
-      higher_iter_glm <- 2000 
-    # } else {
-    #   higher_iter_glm <- 200
-    # } 
+  if(SIZE == "i"){
+    # Industrial by illegal status
+    for(ILL in ill_status){
+      res_data_list_level[[elm]] <- make_base_reg(island = ISL,
+                                                 outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                 illegal = ILL,
+                                                 log_prices = FALSE,
+                                                 n_iter_glm = 2000,
+                                                 offset = FALSE)
+      names(res_data_list_level)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+      elm <- elm + 1
+    }
+  } else {
+    # If size == sm or a, we do want to include all legal statuses.
+    # If size == unr, the selection of illegal indus is handled in make_base_reg 
+    ILL <- "all"
     res_data_list_level[[elm]] <- make_base_reg(island = ISL,
-                                                log_prices = FALSE,
-                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
                                                illegal = ILL,
-                                               n_iter_glm = higher_iter_glm,
+                                               log_prices = FALSE,
+                                               n_iter_glm = 2000,
                                                offset = FALSE)
     names(res_data_list_level)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
     elm <- elm + 1
-  }
-}
-
+  }}
 
 ## PARTIAL EFFECTS
 rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat <- lapply(res_data_list_level, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_level)){
+  # get estimation results and data
+  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+  res_data <- res_data_list_level[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+lapply(reg_res_list, FUN = function(x) x$convStatus)
+# ape_mat <- lapply(res_data_list_level, FUN = make_APEs) # this was the way to do it until it stopped working, on R 4.5 
+
 ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
 row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
 ape_mat
 colnames(ape_mat) <- NULL
+
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
@@ -4013,21 +4177,25 @@ kable(ape_mat, booktabs = T, align = "r",
   add_header_above(c(" " = 1,
                      "Legal" = 1,
                      "Illegal" = 1,
-                     "All" = 1,
-                     "Legal" = 1,
-                     "Illegal" = 1,
-                     "All" = 1,
-                     "Legal" = 1,
-                     "Illegal" = 1,
-                     "All" = 1),
+                     "All" = 1, 
+                     " " = 3),
                    bold = F,
                    align = "c") %>%
   add_header_above(c(" " = 1,
                      "Industrial plantations" = 3,
-                     "Smallholder plantations" = 3, 
-                     "All" = 3),
+                     "Smallholder plantations" = 1, 
+                     "Unregulated plantations" = 1, 
+                     "All" = 1),
                    align = "c",
                    strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1),
+                   align = "c") %>%
   # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
   column_spec(column = 1,
               width = "7em",
@@ -4100,7 +4268,19 @@ rm(i)
 
 ## PARTIAL EFFECTS
 rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat <- lapply(res_data_list_lagov, FUN = make_APEs) # and for the same reason, this cannot be wrapped in other functions (an environment problem)
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_lagov)){
+  # get estimation results and data
+  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+  res_data <- res_data_list_lagov[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
 ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
 row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
 ape_mat
@@ -4131,6 +4311,14 @@ kable(ape_mat, booktabs = T, align = "c",
                      "Not" = 1),
                    align = "c",
                    strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1),
+                   align = "c") %>%
   # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
   column_spec(column = 1,
               width = "7em",
@@ -4364,6 +4552,7 @@ fals_4_wth,
 fals_5,
 fals_5_wth,
 tex = T, 
+depvar = FALSE,
 dict = c(cpo_price_imp1 = "CPO price",
          in_ton_ffb_imp1 = "FFB input",
          in_ton_ffb_imp1_lag1 = "FFB input t-1",
