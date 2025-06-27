@@ -917,13 +917,18 @@ llu <- llu[llu$Province == "Sumatra Utara" |
 
 
 
-catchment_radiuseS <- c(1e4, 3e4, 5e4)# 
+catchment_radiuseS <- c(1e4, 3e4, 5e4, 82*1e3) # (also do for 82km here because we need it to plot legal/illegal in final_script)
 for(catchment_radius in catchment_radiuseS){ 
   # read the parcel panel
+  if(catchment_radius == 82*1e3){
+  parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+                                      parcel_size/1000,"km_",
+                                      catchment_radius/1000,"km_UML_CR.rds")))
+  }else{
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
                                       parcel_size/1000,"km_",
                                       catchment_radius/1000,"km_IBS_CR.rds")))
-  
+  }
   
   parcels <- st_as_sf(parcels, coords = c("idncrs_lon", "idncrs_lat"), remove = FALSE, crs = indonesian_crs)
   

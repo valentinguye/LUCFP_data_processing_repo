@@ -98,44 +98,44 @@ rm(d_30, d_50)
 ##### REGRESSION FUNCTION ##### 
 # Commented out below are the arguments of the regression making function. 
 # They may be useful to run parts of the operations within the function. 
-catchment = "CR"
-outcome_variable = "lucpfip_pixelcount"
-island = "both"
-start_year = 2002
-end_year = 2014
-alt_cr = FALSE
-nearest_mill = FALSE
-margin = "both"
-restr_marg_def = TRUE
-reduced_form_iv = FALSE
-instru_share = "contemp"
-commo = c("cpo")
-x_pya = 3
-dynamics = FALSE
-annual = FALSE
-price_variation = FALSE
-log_prices = TRUE
-yoyg = FALSE
-only_sr = FALSE
-short_run = "full"
-imp = 1
-distribution = "quasipoisson"
-fe = "reachable + district_year"#
-offset = FALSE
-lag_or_not = "_lag1"
-controls = c("n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
-remaining_forest = FALSE
-control_lncpo = FALSE # should the CPO price treatment of interest be included in the controls (for regressions on FFB price)
-interaction_terms = NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
-interact_regressors = TRUE
-interacted = "regressors"
-pya_ov = FALSE
-illegal = "no_ill2"# "ill2" #
-weights = FALSE
-min_forest_2000 = 0
-min_coverage = 0
-n_iter_glm = 200
-output_full = FALSE
+# catchment = "CR"
+# outcome_variable = "lucpfip_pixelcount"
+# island = "both"
+# start_year = 2002
+# end_year = 2014
+# alt_cr = FALSE
+# nearest_mill = FALSE
+# margin = "both"
+# restr_marg_def = TRUE
+# reduced_form_iv = FALSE
+# instru_share = "contemp"
+# commo = c("cpo")
+# x_pya = 3
+# dynamics = FALSE
+# annual = FALSE
+# price_variation = FALSE
+# log_prices = TRUE
+# yoyg = FALSE
+# only_sr = FALSE
+# short_run = "full"
+# imp = 1
+# distribution = "quasipoisson"
+# fe = "reachable + district_year"#
+# offset = FALSE
+# lag_or_not = "_lag1"
+# controls = c("n_reachable_uml")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
+# remaining_forest = FALSE
+# control_lncpo = FALSE # should the CPO price treatment of interest be included in the controls (for regressions on FFB price)
+# interaction_terms = NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
+# interact_regressors = TRUE
+# interacted = "regressors"
+# pya_ov = FALSE
+# illegal = "no_ill2"# "ill2" #
+# weights = FALSE
+# min_forest_2000 = 0
+# min_coverage = 0
+# n_iter_glm = 200
+# output_full = FALSE
 # 
 # rm(catchment,outcome_variable,island,alt_cr,commo,x_pya,dynamics,log_prices,yoyg,short_run,imp,distribution,fe,remaining_forest,offset,lag_or_not,controls,interaction_terms ,interacted,pya_ov,illegal, nearest_mill, weights)
 
@@ -2179,9 +2179,22 @@ ggplot() +
 #   addCircleMarkers(data = ibs, radius = 0.001, fillOpacity = 1, fillColor = "black", stroke = FALSE, weight = 0) 
 # # exported in width = 1150 and height = 560 and zoom once 
 
-rm(d_clean_cs, d_cs, ibs)
+rm(d_clean_cs, d_cs)
 
 ##### Accumulated deforestation #####  
+# # Or the full raster
+# rast_list <- list()
+# for(island in c("Sumatra", "Kalimantan")){
+#   rast_name <- paste0("lucpf",size,"p_",island)
+#   brick_lucpfsmp <- brick(file.path(paste0("temp_data/processed_lu/parcel_",rast_name,"_",parcel_size/1000,"km_total.tif")))
+#   # select 2002-2014 layers 
+#   layer_names <- paste0("parcel_",rast_name,"_",parcel_size/1000,"km_total.",c(2:14))
+#   brick_lucpfsmp <- raster::subset(brick_lucpfsmp, layer_names)
+#   # Add up annual aggregated LUCFP (result is a single layer with cell values = the sum of annual cell values over the selected time period)
+#   rast_list[[rast_name]] <- calc(brick_lucpfsmp, fun = sum, na.rm = TRUE)
+# }
+
+
 loss_types <- c("i","sm", "unr", "a")
 
 # Choice to display all cells in catchement radius (broader than the sample, but not wall-to-wall). 
@@ -2191,53 +2204,78 @@ d <-
 
 
 # Or Grid cells within 82km of a known (UML) mill. 
-lucpfip <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
+# This one for industrial has legal/illegal info (dirty naming but its UML CR, see add_CR_parcel_variables.R)
+lucpfip <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_land_des_",
                                     parcel_size/1000,"km_",
-                                    "82km_UML_CR.rds")))
+                                    "82CR.rds"))) 
+# Use lucpfip_pixelcount_total, not a problem since this is just for plotting and ~the same as rapid + slow. 
+all_indus = 
+  lucpfip %>% 
+  filter(year >= 2002 & year <= 2014) %>% 
+  mutate(lucpfip_pixelcount = lucpfip_pixelcount_total) %>% 
+  summarise(.by = lonlat, 
+            lon = unique(lon),
+            lat = unique(lat),
+            # Keep legal var here
+            illegal2 = unique(illegal2),
+            # the rounding to 0 decimales on percentage points means that cells with less 
+            # than 0.5% (4.5ha) of deforestation are rounded to 0 and then converted to NA (transparent).  
+            accu_LT_cellpct = round(100*sum(lucpfip_pixelcount)*pixel_area_ha/900, 0)) %>% 
+  mutate(loss_type = "all_indus")
+
+# Legal industrial
+leg_indus = 
+  all_indus %>% 
+  filter(is.na(illegal2) | !illegal2) %>% 
+  mutate(loss_type = "leg_indus")
+
+# Illegal industrial
+ill_indus = 
+  all_indus %>% 
+  filter(!is.na(illegal2) & illegal2) %>% 
+  mutate(loss_type = "ill_indus")
+
+# Smallholders
 lucpfsmp <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfsmp_panel_",
                                      parcel_size/1000,"km_",
                                      "82km_UML_CR.rds")))
+all_sm = 
+  lucpfsmp %>% 
+  filter(year >= 2002 & year <= 2014) %>% 
+  mutate(lucpfsmp_pixelcount = lucpfsp_pixelcount_total + lucpfmp_pixelcount_total) %>% 
+  summarise(.by = lonlat, 
+            lon = unique(lon),
+            lat = unique(lat), 
+            accu_LT_cellpct = round(100*sum(lucpfsmp_pixelcount)*pixel_area_ha/900, 0)) %>% 
+  mutate(loss_type = "sm")
 
-# Or the full raster
-brick_lucpfsmp <- brick(file.path(paste0("temp_data/processed_lu/parcel_lucpf",size,"p_",island,"_",parcel_size/1000,"km_total.tif")))
-# select 2002-2014 layers 
-layer_names <- paste0("parcel_lucpf",size,"p_",island,"_",parcel_size/1000,"km_total.",c(2:14))
-brick_lucpfsmp <- raster::subset(brick_lucpfsmp, layer_names)
-# Add up annual aggregated LUCFP (result is a single layer with cell values = the sum of annual cell values over the selected time period)
-r_accu_lucfp <- calc(brick_lucpfsmp, fun = sum, na.rm = TRUE)
+# unregulated
+unreg = 
+  full_join(ill_indus, 
+            all_sm, 
+            by = c("lonlat", "lon", "lat")) %>% 
+  mutate(accu_LT_cellpct = accu_LT_cellpct.x + accu_LT_cellpct.y) %>% 
+  dplyr::select(!contains(".")) %>% 
+  mutate(loss_type = "unr")
 
-# Produce unregulated deforestation 
-d <- 
-  d %>% 
-  dplyr::mutate(
-    lucpfunrp_pixelcount = if_else(
-      # in illegal pixels, count indus + smallholders (all)
-      (!is.na(illegal2) & illegal2),
-      lucpfap_pixelcount,
-      # otherwise (legal or unknown legal status), count only smallholders
-      lucpfsmp_pixelcount
-    ))
+# all 
+all = 
+  full_join(all_indus, 
+            all_sm, 
+            by = c("lonlat", "lon", "lat")) %>% 
+  mutate(accu_LT_cellpct = accu_LT_cellpct.x + accu_LT_cellpct.y) %>% 
+  dplyr::select(!contains(".")) %>% 
+  mutate(loss_type = "all")
 
-# Compute cumulative defo for each plantation type, in percentage of cell area. 
-d_cs_list <- list()
-elm <- 1 
-for(LT in loss_types){
-  d_accu = 
-    d %>% 
-    summarise(.by = lonlat, 
-              lon = unique(lon),
-              lat = unique(lat), 
-              accu_LT_cellpct := round(100*sum(!!as.symbol(paste0("lucpf",LT,"p_pixelcount")))*pixel_area_ha/900, 0))
-  # the rounding to 0 decimales on percentage points means that cells with less 
-  # than 0.5% (4.5ha) of deforestation are rounded to 0 and then converted to NA (transparent).  
-  
-  d_accu$accu_LT_cellpct <- na_if(d_accu$accu_LT_cellpct, 0)
-  d_accu$loss_type <- LT
-  
-  d_cs_list[[LT]] = d_accu
-  elm <- elm + 1
-}
-d_stack <- bind_rows(d_cs_list)
+d_stack = 
+  rbind(leg_indus %>% dplyr::select(names(all_sm)), 
+        ill_indus %>% dplyr::select(names(all_sm)), 
+        all_indus %>% dplyr::select(names(all_sm)), 
+        all_sm,
+        unreg %>% dplyr::select(names(all_sm)),
+        all %>% dplyr::select(names(all_sm))) 
+
+d_stack$accu_LT_cellpct <- na_if(d_stack$accu_LT_cellpct, 0)
 
 # Spatialize to 3km grid cells
 d_stack <- st_as_sf(d_stack, coords = c("lon", "lat"), crs = 4326)
@@ -2246,20 +2284,24 @@ d_stack <- st_buffer(d_stack, dist = 1600) # half the size of a cell + TAKING SO
 st_geometry(d_stack) <- sapply(st_geometry(d_stack), FUN = function(x){st_as_sfc(st_bbox(x))}) %>% st_sfc(crs = indonesian_crs)
 d_stack <- st_transform(d_stack, crs = 4326)
 
-d_stack %>% filter(loss_type == "i") %>% pull(accu_LT_cellpct) %>% summary()
-d_stack %>% filter(loss_type == "sm") %>% pull(accu_LT_cellpct) %>% summary()
-d_stack %>% filter(loss_type == "a") %>% pull(accu_LT_cellpct) %>% summary()
+d_stack %>% filter(loss_type == "all_indus") %>% pull(accu_LT_cellpct) %>% summary()
+d_stack %>% filter(loss_type == "all_sm") %>% pull(accu_LT_cellpct) %>% summary()
+d_stack %>% filter(loss_type == "all") %>% pull(accu_LT_cellpct) %>% summary()
 
 d_stack = 
   d_stack %>% 
   mutate(
     loss_type = case_when(
-      loss_type=="i"   ~ "Industrial plantations", 
-      loss_type=="sm"  ~ "Smallholder plantations", 
-      loss_type=="unr" ~ "Unregulated plantations",
-      loss_type=="a"   ~ "All plantations"
+      loss_type=="leg_indus"   ~ "Not illegal industrial plantations", 
+      loss_type=="ill_indus"   ~ "Illegal industrial plantations", 
+      loss_type=="all_indus"   ~ "All industrial plantations", 
+      loss_type=="all_sm"  ~ "Smallholder plantations", 
+      loss_type=="unreg" ~ "Unregulated plantations",
+      loss_type=="all"   ~ "All plantations"
     ), 
-    loss_type = factor(loss_type, levels=c("Industrial plantations",
+    loss_type = factor(loss_type, levels=c("Not illegal industrial plantations",
+                                           "Illegal industrial plantations", 
+                                           "All industrial plantations",
                                            "Smallholder plantations",
                                            "Unregulated plantations", 
                                            "All plantations"))
@@ -2314,12 +2356,13 @@ ggplot() +
   coord_sf(xlim = c(94, 118.5), ylim = c(-4, 5), expand = FALSE) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_rect(colour = "lightgrey"), 
+        legend.position = "bottom",
         legend.key = element_blank(), 
         strip.text = element_text(face = "bold"), 
         strip.background = element_rect(fill = "white", colour = "lightgrey")) 
 
 ggsave(filename = "map_accu_inCR_bytype.png", 
-       width=6, height=6)
+       width=15, height=6)
 
 
 
