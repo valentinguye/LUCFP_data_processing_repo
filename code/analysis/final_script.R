@@ -5330,46 +5330,46 @@ i <- i+1
 i # 12
 
 ## RAPID LUCFP - this is not run anymore. 
-if(SIZE == "i"){
-  # loops over critical parameters (not repeating because the outcome is different)
-  for(IMP in c(1, 2)){
-    for(XPYA in c(2, 3, 4)){
-      for(LAG in c("_lag1", "")){
-        reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL, illegal = ILL,
-                                                         outcome_variable = paste0("lucpfip_rapid_pixelcount"),
-                                                         imp = IMP,
-                                                         x_pya = XPYA,
-                                                         lag_or_not = LAG)
-        i <- i+1
-      }
-    }
-  }    
-  i # 28
-  
-  # in CA
-  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL, illegal = ILL,
-                                                   outcome_variable = paste0("lucpfip_rapid_pixelcount"),
-                                                   catchment = "CA") 
-  i <- i+1
-  
-  # With 2way clustering
-  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL, illegal = ILL,
-                                                   outcome_variable = paste0("lucpfip_rapid_pixelcount"),
-                                                   SE = "twoway")
-  i <- i+1
-  
-  # negbin
-  # reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL, illegal = ILL,
-  #                                                  outcome_variable = paste0("lucpfip_rapid_pixelcount"),
-  #                                                  distribution = "negbin")
-  # i <- i+1
-  
-  # unit FE
-  reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL, illegal = ILL,
-                                                   outcome_variable = paste0("lucpfip_rapid_pixelcount"),
-                                                   fe = "lonlat")
-  i <- i+1
-}
+# if(SIZE == "i"){
+#   # loops over critical parameters (not repeating because the outcome is different)
+#   for(IMP in c(1, 2)){
+#     for(XPYA in c(2, 3, 4)){
+#       for(LAG in c("_lag1", "")){
+#         reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL, illegal = ILL,
+#                                                          outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+#                                                          imp = IMP,
+#                                                          x_pya = XPYA,
+#                                                          lag_or_not = LAG)
+#         i <- i+1
+#       }
+#     }
+#   }    
+#   i # 28
+#   
+#   # in CA
+#   reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL, illegal = ILL,
+#                                                    outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+#                                                    catchment = "CA") 
+#   i <- i+1
+#   
+#   # With 2way clustering
+#   reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL, illegal = ILL,
+#                                                    outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+#                                                    SE = "twoway")
+#   i <- i+1
+#   
+#   # negbin
+#   # reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL, illegal = ILL,
+#   #                                                  outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+#   #                                                  distribution = "negbin")
+#   # i <- i+1
+#   
+#   # unit FE
+#   reg_stats_indvar_list[[i]] <- make_spec_chart_df(island = ISL, illegal = ILL,
+#                                                    outcome_variable = paste0("lucpfip_rapid_pixelcount"),
+#                                                    fe = "lonlat")
+#   i <- i+1
+# }
 
 
 ## For alternative distributional assumptions
