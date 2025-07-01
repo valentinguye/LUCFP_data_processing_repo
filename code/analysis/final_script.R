@@ -101,7 +101,7 @@ rm(d_30, d_50)
 # # Commented out below are the arguments of the regression making function. 
 # # They may be useful to run parts of the operations within the function. 
 # catchment = "CR"
-# outcome_variable = "lucpfip_pixelcount"
+# outcome_variable = "lucpfap_pixelcount"
 # island = "both"
 # start_year = 2002
 # end_year = 2014
@@ -132,7 +132,7 @@ rm(d_30, d_50)
 # interact_regressors = TRUE
 # interacted = "regressors"
 # pya_ov = FALSE
-# illegal = "no_ill2"# "ill2" #
+# illegal = "all"# "ill2" #
 # weights = FALSE
 # min_forest_2000 = 0
 # min_coverage = 0
@@ -332,6 +332,7 @@ make_base_reg <- function(island,
         filter((!is.na(illegal2) & illegal2) | (!is.na(illegal2) & !illegal2 & any_sm_in_cell)) %>% 
         as.data.frame()
     }
+  
   
   if(offset & grepl("lucpf", outcome_variable)){offset_fml <- ~log(remain_pf_pixelcount)}
   #if(offset & grepl("lucf", outcome_variable)){offset_fml <- ~log(remain_f30th_pixelcount)}
@@ -589,6 +590,23 @@ make_base_reg <- function(island,
   #   d$sample_coverage <- d$n_reachable_ibs/d$n_reachable_uml
   # }
   
+  # Make baseline forest cover share of cell, if it is featured in the interaction terms or controls
+  if("share_pfc2000_total" %in% c(interaction_terms, controls)){
+    d = d %>% mutate(share_pfc2000_total = pfc2000_total_pixelcount*pixel_area_ha/900)
+  }
+  
+  # INTERACTING OUTCOME SHARES 
+  if("share_ill" %in% controls){
+    d = 
+      d %>% 
+      mutate(share_ill = if_else(lucpfap_pixelcount > 0, lucpfip_pixelcount*illegal2 / lucpfap_pixelcount, 0)) # & !is.na(illegal2)
+    # This sets share_ill to NA when illegal2 is NA. 
+  }
+  if("share_sm" %in% controls){
+    d = 
+      d %>% 
+      mutate(share_sm = if_else(lucpfap_pixelcount > 0, lucpfsmp_pixelcount / lucpfap_pixelcount, 0))
+  }
   
   
   ### SELECT DATA FOR REGRESSION
@@ -933,12 +951,12 @@ make_base_reg <- function(island,
 # for the K first regressors in the models fitted by make_base_reg 
 # If there are interactions in the models, the APEs (and SEs) of the interaction effects are computed (may not work if K > 1 then)
 
-# res_data <- res_data_list_full[[1]]
+# res_data <- res_data_list_byplantation[[1]]
 # k = 1
 # K=1
 # cumulative <- TRUE
-# controls_pe = F
-# SE = "cluster"
+# controls_pe = FALSE
+# # SE = "cluster"
 # CLUSTER = "reachable"
 # stddev = FALSE
 # rel_price_change = 0.01 # sd/m #
@@ -3359,78 +3377,116 @@ rm(res_data_list_interact)
 
 
 
-## INTERACTION INITIAL FOREST COVER -------------------------------------------------------------
-### For each plantation type -----------------------------
-res_data_list_interact_ifc <- list()
-elm <- 1
-
-size_list <- list("i","sm", "unr", "a")
-
-# legality definition
-ill_def <- 2
-ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
-
-for(SIZE in size_list){
-  if(SIZE == "i"){
-    # Industrial by illegal status
-    for(ILL in ill_status){
-      res_data_list_interact_ifc[[elm]] <- make_base_reg(island = ISL,
-                                                     outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                     interaction_terms = c("pfc2000_total_pixelcount"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                     controls = c("n_reachable_uml", "pfc2000_total_pixelcount"),
-                                                     illegal = ILL,
-                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-                                                     offset = FALSE)
-      names(res_data_list_interact_ifc)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-      elm <- elm + 1
-    }
-  } else {
-    # If size == sm or a, we do want to include all legal statuses.
-    # If size == unr, the selection of illegal indus is handled in make_base_reg 
-    ILL <- "all"
-    res_data_list_interact_ifc[[elm]] <- make_base_reg(island = ISL,
-                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                   interaction_terms = c("pfc2000_total_pixelcount"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   controls = c("n_reachable_uml", "pfc2000_total_pixelcount"),
-                                                   illegal = ILL,
-                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-                                                   offset = FALSE)
-    names(res_data_list_interact_ifc)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-    elm <- elm + 1
-  }}
-
-# OR 
+## INTERACTION BY TYPE OF PLANTATION & INITIAL FOREST COVER -------------------------------------------------------------
 ### Within an interaction with plantation type shares -----------------------------
 res_data_list_byplantation <- list()
 elm <- 1
 ISL <- "both"
 ILL <- "all"
 
+# by ILL
 res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-                                                   interaction_terms = c("share_ill", "share_sm", "pfc2000_total_pixelcount"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   controls = c("n_reachable_uml", "share_ill", "share_sm","pfc2000_total_pixelcount"),
+                                                   interaction_terms = c("share_ill"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_ill"),
                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
                                                    offset = FALSE)
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILL")
 elm <- elm + 1
 
+# by ILL and IFC
+res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+                                                   outcome_variable = paste0("lucpfap_pixelcount"),
+                                                   interaction_terms = c("share_ill", "share_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_ill", "share_pfc2000_total"),
+                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                   offset = FALSE)
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLandIFC")
+elm <- elm + 1
+
+# by SM
+res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+                                                   outcome_variable = paste0("lucpfap_pixelcount"),
+                                                   interaction_terms = c("share_sm"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml","share_sm"),
+                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                   offset = FALSE)
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_bySM")
+elm <- elm + 1
+
+# by SM and IFC
+res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+                                                   outcome_variable = paste0("lucpfap_pixelcount"),
+                                                   interaction_terms = c("share_sm", "share_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_sm", "share_pfc2000_total"),
+                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                   offset = FALSE)
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_bySMandIFC")
+elm <- elm + 1
+
+# by ILL and SM 
+res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+                                                   outcome_variable = paste0("lucpfap_pixelcount"),
+                                                   interaction_terms = c("share_ill", "share_sm"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_ill", "share_sm"),
+                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                   offset = FALSE)
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLandSM")
+elm <- elm + 1
+
+# by ILL and SM and IFC
+res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+                                                   outcome_variable = paste0("lucpfap_pixelcount"),
+                                                   interaction_terms = c("share_ill", "share_sm", "share_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_ill", "share_sm","share_pfc2000_total"),
+                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                   offset = FALSE)
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLandSMandIFC")
+elm <- elm + 1
 
 ## PARTIAL EFFECTS
 rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
 ape_mat = list()
 reg_res_list = list()
-for(REGELM in 1:length(res_data_list_interact_ifc)){
+for(REGELM in 1:length(res_data_list_byplantation)){
   # get estimation results and data
   # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-  res_data <- res_data_list_interact_ifc[[REGELM]]
+  res_data <- res_data_list_byplantation[[REGELM]]
   reg_res <- res_data[[1]]
   d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
   rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM, rounding = 4) # and for the same reason, this cannot be wrapped in other functions
+  ape_mat1 <- make_APEs(rounding = 3) # and for the same reason, this cannot be wrapped in other functions
+  
+  # arrange depending on interaction set 
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byILL"){ 
+    # add 4 rows after 4th one. 
+    ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), matrix(ape_mat1[5:6,]))
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLandIFC"){ 
+    # add 2 rows after 4th one. 
+    ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), matrix(ape_mat1[5:8,]))
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_bySM"){ 
+    # add 2 rows after 2nd one. 
+    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), matrix(ape_mat1[3:6,]))
+    # and again 2 rows after 6th one. 
+    ape_mat1 <- rbind(matrix(ape_mat1[1:6,]), matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), matrix(ape_mat1[7:8,]))
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_bySMandIFC"){ 
+    # add 2 rows after 2nd one. 
+    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), matrix(ape_mat1[3:8,]))
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLandSM"){ 
+    # add 2 rows after 6th one. 
+    ape_mat1 <- rbind(matrix(ape_mat1[1:6,]), matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), matrix(ape_mat1[7:8,]))
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLandSMandIFC"){ 
+    # add no row
+  }
+  ape_mat[[REGELM]] <- ape_mat1
   reg_res_list[[REGELM]] <- reg_res
   rm(d_clean, reg_res)
 }
-# ape_mat <- lapply(res_data_list_interact_ifc, FUN = make_APEs) # this was the way to do it until it stopped working, on R 4.5 
 lapply(reg_res_list, FUN = function(x) x$convStatus)
 
 ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
@@ -3438,35 +3494,13 @@ row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Obs
 ape_mat
 colnames(ape_mat) <- NULL
 
-# for(SIZE in size_list){
-#   for(ILL in ill_status){
-#     res_data_list_interact_ifc[[elm]] <- make_base_reg(island = "both",
-#                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-#                                                    interaction_terms = c("n_reachable_uml"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-#                                                    illegal = ILL,
-#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-#                                                    offset = FALSE)
-#     names(res_data_list_interact_ifc)[elm] <- paste0("both_",SIZE,"_",ILL)
-#     elm <- elm + 1
-#   }
-# }
 
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "r",
-      caption = "Price elasticity heterogeneity across ownership and local market development") %>% #of 1 percentage change in medium-run price signal
+      caption = "Price elasticity heterogeneity across local market development") %>% #of 1 percentage change in medium-run price signal
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
   add_header_above(c(" " = 1,
-                     "Legal" = 1,
-                     "Illegal" = 1,
-                     "All" = 1, 
-                     " " = 3),
-                   bold = F,
-                   align = "c") %>%
-  add_header_above(c(" " = 1,
-                     "Industrial plantations" = 3,
-                     "Smallholder plantations" = 1, 
-                     "Unregulated plantations" = 1, 
-                     "All" = 1),
+                     "All plantations" = 6),
                    align = "c",
                    strikeout = F) %>%
   add_header_above(c(" " = 1,
@@ -3479,13 +3513,17 @@ kable(ape_mat, booktabs = T, align = "r",
                    align = "c") %>%
   pack_rows("Price signal", 1, 2, 
             italic = TRUE, bold = TRUE)  %>%
-  pack_rows("Interaction with", 3, 4, 
+  pack_rows("Interaction with", 3, 8, 
             italic = FALSE, bold = TRUE)  %>%
   # pack_rows("Domestic private \n ownership", 3, 4, 
   #           italic = TRUE, bold = TRUE)  %>%
   # pack_rows("Foreign ownership", 5, 6, 
   #           italic = TRUE, bold = TRUE)  %>%
-  pack_rows("# reachable mills", 3, 4, 
+  pack_rows("Share industrial illegal", 3, 4, 
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows("Share smallholder", 5, 6, 
+            italic = TRUE, bold = TRUE)  %>%
+  pack_rows("Share initial forest cover", 7, 8, 
             italic = TRUE, bold = TRUE)  %>%
   # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.1em", hline_before = TRUE) %>% 
   column_spec(column = 1,
@@ -3495,7 +3533,71 @@ kable(ape_mat, booktabs = T, align = "r",
               width = "8em",
               latex_valign = "b")
 
-rm(res_data_list_interact_ifc)
+rm(res_data_list_byplantation)
+
+# # OR 
+# ### For each plantation type -----------------------------
+# res_data_list_interact_ifc <- list()
+# elm <- 1
+# 
+# size_list <- list("i","sm", "unr", "a")
+# 
+# # legality definition
+# ill_def <- 2
+# ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
+# 
+# for(SIZE in size_list){
+#   if(SIZE == "i"){
+#     # Industrial by illegal status
+#     for(ILL in ill_status){
+#       res_data_list_interact_ifc[[elm]] <- make_base_reg(island = ISL,
+#                                                      outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+#                                                      interaction_terms = c("pfc2000_total_pixelcount"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                      controls = c("n_reachable_uml", "pfc2000_total_pixelcount"),
+#                                                      illegal = ILL,
+#                                                      n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                      offset = FALSE)
+#       names(res_data_list_interact_ifc)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+#       elm <- elm + 1
+#     }
+#   } else {
+#     # If size == sm or a, we do want to include all legal statuses.
+#     # If size == unr, the selection of illegal indus is handled in make_base_reg 
+#     ILL <- "all"
+#     res_data_list_interact_ifc[[elm]] <- make_base_reg(island = ISL,
+#                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+#                                                    interaction_terms = c("pfc2000_total_pixelcount"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                    controls = c("n_reachable_uml", "pfc2000_total_pixelcount"),
+#                                                    illegal = ILL,
+#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                    offset = FALSE)
+#     names(res_data_list_interact_ifc)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+#     elm <- elm + 1
+#   }}
+# 
+# ## PARTIAL EFFECTS
+# rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+# ape_mat = list()
+# reg_res_list = list()
+# for(REGELM in 1:length(res_data_list_interact_ifc)){
+#   # get estimation results and data
+#   # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+#   res_data <- res_data_list_interact_ifc[[REGELM]]
+#   reg_res <- res_data[[1]]
+#   d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+#   rm(res_data)
+#   ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM, rounding = 7) # and for the same reason, this cannot be wrapped in other functions
+#   reg_res_list[[REGELM]] <- reg_res
+#   rm(d_clean, reg_res)
+# }
+# # ape_mat <- lapply(res_data_list_interact_ifc, FUN = make_APEs) # this was the way to do it until it stopped working, on R 4.5 
+# lapply(reg_res_list, FUN = function(x) x$convStatus)
+# 
+# ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+# row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+# ape_mat
+# colnames(ape_mat) <- NULL
+
 
 ## LUC DYNAMICS --------------------------------------------------------------------------------------
 
