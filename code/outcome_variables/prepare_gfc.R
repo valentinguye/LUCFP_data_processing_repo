@@ -54,9 +54,8 @@ provinces <- provinces$geometry
 
 indonesian_extent <- st_as_sfc(st_bbox(provinces))
 
-aoi_sp <- as(indonesian_extent, "Spatial")
-
-rm(provinces, indonesian_extent)
+# aoi_sp <- as(indonesian_extent, "Spatial")
+rm(provinces)
 
 ### Download GFC data
 
@@ -64,7 +63,7 @@ rm(provinces, indonesian_extent)
 data_folder <- file.path("temp_data/GFC_tiles")
 
 # Calculate tiles needed to cover the AOI
-tiles <- calc_gfc_tiles(aoi_sp)
+tiles <- calc_gfc_tiles(indonesian_extent)
 # length(tiles) 
 
 # version of GFC used here.
@@ -84,14 +83,13 @@ rm(tiles)
 
 # (can only extract all layers with default stack=change)
 # to better understand extract_gfc see https://rdrr.io/cran/gfcanalysis/src/R/extract_gfc.R
-extract_gfc(aoi_sp, data_folder,
+extract_gfc(st_as_sf(indonesian_extent), data_folder,
             stack = "change",
             to_UTM = FALSE,
             dataset = gfc_version,
             filename = file.path(paste0("temp_data/processed_lu/gfc_data_Indonesia.tif")),
             overwrite = TRUE )
 
-rm(aoi_sp)
 
 ### Threshold GFC data 
 

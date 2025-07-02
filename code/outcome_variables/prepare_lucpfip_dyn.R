@@ -138,6 +138,51 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   rm(aoi)
   
   # it is not projected # 
+  ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+  #### Prepare loss layer from GFC data  ####
+  
+  # Import gfc data prepared (Downloaded, extracted, thresholded with gfcanalysis package in prepare_gfc.R)
+  thed_gfc_data <- brick(file.path(paste0("temp_data/processed_lu/gfc_data_Indonesia_30th.tif"))) 
+  
+  
+  ### Select the loss layer (15 and 40 are arbitrary, the max value of loss layer is an integer corresponding 
+  # to the latest year after 2000 when loss is observed. We need a GFC version with this year being at least 2015. 
+  # and we do not want to select a layer with percentage and values up to 100. 
+  
+  loss <- thed_gfc_data[[which(thed_gfc_data@data@max > 15 & thed_gfc_data@data@max < 40)]]
+  
+  rm(thed_gfc_data)
+  
+  ### Crop to extent of island 
+  crop(loss, aoi_sp, 
+       filename = file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th.tif")),
+       datatype = "INT1U",
+       overwrite = TRUE)
+  
+  
+  ### Project loss layer
+  
+  # This is necessary because we will need to make computations on this map within mills' catchment *areas*.
+  # If one does not project maps, then catchment areas all have different areas while being defined with a common buffer.
+  
+  loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th.tif")))
+  
+  beginCluster() # this uses by default detectCores() - 1 
+  
+  projectRaster(loss,
+                method = "ngb",
+                crs = indonesian_crs, 
+                filename = file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")), 
+                datatype = "INT1U",
+                overwrite = TRUE)
+  
+  endCluster()
+  
+  rm(loss) 
+  removeTmpFiles(h=0)
+  
+  print(paste0("complete ", "temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif"))
+  
   
   ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
   #### Make a layer of earliest detected industrial oil palm plantations ####
@@ -335,13 +380,13 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   beginCluster() # uses by default detectedCores() - 1
   
   # For replacement
-  clusterR(rs_replacement,
-           fun = calc, #
-           args = list(overlay_replacement),
-           filename = file.path(paste0("temp_data/processed_lu/lucpfip_replace_",island,"_total.tif")),
-           # the name is not very meaningful, but it's for coding purpose along this script, to have this outcome in the loops easily. 
-           datatype = "INT1U",
-           overwrite = TRUE )
+  # clusterR(rs_replacement,
+  #          fun = calc, #
+  #          args = list(overlay_replacement),
+  #          filename = file.path(paste0("temp_data/processed_lu/lucpfip_replace_",island,"_total.tif")),
+  #          # the name is not very meaningful, but it's for coding purpose along this script, to have this outcome in the loops easily. 
+  #          datatype = "INT1U",
+  #          overwrite = TRUE )
   
   # For rapid conversion
   clusterR(rs_rapid,
@@ -425,7 +470,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   
   ### Execute it for each lucpfip dynamic
   
-  dynamicS <- c("replace", "rapid", "slow")
+  dynamicS <- c("rapid", "slow") # "replace",
   for(dyna in dynamicS){
     
     parallel_split(dyna = dyna, detectCores() - 1) # ~500 seconds / annual layer
@@ -459,7 +504,7 @@ aggregate_lucpfip_dynamics <- function(island, parcel_size){
     # We attribute the tasks to CPU "workers" at the annual level and not at the dyna level.
     # Hence, if a worker is done with its annual task before the others it can move on to the next one and workers' labor is maximized wrt.
     # attributing tasks at the dyna level.
-    years <- seq(from = 2001, to = 2018, by = 1)
+    years <- seq(from = 2001, to = 2015, by = 1)
     
     ## read the input to the task
     # is done within each task because it is each time different here.
@@ -513,7 +558,7 @@ aggregate_lucpfip_dynamics <- function(island, parcel_size){
   
   ### Execute the function to compute the RasterBrick object of 18 annual layers for each primary forest type
   
-  dynamicS <- c("replace", "rapid", "slow")
+  dynamicS <- c("rapid", "slow") # "replace", 
   for(dyna in dynamicS){
     # run the computation, that writes the layers 
     parallel_aggregate(dyna = dyna, ncores = detectCores() - 1)
@@ -592,7 +637,7 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
   # 3. reshaping the values in these parcels to a long format panel dataframe
   raster_to_df <- function(dyna){
     
-    years <- seq(from = 2001, to = 2018, by = 1)
+    years <- seq(from = 2001, to = 2015, by = 1)
     
     ### IBS
 
@@ -671,7 +716,7 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
     # the layer index (1-18) indeed corresponds to the year (2001-2018) because, in aggregate_lucpfip, at the end,
     # rasterlist is ordered along 2001-2018 and this order is preserved when the layers are bricked.
-    varying_vars <- paste0(parcels_brick_name, "_IBS_masked.", seq(from = 1, to = 18))
+    varying_vars <- paste0(parcels_brick_name, "_IBS_masked.", seq(from = 1, to = 15))
 
     # reshape to long
     m.df <- stats::reshape(ibs_msk_df,
@@ -700,7 +745,7 @@ to_panel_within_CR_dynamics <- function(island, parcel_size, catchment_radius){
   }
   
   ### Execute it
-  dynamicS <- c("replace", "rapid", "slow")
+  dynamicS <- c("rapid", "slow") # "replace", 
   for(dyna in dynamicS){
     
     raster_to_df(dyna = dyna)
@@ -729,7 +774,7 @@ to_panel_within_UML_CR_dynamics <- function(island, parcel_size){
   # 3. reshaping the values in these parcels to a long format panel dataframe
   raster_to_df <- function(dyna){
     
-    years <- seq(from = 2001, to = 2018, by = 1)
+    years <- seq(from = 2001, to = 2015, by = 1)
     
     ### UML
     
@@ -836,7 +881,7 @@ to_panel_within_UML_CR_dynamics <- function(island, parcel_size){
   }
   
   ### Execute it
-  dynamicS <- c("replace", "rapid", "slow")
+  dynamicS <- c("rapid", "slow") # "replace",
   for(dyna in dynamicS){
     
     raster_to_df(dyna = dyna)
@@ -907,12 +952,12 @@ while(CR < 60000){
   IslandS <- c("Sumatra", "Kalimantan")
   for(Island in IslandS){
     
-    df_replace   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_replace_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
+    # df_replace   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_replace_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
     df_rapid <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_rapid_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
     df_slow    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_slow_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
     
-    df_rapid <- dplyr::select(df_rapid, -lon, -lat, -idncrs_lon, -idncrs_lat)
-    df <- inner_join(df_replace, df_rapid, by = c("lonlat", "year"))
+    df <- dplyr::select(df_rapid, -lon, -lat, -idncrs_lon, -idncrs_lat)
+    df <- inner_join(df_replace, df, by = c("lonlat", "year"))
     
     df_slow <- dplyr::select(df_slow, -lon, -lat, -idncrs_lon, -idncrs_lat)
     df_list[[match(Island, IslandS)]] <- inner_join(df, df_slow, by = c("lonlat", "year"))
@@ -957,12 +1002,12 @@ df_list <- list()
 IslandS <- c("Sumatra", "Kalimantan")
 for(Island in IslandS){
   
-  df_replace   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_replace_",Island,"_",PS/1000,"km_82km_UML_CR_total.rds")))
+  # df_replace   <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_replace_",Island,"_",PS/1000,"km_82km_UML_CR_total.rds")))
   df_rapid <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_rapid_",Island,"_",PS/1000,"km_82km_UML_CR_total.rds")))
   df_slow    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_slow_",Island,"_",PS/1000,"km_82km_UML_CR_total.rds")))
   
-  df_rapid <- dplyr::select(df_rapid, -lon, -lat, -idncrs_lon, -idncrs_lat)
-  df <- inner_join(df_replace, df_rapid, by = c("lonlat", "year"))
+  df <- dplyr::select(df_rapid, -lon, -lat, -idncrs_lon, -idncrs_lat)
+  df <- inner_join(df_replace, df, by = c("lonlat", "year"))
   
   df_slow <- dplyr::select(df_slow, -lon, -lat, -idncrs_lon, -idncrs_lat)
   df_list[[match(Island, IslandS)]] <- inner_join(df, df_slow, by = c("lonlat", "year"))
