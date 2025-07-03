@@ -167,7 +167,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   
   loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th.tif")))
   
-  beginCluster() # this uses by default detectCores() - 1 
+  beginCluster(n = min(detectCores() - 1, 3)) # this uses by default detectCores() - 1 
   
   projectRaster(loss,
                 method = "ngb",
@@ -231,7 +231,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   loss <- raster(file.path(paste0("temp_data/processed_lu/gfc_loss_",island,"_30th_prj.tif")))
   
   # get the two rasters on the same projection
-  beginCluster() # this uses by default detectCores() - 1
+  beginCluster(min(detectCores() - 1, 3)) # this uses by default detectCores() - 1
   projectRaster(from = earliest, to = loss,
                 method = "ngb",
                 filename = file.path(paste0("temp_data/processed_lu/austin_earliest_detected_",island,"_aligned.tif")),
@@ -297,7 +297,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   # that the highest interval is closed on the right if right = FALSE, so in our case here. 
   time_laps <- raster(file.path(paste0("temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_",island,".tif")))
   
-  beginCluster() # this uses by default detectCores() - 1
+  beginCluster(min(detectCores() - 1, 3)) # this uses by default detectCores() - 1
   
   # REPLACEMENT OF TREES WITHIN PLANTATIONS: loss that occurs within plantations. 
   m1 <- c(-51,-50,0,
@@ -425,7 +425,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
     # We attribute the tasks to CPU "workers" at the annual level and not at the forest type level.
     # Hence, if a worker is done with its annual task before the others it can move on to the next one and workers' labor is maximized wrt.
     # attributing tasks at the forest type level.
-    years <- seq(from = 2001, to = 2018, by = 1)
+    years <- seq(from = 2001, to = 2015, by = 1)
     
     ## read the input to the task
     # is done within each task because it is each time different here.
@@ -473,7 +473,7 @@ prepare_pixel_lucpfip_dynamics <- function(island){
   dynamicS <- c("rapid", "slow") # "replace",
   for(dyna in dynamicS){
     
-    parallel_split(dyna = dyna, detectCores() - 1) # ~500 seconds / annual layer
+    parallel_split(dyna = dyna, min(detectCores() - 1, 3)) # ~500 seconds / annual layer
     
     removeTmpFiles(h=0)
   }  
@@ -561,7 +561,7 @@ aggregate_lucpfip_dynamics <- function(island, parcel_size){
   dynamicS <- c("rapid", "slow") # "replace", 
   for(dyna in dynamicS){
     # run the computation, that writes the layers 
-    parallel_aggregate(dyna = dyna, ncores = detectCores() - 1)
+    parallel_aggregate(dyna = dyna, ncores = min(detectCores() - 1, 3))
     
     # brick the layers together and write the brick
     rasterlist <- list.files(path = "temp_data/processed_lu/annual_maps", 
@@ -583,7 +583,14 @@ aggregate_lucpfip_dynamics <- function(island, parcel_size){
   
   print(paste0("complete aggregate_lucpfip_dynamics ",island," ",parcel_size/1000, "km"))
 }
-# 
+
+PS <- 1000  # this was also run with PS = 1000
+IslandS <- c("Sumatra", "Kalimantan")#
+for(Island in IslandS){
+  aggregate_lucpfip_dynamics(island = Island,
+                             parcel_size = PS)
+}
+
 # timelaps <- raster(file.path(paste0("temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_",island,".tif")))
 # timelaps_s <- sampleRandom(timelaps, 10000)
 # unique(timelaps_s)

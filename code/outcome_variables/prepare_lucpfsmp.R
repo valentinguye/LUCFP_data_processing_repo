@@ -312,7 +312,7 @@ parallel_split <- function(plant_type, ncores){
 plant_typeS <- c("s", "m")
 for(plant_type in plant_typeS){
   
-  parallel_split(plant_type = plant_type, detectCores() - 1) # ~500 seconds / annual layer
+  parallel_split(plant_type = plant_type, min(detectCores() - 1, 3)) # ~500 seconds / annual layer
   
   removeTmpFiles(h=0)
 }
@@ -398,7 +398,7 @@ aggregate_lucpfsmp <- function(island, parcel_size){
   plant_typeS <- c("s", "m")
   for(plant_type in plant_typeS){
     # run the computation, that writes the layers 
-    parallel_aggregate(plant_type = plant_type, ncores = detectCores() - 1)
+    parallel_aggregate(plant_type = plant_type, ncores = min(detectCores() - 1, 3))
     
     # brick the layers together and write the brick
     rasterlist <- list.files(path = "temp_data/processed_lu/annual_maps", 
