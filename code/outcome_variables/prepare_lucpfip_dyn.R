@@ -584,12 +584,6 @@ aggregate_lucpfip_dynamics <- function(island, parcel_size){
   print(paste0("complete aggregate_lucpfip_dynamics ",island," ",parcel_size/1000, "km"))
 }
 
-PS <- 1000  # this was also run with PS = 1000
-IslandS <- c("Sumatra", "Kalimantan")#
-for(Island in IslandS){
-  aggregate_lucpfip_dynamics(island = Island,
-                             parcel_size = PS)
-}
 
 # timelaps <- raster(file.path(paste0("temp_data/processed_lu/earliest_ioppm_to_loss_timelaps_",island,".tif")))
 # timelaps_s <- sampleRandom(timelaps, 10000)
@@ -915,7 +909,7 @@ for(Island in IslandS){
 }
 
 ### Aggregate this Island map to a chosen parcel size (3km, 6km and 9km for instance)
-PS <- 3000  # this was also run with PS = 1000
+PS <- 3000  # this was also run with PS = 1000 & PS = 5000
 IslandS <- c("Sumatra", "Kalimantan")#
 for(Island in IslandS){
   aggregate_lucpfip_dynamics(island = Island,
@@ -924,7 +918,7 @@ for(Island in IslandS){
 
 ### For that Island and for each aggregation factor, extract panels of parcels within different catchment area sizes 
 # (radius of 10km, 30km and 50km)
-PS <- 3000  # this was also run with PS = 1000
+# this was run with PS = 1000, 3000 and 5000
 IslandS <- c("Sumatra","Kalimantan")#
 for(Island in IslandS){
   CR <- 30000 # i.e. 30km radius
@@ -939,7 +933,6 @@ for(Island in IslandS){
 
 
 ### Transform to panel data but within the maximal 82km CR from UML 
-PS <- 3000  # this was also run with PS = 1000
 IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   to_panel_within_UML_CR_dynamics(island = Island,
@@ -948,7 +941,6 @@ for(Island in IslandS){
 
 
 #### Gather the lucfip variables for each parcel_size and catchment_radius combinations. ####
-PS <- 3000  # this was also run with PS = 1000
 
 ### IBS
 CR <- 30000 # i.e. 30km radius
@@ -963,15 +955,15 @@ while(CR < 60000){
     df_rapid <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_rapid_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
     df_slow    <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_slow_",Island,"_",PS/1000,"km_",CR/1000,"km_IBS_CR_total.rds")))
     
-    df <- dplyr::select(df_rapid, -lon, -lat, -idncrs_lon, -idncrs_lat)
-    df <- inner_join(df_replace, df, by = c("lonlat", "year"))
-    
+    # df <- dplyr::select(df_rapid, -lon, -lat, -idncrs_lon, -idncrs_lat)
+    # df <- inner_join(df_replace, df, by = c("lonlat", "year"))
+
     df_slow <- dplyr::select(df_slow, -lon, -lat, -idncrs_lon, -idncrs_lat)
-    df_list[[match(Island, IslandS)]] <- inner_join(df, df_slow, by = c("lonlat", "year"))
+    df_list[[match(Island, IslandS)]] <- inner_join(df_rapid, df_slow, by = c("lonlat", "year"))
 
     # here, it's normal that df_replace do not have the same size as the two others. 
     if(nrow(df_list[[match(Island, IslandS)]]) != nrow(df_slow)){stop("data frames do not all have the same set of grid cells")}
-    rm(df, df_replace, df_rapid, df_slow)
+    rm(df, df_rapid, df_slow) # df_replace
   }
   
   # stack the three Islands together

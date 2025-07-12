@@ -144,11 +144,12 @@ sop <- smop[smop$type == 3,] %>% st_geometry()
 mop <- smop[smop$type == 2,] %>% st_geometry()
 
 # dissolve by type
-sop <- st_union(x = sop, by_feature = FALSE)
-mop <- st_union(x = mop, by_feature = FALSE)
-
+# sf_use_s2(FALSE) or transform before unioning. 
 sop <- st_transform(sop, crs = indonesian_crs)
 mop <- st_transform(mop, crs = indonesian_crs)
+
+sop <- st_union(x = sop, by_feature = FALSE)
+mop <- st_union(x = mop, by_feature = FALSE)
 
 # make it Spatial class
 sop_sp <- as(sop, "Spatial")
@@ -264,7 +265,7 @@ parallel_split <- function(plant_type, ncores){
   # We attribute the tasks to CPU "workers" at the annual level and not at the plantation type level.
   # Hence, if a worker is done with its annual task before the others it can move on to the next one and workers' labor is maximized wrt.
   # attributing tasks at the plantation type level.
-  years <- seq(from = 2001, to = 2018, by = 1)
+  years <- seq(from = 2001, to = 2015, by = 1)
   
   ## read the input to the task
   # is done within each task because it is each time different here.
@@ -342,7 +343,7 @@ aggregate_lucpfsmp <- function(island, parcel_size){
     # We attribute the tasks to CPU "workers" at the annual level and not at the plant_type level.
     # Hence, if a worker is done with its annual task before the others it can move on to the next one and workers' labor is maximized wrt.
     # attributing tasks at the plant_type level.
-    years <- seq(from = 2001, to = 2018, by = 1)
+    years <- seq(from = 2001, to = 2015, by = 1)
     
     ## read the input to the task
     # is done within each task because it is each time different here.
@@ -451,7 +452,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
   # 3. reshaping the values in these parcels to a long format panel dataframe
   raster_to_df <- function(plant_type){
     
-    years <- seq(from = 2001, to = 2018, by = 1)
+    years <- seq(from = 2001, to = 2015, by = 1)
     
     ### IBS 
     
@@ -530,7 +531,7 @@ to_panel_within_CR <- function(island, parcel_size, catchment_radius){
     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
     # the layer index (1-18) indeed corresponds to the year (2001-2018) because, in aggregate_lucpfsmp, at the end, 
     # rasterlist is ordered along 2001-2018 and this order is preserved when the layers are bricked. 
-    varying_vars <- paste0(parcels_brick_name, "_IBS_masked.", seq(from = 1, to = 18))
+    varying_vars <- paste0(parcels_brick_name, "_IBS_masked.", seq(from = 1, to = 15))
     
     # reshape to long
     m.df <- stats::reshape(ibs_msk_df,
@@ -588,7 +589,7 @@ to_panel_within_UML_CR <- function(island, parcel_size){
   # 3. reshaping the values in these parcels to a long format panel dataframe
   raster_to_df <- function(plant_type){
     
-    years <- seq(from = 2001, to = 2018, by = 1)
+    years <- seq(from = 2001, to = 2015, by = 1)
   
     ### UML 
     
@@ -668,7 +669,7 @@ to_panel_within_UML_CR <- function(island, parcel_size){
     
     # vector of the names in the wide format of our time varying variables
     # the column names are the layer names in the parcels_brick + the layer index, separated by "." see examples in raster::as.data.frame
-    varying_vars <- paste0(parcels_brick_name, "_UML_masked.", seq(from = 1, to = 18))
+    varying_vars <- paste0(parcels_brick_name, "_UML_masked.", seq(from = 1, to = 15))
     
     # reshape to long
     m.df <- stats::reshape(uml_msk_df,
@@ -720,14 +721,14 @@ to_panel_within_UML_CR <- function(island, parcel_size){
 ### Prepare a 30m pixel map of lucfp for each Island
 IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
-  if(!file.exists(file.path(paste0("temp_data/processed_lu/annual_maps/lucpfmp_",Island,"_total_2018.tif")))){
+  if(!file.exists(file.path(paste0("temp_data/processed_lu/annual_maps/lucpfmp_",Island,"_total_2015.tif")))){
     
     prepare_pixel_lucpfsmp(Island)
   }
 }
 
 ### Aggregate this Island map to a chosen parcel size (3km, 6km and 9km for instance)
-PS <- 3000
+PS <- 3000 # this was also run with PS = 1000
 IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucpfmp_",Island,"_",PS/1000,"km_total.tif")))){
@@ -739,10 +740,10 @@ for(Island in IslandS){
 
 ### For that Island and for each aggregation factor, extract panels of parcels within different catchment area sizes 
 # (radius of 10km, 30km and 50km)
-PS <- 3000
+PS <- 3000 # this was also run with PS = 1000
 IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
-  CR <- 10000 # i.e. 10km radius
+  CR <- 30000 # i.e. 10km radius
   while(CR < 60000){
    
     to_panel_within_CR(island = Island,
@@ -754,7 +755,7 @@ for(Island in IslandS){
 }
 
 ### Transform to panel data but within the maximal 82km CR from UML 
-PS <- 3000
+PS <- 3000 # this was also run with PS = 1000
 IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   to_panel_within_UML_CR(island = Island,
@@ -764,10 +765,10 @@ for(Island in IslandS){
 
 
 #### Gather the lucfsmp variables for each parcel_size and catchment_radius combinations. ####
-PS <- 3000  
+PS <- 3000  # this was also run with PS = 1000
 
 ### IBS
-CR <- 10000 # i.e. 10km radius
+CR <- 30000 # i.e. 30km radius
 while(CR < 60000){
   
   # For each Island, join columns of plantation type variable 

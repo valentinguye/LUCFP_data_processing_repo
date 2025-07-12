@@ -952,16 +952,16 @@ make_base_reg <- function(island,
 # If there are interactions in the models, the APEs (and SEs) of the interaction effects are computed (may not work if K > 1 then)
 
 # res_data <- res_data_list_byplantation[[1]]
-# k = 1
-# K=1
-# cumulative <- TRUE
-# controls_pe = FALSE
-# # SE = "cluster"
-# CLUSTER = "reachable"
-# stddev = FALSE
-# rel_price_change = 0.01 # sd/m #
-# abs_price_change = 1
-# rounding = 2
+k = 1
+K=1
+cumulative <- TRUE
+controls_pe = FALSE
+# SE = "cluster"
+CLUSTER = "reachable"
+stddev = FALSE
+rel_price_change = 0.01 # sd/m #
+abs_price_change = 1
+rounding = 2
 
 make_APEs <- function(#res_data, 
                       reg_elm = 1,
@@ -1837,9 +1837,9 @@ make_des_table_ibs <- function(ibs_isl){
   
   
   # row names
-  row.names(rhs_des) <- c("First year in IBS", "FFB muv (USD/ton)", "FFB input (ton)", 
-                          "CPO muv (USD/ton", "CPO output (ton)", 
-                          "PKO muv (USD/ton)", "PKO output (ton)", 
+  row.names(rhs_des) <- c("First year in IBS", "FFB MUV (USD/ton)", "FFB input (ton)", 
+                          "CPO MUV (USD/ton", "CPO output (ton)", 
+                          "PKO MUV (USD/ton)", "PKO output (ton)", 
                           "CPO export share (%)", 
                           "Central government ownership (%)", 
                           "Local government ownership (%)", 
@@ -2449,8 +2449,8 @@ i <- i +1
 des_table <- bind_cols(list_desstat_all) %>% as.matrix()
 # row names
 row.names(des_table) <- c("Deforestation (ha)",
-                          "Price signal (USD/ton CPO)", 
-                          "Price signal (USD/ton FFB)"
+                          "CPO price signal (USD/ton)", 
+                          "FFB price signal (USD/ton)"
                           # "Public ownership (%)", 
                           # "Domestic private ownership (%)", 
                           # "Foreign ownership (%)", 
@@ -3037,6 +3037,7 @@ d_cs <- st_buffer(d_cs, dist = 1600)
 st_geometry(d_cs) <- sapply(st_geometry(d_cs), FUN = function(x){st_as_sfc(st_bbox(x))}) %>% st_sfc(crs = indonesian_crs)
 d_geo <- st_union(st_geometry(d_cs))
 d_geo <- st_transform(d_geo, crs = 4326)
+d_geo <- d_geo %>% st_as_sf() %>% mutate(label = "Plantation sites")
 
 
 # d_cs <- ddply(d_clean, "lonlat", summarise, 
@@ -3064,14 +3065,56 @@ uml$trase_code %>% unique() %>% length()
 # # remove those matched with ibs
 # uml <- uml[!(uml$trase_code %in% ibs$trase_code),]
 
+legend_df <- data.frame(x = 0, y = 0, label = "Mills") %>% 
+  st_as_sf(coords = c("x", "y"), crs = 4326)
 
-ggplot() +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank()) +
-  geom_sf(data=st_geometry(d_geo), color=alpha("grey",0.2))+
-  geom_sf(data = ibs, color = "black", size = 0.05) + 
-  geom_sf(data = st_geometry(countries), fill = "transparent") +
-  coord_sf(xlim = c(94, 120), ylim = c(-7, 7), expand = FALSE) 
+map1 =
+  ggplot() +
+    geom_sf(data = countries, fill = "grey", col = "black") +
+    geom_sf(data = indonesia_sf, fill = "white", col = "black") +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          panel.background = element_rect(colour = "lightgrey"), 
+          legend.position = "bottom",
+          legend.text = element_text(size = 18, face = "bold"),
+          legend.title = element_text(size = 18, face = "bold"),
+          legend.key = element_blank(), 
+          axis.text = element_text(size = 10),
+          # legend.key.spacing = unit(2, "cm"),
+          legend.key.height = unit(1.5, "cm"),
+          legend.key.width = unit(1.5, "cm")
+          # plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")
+          ) +
+    # geom_sf(data=st_geometry(d_geo), color=alpha("grey",0.2))+
+    geom_sf(data= d_geo, aes(fill = label, alpha=label), color = "transparent") +
+    scale_fill_manual(
+      name = " ",
+      values = c("Plantation sites" = "blue")
+    ) +
+    scale_alpha_manual(
+      name = " ",
+      values = c("Plantation sites" = 0.2)
+    ) +
+    geom_sf(data = legend_df, aes(shape = label, size = label, color = label), fill = NA) +
+    scale_size_manual(
+      name = " ",
+      values = c("Mills" = 4)
+    ) +
+    scale_shape_manual(
+      name = " ",
+      values = c("Mills" = 16)
+    ) +
+    scale_color_manual(
+      name = " ",
+      values = c("Mills" = "red")
+    ) +
+    geom_sf(data = ibs, color = "red", size = 0.15) + 
+    # geom_sf(data = st_geometry(countries), fill = "transparent") +
+    coord_sf(xlim = c(94, 119), ylim = c(-7, 7), expand = FALSE)
+    
+
+ggsave(map1, 
+       filename = "map_mills_sites.png", 
+       width=18, height=11)
 
 # leaflet() %>% 
 #   # we do not add these tiles if the figure is purposed for print in white and black. 
@@ -3181,19 +3224,19 @@ d_stack =
   d_stack %>% 
   mutate(
     loss_type = case_when(
-      loss_type=="leg_indus"   ~ "Legal industrial plantations", 
-      loss_type=="ill_indus"   ~ "Illegal industrial plantations", 
-      loss_type=="all_indus"   ~ "All industrial plantations", 
-      loss_type=="all_sm"  ~ "Smallholder plantations", 
-      loss_type=="unreg" ~ "Unregulated plantations",
-      loss_type=="all"   ~ "All plantations"
+      loss_type=="leg_indus"   ~ "(1) Legal industrial plantations", 
+      loss_type=="ill_indus"   ~ "(2) Illegal industrial plantations", 
+      loss_type=="all_indus"   ~ "(3) All industrial plantations", 
+      loss_type=="all_sm"      ~ "(4) Smallholder plantations", 
+      loss_type=="unreg"       ~ "(5) Unregulated plantations",
+      loss_type=="all"         ~ "(6) All plantations"
     ), 
-    loss_type = factor(loss_type, levels=c("Legal industrial plantations",
-                                           "Illegal industrial plantations", 
-                                           "All industrial plantations",
-                                           "Smallholder plantations",
-                                           "Unregulated plantations", 
-                                           "All plantations"))
+    loss_type = factor(loss_type, levels=c("(1) Legal industrial plantations",
+                                           "(2) Illegal industrial plantations", 
+                                           "(3) All industrial plantations",
+                                           "(4) Smallholder plantations",
+                                           "(5) Unregulated plantations", 
+                                           "(6) All plantations"))
   ) 
 
 ibs_cr_sf = 
@@ -3212,7 +3255,6 @@ ibs_cr_sf =
   st_geometry() %>% 
   st_union()
 
-label_cr = "Catchment radius \nof mills in analysis"# 
 # ibs_cr_sf <- ibs_cr_sf %>% st_as_sf() %>% mutate(label = label_cr)
 legend_df <- data.frame(x = 0, y = 0, label = "Catchment radius \nof mills in analysis") %>% 
   st_as_sf(coords = c("x", "y"), crs = 4326)
@@ -3252,12 +3294,13 @@ map <-
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_rect(colour = "lightgrey"), 
         legend.position = "bottom",
-        legend.text = element_text(size = 15, face = "bold"),
-        legend.title = element_text(size = 15, face = "bold"),
+        legend.text = element_text(size = 18, face = "bold"),
+        legend.title = element_text(size = 18, face = "bold"),
         legend.key = element_blank(), 
+        axis.text = element_text(size = 10),
         # legend.key.spacing = unit(2, "cm"),
-        legend.key.height = unit(1.4, "cm"),
-        legend.key.width = unit(2, "cm"),
+        legend.key.height = unit(1.5, "cm"),
+        legend.key.width = unit(2.2, "cm"),
         strip.text = element_text(size = 15, face = "bold"), 
         strip.background = element_rect(fill = "white", colour = "lightgrey")) 
 
@@ -3794,15 +3837,15 @@ kable(df, booktabs = T, align = "c",
                    align = "c") %>%
   pack_rows("Regression coefficient of:", 1, 10, 
             bold = TRUE)  %>% 
-  pack_rows(" FFB input volume in t", 1, 2, indent = FALSE, 
+  pack_rows(" FFB input kton in year t", 1, 2, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input volume in t-1", 3, 4, indent = FALSE, 
+  pack_rows(" FFB input kton in year t-1", 3, 4, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input volume in t-2", 5, 6, indent = FALSE, 
+  pack_rows(" FFB input kton in year t-2", 5, 6, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input volume in t-3", 7, 8, indent = FALSE, 
+  pack_rows(" FFB input kton in year t-3", 7, 8, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input volume 4 past year average", 9, 10, indent = FALSE, 
+  pack_rows(" FFB input kton, 4 past year average", 9, 10, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
   
   pack_rows("Fixed-effects:", 11, 12,
@@ -3810,7 +3853,7 @@ kable(df, booktabs = T, align = "c",
   pack_rows(" ", nrow(df)-1, nrow(df), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
   column_spec(column = 1,
               underline = FALSE, # useless - line under "Deforestation for:" will need to be removed manually in Overleaf 
-              width = "14em",
+              width = "15em",
               latex_valign = "m") 
 
 
@@ -3918,15 +3961,15 @@ kable(df, booktabs = T, align = "c",
                    align = "c") %>%
   pack_rows("Regression coefficient of:", 1, 10, 
             bold = TRUE)  %>% 
-  pack_rows(" FFB input volume in t", 1, 2, indent = FALSE, 
+  pack_rows(" FFB input kton in year t", 1, 2, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input volume in t-1", 3, 4, indent = FALSE, 
+  pack_rows(" FFB input kton in year t-1", 3, 4, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input volume in t-2", 5, 6, indent = FALSE, 
+  pack_rows(" FFB input kton in year t-2", 5, 6, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input volume in t-3", 7, 8, indent = FALSE, 
+  pack_rows(" FFB input kton in year t-3", 7, 8, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input volume 4 past year average", 9, 10, indent = FALSE, 
+  pack_rows(" FFB input kton, 4 past year average", 9, 10, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
   
   pack_rows("Fixed-effects:", 11, 12,
@@ -3934,7 +3977,7 @@ kable(df, booktabs = T, align = "c",
   pack_rows(" ", nrow(df)-1, nrow(df), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
   column_spec(column = 1,
               underline = FALSE, # useless - line under "Deforestation for:" will need to be removed manually in Overleaf 
-              width = "14em",
+              width = "15em",
               latex_valign = "m") 
 
 ## Table A.6 INTERACTION BY TYPE OF PLANTATION & INITIAL FOREST COVER -------------------------------------------------------------
@@ -4014,30 +4057,42 @@ for(REGELM in 1:length(res_data_list_byplantation)){
   reg_res <- res_data[[1]]
   d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
   rm(res_data)
-  ape_mat1 <- make_APEs(rounding = 3) # and for the same reason, this cannot be wrapped in other functions
+  ape_mat1 <- make_APEs(rounding = 5) # and for the same reason, this cannot be wrapped in other functions
   
   # arrange depending on interaction set 
   if(names(res_data_list_byplantation[REGELM]) == "both_a_byILL"){ 
     # add 4 rows after 4th one. 
-    ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), matrix(ape_mat1[5:6,]))
+    ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
+                      matrix(ape_mat1[5:6,]))
   }
   if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLandIFC"){ 
     # add 2 rows after 4th one. 
-    ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), matrix(ape_mat1[5:8,]))
+    ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), 
+                      matrix(ape_mat1[5:8,]))
   }
   if(names(res_data_list_byplantation[REGELM]) == "both_a_bySM"){ 
     # add 2 rows after 2nd one. 
-    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), matrix(ape_mat1[3:6,]))
+    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), 
+                      matrix(ape_mat1[3:6,]))
     # and again 2 rows after 6th one. 
-    ape_mat1 <- rbind(matrix(ape_mat1[1:6,]), matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), matrix(ape_mat1[7:8,]))
+    ape_mat1 <- rbind(matrix(ape_mat1[1:6,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), 
+                      matrix(ape_mat1[7:8,]))
   }
   if(names(res_data_list_byplantation[REGELM]) == "both_a_bySMandIFC"){ 
     # add 2 rows after 2nd one. 
-    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), matrix(ape_mat1[3:8,]))
+    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), 
+                      matrix(ape_mat1[3:8,]))
   }
   if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLandSM"){ 
     # add 2 rows after 6th one. 
-    ape_mat1 <- rbind(matrix(ape_mat1[1:6,]), matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), matrix(ape_mat1[7:8,]))
+    ape_mat1 <- rbind(matrix(ape_mat1[1:6,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), 
+                      matrix(ape_mat1[7:8,]))
   }
   if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLandSMandIFC"){ 
     # add no row
