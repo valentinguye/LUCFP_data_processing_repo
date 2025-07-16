@@ -101,6 +101,7 @@ rm(d_30, d_50)
 # # Commented out below are the arguments of the regression making function. 
 # # They may be useful to run parts of the operations within the function. 
 # catchment = "CR"
+# PS = 3000
 # outcome_variable = "lucpfap_pixelcount"
 # island = "both"
 # start_year = 2002
@@ -147,6 +148,7 @@ make_base_reg <- function(island,
                           start_year = 2002, 
                           end_year = 2014, 
                           outcome_variable = "lucpfip_pixelcount", # LHS. One of "lucfip_pixelcount", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount"p
+                          PS = 3000,
                           catchment = "CR",  
                           alt_cr = FALSE, # logical, if TRUE, Sumatra's catchment radius is 50000 meters, and Kalimantan's is 30000. 
                           nearest_mill = FALSE, # whether the ibs variables should be attributed to parcels as from the nearest mill or inverse distance weighted average.  
@@ -220,7 +222,22 @@ make_base_reg <- function(island,
     
     # this is just for convenience, because this variable was not created for the CA stream, but is required to exist below 
     # (although wont be effectively used, see in specification charts). 
-    d$reachable <- rep(1, nrow(d))
+    # d$reachable <- rep(1, nrow(d))
+  }
+  
+  if(PS == 1000){
+    d <- readRDS("temp_data/panel_parcels_ip_final_1km_30CR.rds")
+  }
+  if(PS == 5000){
+    d_30_5km <- readRDS("temp_data/panel_parcels_ip_final_5km_30CR.rds")
+    d_50_5km <- readRDS("temp_data/panel_parcels_ip_final_5km_50CR.rds")
+    
+    d = 
+      rbind(
+        d_30_5km %>% filter(island == "Sumatra"),
+        d_50_5km %>% filter(island == "Kalimantan")
+      )
+    rm(d_30_5km, d_50_5km)
   }
   
   ### MAKE THE lonlat 
@@ -596,18 +613,25 @@ make_base_reg <- function(island,
   }
   
   # INTERACTING OUTCOME SHARES 
-  if("share_ill" %in% controls){
+  if("share_indus" %in% controls){
     d = 
       d %>% 
-      mutate(share_ill = if_else(lucpfap_pixelcount > 0, lucpfip_pixelcount*illegal2 / lucpfap_pixelcount, 0)) # & !is.na(illegal2)
-    # This sets share_ill to NA when illegal2 is NA. 
+      mutate(share_indus = if_else(lucpfap_pixelcount > 0, lucpfip_pixelcount / lucpfap_pixelcount, 0)) # & !is.na(illegal2)
+  }
+  if("share_illindus" %in% controls){
+    d = 
+      d %>% 
+      mutate(share_illindus = if_else(lucpfap_pixelcount > 0, lucpfip_pixelcount*illegal2 / lucpfap_pixelcount, 0)) # & !is.na(illegal2)
+    # This sets share_illindus to NA when illegal2 is NA. 
   }
   if("share_sm" %in% controls){
     d = 
       d %>% 
       mutate(share_sm = if_else(lucpfap_pixelcount > 0, lucpfsmp_pixelcount / lucpfap_pixelcount, 0))
   }
-  
+  if("illegal2"%in%controls){
+    d = d %>% mutate(illegal2 = if_else(illegal2, 1, 0))
+  }
   
   ### SELECT DATA FOR REGRESSION
   
@@ -642,6 +666,7 @@ make_base_reg <- function(island,
   
   # - are covered with some of the studied forest 
   # in 2000
+  if(PS == 3000){ # variables available only for 3km CR
   if(grepl("lucpf", outcome_variable)){
     d <- dplyr::filter(d, pfc2000_total_pixelcount*pixel_area_ha/900 > min_forest_2000)
     #d <- d[d$pfc2000_total_pixelcount*pixel_area_ha/900 > min_forest_2000,]
@@ -651,7 +676,7 @@ make_base_reg <- function(island,
     # d <- d[d$fc2000_30th_pixelcount*pixel_area_ha/900 > min_forest_2000,]
   }
 
-  # # in years after grid cells get completely deforested)
+  # # in years after grid cells get completely deforested) - this is insignificant as there will almost always remain some pixels of forest
   if(grepl("lucpf", outcome_variable)){
     d <- dplyr::filter(d, remain_pf_pixelcount > 0,)
     #d <- d[d$remain_pf_pixelcount > 0,]
@@ -660,7 +685,7 @@ make_base_reg <- function(island,
     d <- dplyr::filter(d, remain_f30th_pixelcount > 0,)
     # d <- d[d$remain_f30th_pixelcount > 0,]
   }
-  
+  }
   # # Do not experience industrial and smallholder deforestation at the same time. 
   # if(grepl("lucpf", outcome_variable)){
   #   d <- d[d$lucp_i_and_sm_bar,]
@@ -3986,65 +4011,66 @@ elm <- 1
 ISL <- "both"
 ILL <- "all"
 
-# by ILL
+# by INDUS 
 res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-                                                   interaction_terms = c("share_ill"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   controls = c("n_reachable_uml", "share_ill"),
+                                                   interaction_terms =           c("share_indus"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_indus"),
                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
                                                    offset = FALSE)
-names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILL")
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUS")
 elm <- elm + 1
 
-# by ILL and IFC
+# by INDUS and IFC
 res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-                                                   interaction_terms = c("share_ill", "share_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   controls = c("n_reachable_uml", "share_ill", "share_pfc2000_total"),
+                                                   interaction_terms =           c("share_indus", "share_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_indus", "share_pfc2000_total"),
                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
                                                    offset = FALSE)
-names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLandIFC")
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandIFC")
 elm <- elm + 1
 
-# by SM
+# by INDUS and ILL
 res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-                                                   interaction_terms = c("share_sm"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   controls = c("n_reachable_uml","share_sm"),
+                                                   interaction_terms =           c("share_indus", "illegal2"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_indus", "illegal2"),
                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
                                                    offset = FALSE)
-names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_bySM")
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandILL")
 elm <- elm + 1
 
-# by SM and IFC
+# by INDUS and ILL and IFC
 res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-                                                   interaction_terms = c("share_sm", "share_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   controls = c("n_reachable_uml", "share_sm", "share_pfc2000_total"),
+                                                   interaction_terms =           c("share_indus", "illegal2", "share_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_indus", "illegal2", "share_pfc2000_total"),
                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
                                                    offset = FALSE)
-names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_bySMandIFC")
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandILLandIFC")
 elm <- elm + 1
 
-# by ILL and SM 
+# by INDUS and ILL and INDUSxILL
 res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-                                                   interaction_terms = c("share_ill", "share_sm"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   controls = c("n_reachable_uml", "share_ill", "share_sm"),
+                                                   interaction_terms =           c("share_indus", "illegal2", "share_illindus"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_indus", "illegal2", "share_illindus"),
                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
                                                    offset = FALSE)
-names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLandSM")
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandILLandILLINDUS")
 elm <- elm + 1
 
-# by ILL and SM and IFC
+# by INDUS and ILL and INDUSxILL and IFC
 res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-                                                   interaction_terms = c("share_ill", "share_sm", "share_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   controls = c("n_reachable_uml", "share_ill", "share_sm","share_pfc2000_total"),
+                                                   interaction_terms =           c("share_indus", "illegal2", "share_illindus", "share_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_indus", "illegal2", "share_illindus", "share_pfc2000_total"),
                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
                                                    offset = FALSE)
-names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLandSMandIFC")
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandILLandILLINDUSandIFC")
 elm <- elm + 1
+
 
 ## PARTIAL EFFECTS
 rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
@@ -4060,19 +4086,19 @@ for(REGELM in 1:length(res_data_list_byplantation)){
   ape_mat1 <- make_APEs(rounding = 5) # and for the same reason, this cannot be wrapped in other functions
   
   # arrange depending on interaction set 
-  if(names(res_data_list_byplantation[REGELM]) == "both_a_byILL"){ 
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUS"){ 
     # add 4 rows after 4th one. 
     ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), 
                       matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
                       matrix(ape_mat1[5:6,]))
   }
-  if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLandIFC"){ 
-    # add 2 rows after 4th one. 
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUSandIFC"){ 
+    # add 4 rows after 4th one. 
     ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), 
-                      matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
                       matrix(ape_mat1[5:8,]))
   }
-  if(names(res_data_list_byplantation[REGELM]) == "both_a_bySM"){ 
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUSandILL"){ 
     # add 2 rows after 2nd one. 
     ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
                       matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), 
@@ -5394,6 +5420,7 @@ make_spec_chart_df <- function(island,
                                start_year = 2002, 
                                end_year = 2014,
                                outcome_variable = "lucpfip_pixelcount", # LHS. One of "lucfip_pixelcount", "lucfip_pixelcount_60th", "lucfip_pixelcount_90th", "lucpfip_pixelcount_intact", "lucpfip_pixelcount_degraded", "lucpfip_pixelcount"p
+                               PS = 3000,
                                catchment = "CR",  
                                alt_cr = FALSE, # logical, if TRUE, Sumatra's catchment radius is 50000 meters, and Kalimantan's is 30000. 
                                nearest_mill = FALSE, # whether the ibs variables should be attributed to parcels as from the nearest mill or inverse distance weighted average.  
@@ -5431,6 +5458,7 @@ make_spec_chart_df <- function(island,
                                        start_year = start_year, 
                                        end_year = end_year,
                                        outcome_variable = outcome_variable,
+                                       PS = PS,
                                        catchment = catchment,
                                        alt_cr = alt_cr,  
                                        nearest_mill = nearest_mill, 
@@ -5484,6 +5512,10 @@ make_spec_chart_df <- function(island,
     ## Sampling
     "min_forest_2000" = FALSE,
     "min_coverage" = FALSE,
+    ## Parcel size 
+    "PS_1KM" = FALSE,
+    "PS_3KM" = FALSE,
+    "PS_5KM" = FALSE,
     ## Catchment model
     #"nearest_mill" = FALSE,
     #"intensive_only" = FALSE,
@@ -5547,6 +5579,10 @@ make_spec_chart_df <- function(island,
   # minimums 
   if(min_forest_2000>0){ind_var[,"min_forest_2000"] <- TRUE}
   if(min_coverage>0){ind_var[,"min_coverage"] <- TRUE}
+  
+  if(PS==1000){ind_var[,"PS_1KM"] <- TRUE}
+  if(PS==3000){ind_var[,"PS_3KM"] <- TRUE}
+  if(PS==5000){ind_var[,"PS_5KM"] <- TRUE}
   
   ## Catchment model
   # nearest mill rather than inverse-distance weighted average
@@ -5629,8 +5665,8 @@ make_spec_chart_df <- function(island,
 ### COMPUTE THE DATASETS FOR EACH ISLAND, AND COMMODITY OF INTEREST
 
 # There is no loop here, because it makes too much code to repeat. Just change values below and rerun everything. 
-SIZE <- "i" # "sm", "i" # 
-ILL <- "ill2" # "ill2" # 
+SIZE <- "a" # "i" # "sm", "i" # 
+ILL <- "all" # "ill2" # "ill2" # 
 ISL <- "both"
 
 # for(ISL in c("Sumatra", "Kalimantan", "both")){
@@ -5660,6 +5696,16 @@ i <- i+1
 reg_stats_indvar_list[["min_coverage"]] <- make_spec_chart_df(island = ISL, illegal = ILL,
                                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
                                                               min_coverage = 0.5)
+i <- i+1
+
+# Alternative parcel size 
+reg_stats_indvar_list[["PS_1km"]] <- make_spec_chart_df(island = ISL, illegal = ILL,
+                                                        outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                        PS = 1000)
+i <- i+1
+reg_stats_indvar_list[["PS_5km"]] <- make_spec_chart_df(island = ISL, illegal = ILL,
+                                                        outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                        PS = 5000)
 i <- i+1
 
 ## Data cleaning
@@ -5717,7 +5763,7 @@ i <- i+1
 # For catchment area
 reg_stats_indvar_list[["catchment"]] <- make_spec_chart_df(island = ISL, illegal = ILL,
                                                            outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                           cluster = "subdistrict", # variable reachable is not computed in the CA stream. 
+                                                           cluster = "reachable", # variable reachable is not computed in the CA stream. 
                                                            catchment = "CA") 
 i <- i+1
 
@@ -5956,7 +6002,7 @@ reg_stats_indvar <- bind_rows(reg_stats_indvar_list)
 
 # save it 
 if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_indvar)+1 == i
-  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_30062025")))
+  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_16072025")))
 } else{print(paste0("SOMETHING WENT WRONG in spec_chart_df_",ISL,"_",SIZE,"_",ILL))}
 
 #}else{reg_stats_indvar <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",ISL)))}
@@ -5975,7 +6021,7 @@ if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_
 
 ### PLOTTING 
 ### GIVE HERE THE ISLAND, THE OUTCOME AND THE DATE FOR WHICH YOU WANT THE SPEC CHART TO BE PLOTTED
-scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_30062025")))
+scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_16072025")))
 
 # some modifications for now because scdf run with some "mistakes"
 # scdf <- dplyr::select(scdf, -weights)
@@ -5997,6 +6043,10 @@ schart_labels <- list(#"Dependent variable:" = c("Larger forest definition"),
   
   "Sampling:" = c("Minimum forest cover in 2000",
                   "Minimum IBS to UML mill ratio"),
+  
+  "Plantation site size" = c("1x1 km",
+                             "3x3 km", 
+                             "5x5 km"),
   
   "Catchment model" = c(#"Nearest mill",
     #"Intensive margin expansion only",
@@ -6058,6 +6108,8 @@ a <- a[#a$larger_forest_def==FALSE &
     
     a$min_forest_2000 == FALSE & 
     a$min_coverage == FALSE & 
+    
+    a$PS_3km & 
     
     #a$nearest_mill == FALSE & 
     #a$intensive_only == FALSE & 

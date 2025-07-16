@@ -150,7 +150,7 @@ district_sf_prj <- st_transform(district_sf, crs = indonesian_crs)
 #### ADD N_REACHABLE_UML AND GEOGRAPHIC VARIABLES AND THEIR TRENDS and QUEEN NEIGHBORS #### 
 
 # this needs to be done at the island level, because it involves OSRM durations, that are relevant to compute at this level. 
-for(travel_time in c(2,4,6)){
+for(travel_time in c(2)){# ,4,6
   
   # as the computations on n_reachable_uml requires using parcels at the level of island, we store the results in a list to 
   # be able to append parcels over islands after. 
@@ -165,13 +165,15 @@ for(travel_time in c(2,4,6)){
                                         travel_time,"h_CA.rds")))
     
     parcels$n_reachable_uml <- rep(NA, nrow(parcels))
+    parcels$set_reachable_ibs <- rep(NA, nrow(parcels))
+    parcels <- mutate(parcels, lonlat = paste0(lon, lat))
     
     # loop over years to get the annual number of reachable uml mills
     years <- seq(from = 1998, to = 2015, by = 1)
     for(t in 1:length(years)){
       
       # take the annual cross section of it (parcels' coordinates are constant over time)
-      parcels_centro <- parcels[parcels$year == years[t], c("lonlat", "year", "lat", "lon")]
+      parcels_centro <- parcels[parcels$year == years[t], c("year", "lonlat", "lat", "lon")]
       # and of the uml data set (only useful for the checks)
       # if(island == "Sumatra"){
       #   uml_cs <- uml_sumatra[uml_sumatra$est_year_imp <= years[t] | is.na(uml_sumatra$est_year_imp),]
@@ -192,7 +194,6 @@ for(travel_time in c(2,4,6)){
       # for more safety, merge the dur_mat with the parcels_centro based on coordinates identifiers
       dur_mat <- as.data.frame(dur_mat)
       dur_mat$lonlat <- row.names(dur_mat)
-      parcels_centro <- mutate(parcels_centro, lonlat = paste0(lon, lat))
       
       # sort = FALSE is MEGA IMPORTANT because otherwise dur_mat get sorted in a different way than parcels_centro
       dur_mat <- merge(dur_mat, parcels_centro[,c("lonlat", "lon", "lat")], by = "lonlat", all = FALSE, sort = FALSE)
@@ -216,25 +217,70 @@ for(travel_time in c(2,4,6)){
       
       # replace the few NAs with FALSE
       #anyNA(dur_mat_log)
-      dur_mat_log <- tidyr::replace_na(dur_mat_log, replace = FALSE)
+      # dur_df_log = dur_mat_log %>% as.data.frame() 
+      # dur_df_log <- tidyr::replace_na(dur_df_log, replace = FALSE)
+      # # dur_mat_log <- tidyr::replace_na(dur_mat_log, replace = FALSE)
+      # dur_mat_log <- mutate(dur_mat_log, if_else( = FALSE)
+      
       #anyNA(dur_mat_log)
       
       # count reachable mills from each parcel  
-      parcels_centro$n_reachable_uml <- sapply(1:nrow(parcels_centro), FUN = function(i){sum(dur_mat_log[i,])})
+      parcels_centro$n_reachable_uml <- sapply(1:nrow(parcels_centro), FUN = function(i){sum(dur_mat_log[i,], na.rm = TRUE)})
       
       # rearrange the panel, so that within cross sections, it's ordred by lonlat. 
       #parcels <- dplyr::arrange(parcels, year, lonlat)
       
+      ### PREPARE THE SETS OF REACHABLE IBS MILLS in duration terms
+      dur_mat <- readRDS(file.path(paste0("input_data/local_osrm_outputs/osrm_driving_durations_",island,"_",parcel_size/1000,"km_",travel_time,"h_IBS_",years[t])))
+      dur_mat <- dur_mat$durations
+      dur_mat <- as.data.frame(dur_mat)
+      dur_mat$lonlat <- row.names(dur_mat)      
+      
+      dur_mat <- merge(dur_mat, parcels_centro[,c("lonlat", "lon", "lat")], by = "lonlat", all = FALSE, sort = FALSE)
+      row.names(dur_mat) <- dur_mat$lonlat
+      # so there should be the same amount of parcels_centro which coordinates matched, as the total amount of parcels.
+      if(nrow(dur_mat) != nrow(parcels_centro)){stop(paste0("duration matrix and parcel cross section did not merge in ",island,"_",parcel_size/1000,"km_",travel_time,"h_UML_",years[t]))}
+      
+      row.names(parcels_centro) <- parcels_centro$lonlat
+      parcels_centro <- dplyr::arrange(parcels_centro, lonlat)
+      dur_mat <- dplyr::arrange(dur_mat, lonlat)
+      
+      # convert durations (in minutes) into logical whether each parcel-mill pair's travel time is inferior to a threshold travel_time
+      dur_mat <- dplyr::select(dur_mat, -lonlat, -lon, -lat)
+      dur_mat <- as.matrix(dur_mat)
+      dur_mat_log <- dur_mat/(60) < travel_time
+      
+      # Collect column names of columns with TRUE
+      dur_mat_log %>% colnames() %>% unique() %>% length() == ncol(dur_mat_log)
+      
+      # parcels_centro$set_reachable = list()
+      
+      parcels_centro$set_reachable_ibs <- lapply(1:nrow(parcels_centro), 
+                                             FUN = function(i){
+                                               dur_mat_log[i,dur_mat_log[i,]] %>% names() %>% na.omit() %>% sort()
+      })
+      
+      # MERGE BACK
       # this makes sure that the n_reachable_uml cross section is integrated into the panel in face of the right lonlat. 
-      parcels[parcels$year==years[t], c("lonlat", "year", "n_reachable_uml")] <- inner_join(parcels[, c("lonlat", "year")], 
-                                                                                               parcels_centro[,c("lonlat", "year", "n_reachable_uml")], 
-                                                                                               by = c("lonlat", "year"))
+      parcels[parcels$year==years[t], c("lonlat", "year", "n_reachable_uml", "set_reachable_ibs")] <- 
+        inner_join(parcels[, c("lonlat", "year")], 
+                   parcels_centro[,c("lonlat", "year", "n_reachable_uml", "set_reachable_ibs")], 
+                   by = c("lonlat", "year"))
+      
       rm(parcels_centro, uml_cs, dur_mat, dur_mat_log)
     }# closes loop over years
     
+    # set to NA where no mill is reachable  
+    parcels$set_reachable_ibs[lengths(parcels$set_reachable_ibs)==0] <- NA
+    # MAKE THE SET OF REACHABLE MILLS ID 
+    parcels = 
+      parcels %>% 
+      mutate(reachable = match(set_reachable_ibs, unique(parcels$set_reachable_ibs)), 
+             reachable = if_else(is.na(set_reachable_ibs), NA, reachable))
+    
     # make the island variable now
     parcels$island <- island
-    
+
     # store these parcels of a specific island in the dedicated list
     isl_parcel_list[[match(island, c("Sumatra", "Kalimantan"))]] <- parcels
     
@@ -320,7 +366,7 @@ for(travel_time in c(2,4,6)){
 
 
 #### TIME DYNAMICS VARIABLES ####
-for(travel_time in c(4,6)){ #2,4,
+for(travel_time in c(2)){ #2,4,4,6
   parcels <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_geovars_",
                                       parcel_size/1000,"km_",
                                       travel_time,"h_CA.rds")))
@@ -561,7 +607,7 @@ for(travel_time in c(4,6)){ #2,4,
 ##### ADD RSPO, CONCESSIONS, LEGAL LAND USE, & TIME SERIES - IV ##### 
 
 
-for(travel_time in c(2, 4)){ #6 is too heavy for now
+for(travel_time in c(2)){ #, 4, 6 is too heavy for now
   # load data in the loop, not time efficient but here the constraint is rather the memory so we want to be able to remove objects asap
   ### RSPO
   rspo <- st_read("input_data/RSPO_supply_bases/RSPO-certified_oil_palm_supply_bases_in_Indonesia.shp")

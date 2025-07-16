@@ -96,7 +96,7 @@ indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +
 years <- seq(1998, 2015, 1)
 
 ### GRID CELL SIZE
-parcel_size <- 1000
+parcel_size <- 5000
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
@@ -257,10 +257,15 @@ make_n_reachable_uml <- function(parcel_size, catchment_radius){
                                     catchment_radius/1000,"CR.rds")))
 }
 
-#  /!\ WE DO IT ONLY FOR 30 KM CR FOR NOW, BECAUSE 1KM PARCELS DATA IS COMPUTED ONLY FOR THIS CR
+#  /!\ WE DO IT ONLY FOR 30 KM CR FOR NOW, BECAUSE 5KM PARCELS DATA IS COMPUTED ONLY FOR THIS CR
 catchment_radius <- 30000
-make_n_reachable_uml(parcel_size, catchment_radius) 
+while(catchment_radius < 60000){
   
+  make_n_reachable_uml(parcel_size, catchment_radius) 
+  
+  catchment_radius <- catchment_radius + 20000
+}
+
 rm(ibs, ibsuml)
 
 #### ADD GEOGRAPHIC VARIABLES AND THEIR TRENDS ####
@@ -289,7 +294,7 @@ district_sf_prj <- st_transform(district_sf, crs = indonesian_crs)
 subdistrict <- st_read(file.path("input_data/indonesia_spatial/subdistrict_shapefiles"))
 subdistrict_prj <- st_transform(subdistrict, crs = indonesian_crs)
 
-catchment_radiuseS <- c(3e4)#, 5e4
+catchment_radiuseS <- c(3e4, 5e4)#
 for(catchment_radius in catchment_radiuseS){
   
   # read the parcel panel
@@ -397,7 +402,7 @@ rm(district_sf, district_sf_prj, province_sf, province_sf_prj, island_sf, island
 
 #### TIME DYNAMICS VARIABLES ####
 
-catchment_radiuseS <- c(3e4)# , 5e4
+catchment_radiuseS <- c(3e4, 5e4)# 
 for(catchment_radius in catchment_radiuseS){ 
   
   wavars <- readRDS(file.path(paste0("temp_data/processed_parcels/wa_panel_parcels_",
@@ -526,7 +531,7 @@ llu <- llu[llu$Province == "Sumatra Utara" |
 
 
 
-catchment_radiuseS <- c(3e4) 
+catchment_radiuseS <- c(3e4, 5e4) 
 for(catchment_radius in catchment_radiuseS){ 
   # read the parcel panel
   
@@ -651,7 +656,7 @@ rm(cns, llu, parcels, parcels_cs, rspo, rspo_cs, sgbp)
 
 #### MERGE ALL ADDITIONAL VARIABLES #### 
 
-for(catchment_radius in c(3e4)){ # 1e4, , 5e4
+for(catchment_radius in c(3e4, 5e4)){ # 1e4, 
   reachable <- readRDS(file.path(paste0("temp_data/processed_parcels/parcels_panel_reachable_uml_",
                                         parcel_size/1000,"km_",
                                         catchment_radius/1000,"CR.rds")))
@@ -716,16 +721,16 @@ make_spatial_ov_lags <- function(catchment_radius){
   
   if(nrow(LHS) != nrow(lucpfip_dyn)){stop("LHS datasets don't all have the same sets of parcels")}
   
-
+  
   rm(lucpfip_dyn, lucpfsmp)
   
   ## make a variable that counts rapid and slow lucfp events (this is only computed for primary forest as of now)
   # THIS IS GOING TO BE THE MAIN OUTCOME VARIABLE INSTEAD OF lucpfip_pixelcount_total
   LHS$lucpfip_pixelcount <- LHS$lucpfip_rapid_pixelcount + LHS$lucpfip_slow_pixelcount
-
+  
   # make variable that counts lucfp events on both small and medium sized plantations 
   LHS$lucpfsmp_pixelcount <- LHS$lucpfsp_pixelcount_total + LHS$lucpfmp_pixelcount_total
-
+  
   ## make a variable that counts lucfp events on all types of plantations
   LHS <- mutate(LHS, lucpfap_pixelcount = (lucpfip_pixelcount + lucpfsmp_pixelcount))
   
@@ -736,7 +741,7 @@ make_spatial_ov_lags <- function(catchment_radius){
 }
 
 ### Execute
-for(CR in c(3e4)){# , 5e4
+for(CR in c(3e4, 5e4)){# 
   make_spatial_ov_lags(catchment_radius = CR)
 }
 

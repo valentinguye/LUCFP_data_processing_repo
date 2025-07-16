@@ -728,7 +728,8 @@ for(Island in IslandS){
 }
 
 ### Aggregate this Island map to a chosen parcel size (3km, 6km and 9km for instance)
-PS <- 3000 # this was also run with PS = 1000
+PS <- 3000 # this was also run with PS = 1000 and PS = 5000
+
 IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   if(!file.exists(file.path(paste0("temp_data/processed_lu/parcel_lucpfmp_",Island,"_",PS/1000,"km_total.tif")))){
@@ -740,7 +741,6 @@ for(Island in IslandS){
 
 ### For that Island and for each aggregation factor, extract panels of parcels within different catchment area sizes 
 # (radius of 10km, 30km and 50km)
-PS <- 3000 # this was also run with PS = 1000
 IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   CR <- 30000 # i.e. 10km radius
@@ -755,7 +755,6 @@ for(Island in IslandS){
 }
 
 ### Transform to panel data but within the maximal 82km CR from UML 
-PS <- 3000 # this was also run with PS = 1000
 IslandS <- c("Sumatra", "Kalimantan")#, "Papua"
 for(Island in IslandS){
   to_panel_within_UML_CR(island = Island,
@@ -765,7 +764,6 @@ for(Island in IslandS){
 
 
 #### Gather the lucfsmp variables for each parcel_size and catchment_radius combinations. ####
-PS <- 3000  # this was also run with PS = 1000
 
 ### IBS
 CR <- 30000 # i.e. 30km radius

@@ -13,7 +13,7 @@
 # see this project's README for a better understanding of how packages are handled in this project. 
 
 # These are the packages needed in this particular script. 
-neededPackages = c("plyr", "dplyr", "foreign", 
+neededPackages = c("plyr", "dplyr", "foreign", "sf",
                    "DataCombine")
 
 # Install them in their project-specific versions
@@ -42,6 +42,7 @@ lapply(neededPackages, library, character.only = TRUE)
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 
 
+indonesian_crs <- "+proj=cea +lon_0=115.0 +lat_ts=0 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 # There are several merges to do because several data frames
@@ -233,10 +234,10 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
   
   ## FOR PRIMARY FOREST
   year_list <- list()
-  
-  # in the first year (2001), the past year accumulated lucfp is null. 
-  year_list[["2001"]] <- parcels[parcels$year == 2001, c("lonlat", "year")] 
-  # names(year_list[["2001"]]) <- "lonlat"%>% as.data.frame() 
+
+  # in the first year (2001), the past year accumulated lucfp is null.
+  year_list[["2001"]] <- parcels[parcels$year == 2001, c("lonlat", "year")]
+  # names(year_list[["2001"]]) <- "lonlat"%>% as.data.frame()
   year_list[["2001"]][,"accu_lucfp_since2k"] <- 0
   year_list[["2001"]][,"accu_lucpfp_since2k"] <- 0
 
@@ -249,19 +250,19 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
                                           accu_lucpfp_since2k = sum(lucpfap_pixelcount, na.rm = TRUE))
     year_list[[as.character(y)]][,"year"] <- y
   }
-  
+
   # data <- parcels[parcels$year < y,]
   # t <- ddply(data, "lonlat", summarise,
   #            #past_accu_lucfp = sum(total_lucfp_30th, na.rm = TRUE),
   #            accu_lucpfp_since2k = sum(lucpfap_pixelcount, na.rm = TRUE))
-  
+
   accu_lucfp_df <- bind_rows(year_list)
-  
+
   parcels <- inner_join(parcels, accu_lucfp_df, by = c("lonlat", "year"))
-  
-  
+
+
   # summary(parcels$accu_lucpfp_since2k)
-  parcels <- dplyr::mutate(parcels, 
+  parcels <- dplyr::mutate(parcels,
                            remain_f30th_pixelcount = fc2000_30th_pixelcount - accu_lucfp_since2k,
                            remain_pf_pixelcount = pfc2000_total_pixelcount - accu_lucpfp_since2k)
   
@@ -296,7 +297,7 @@ merge_lhs_rhs <- function(parcel_size, travel_time){
 
 
 PS <- 3000 
-for(TT in c(2,4)){#s,6
+for(TT in c(2)){#s,6,4
   merge_lhs_rhs(parcel_size = PS, 
                 travel_time = TT)
 }
@@ -311,7 +312,7 @@ parcels_cs <- parcels[!duplicated(parcels$lonlat),]
 parcels_cs <- st_as_sf(parcels_cs, coords = c("idncrs_lon", "idncrs_lat"), crs = indonesian_crs)
 
 #sub-district
-subdistrict <- st_read(file.path("input_data/indonesia_spatial/podes_bps2014"))
+subdistrict <- st_read(file.path("input_data/indonesia_spatial/subdistrict_shapefiles"))
 subdistrict_prj <- st_transform(subdistrict, crs = indonesian_crs)
 
 parcels_cs <- st_join(parcels_cs, 
