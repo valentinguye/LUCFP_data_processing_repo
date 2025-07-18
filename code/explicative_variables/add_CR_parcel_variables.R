@@ -1022,7 +1022,8 @@ for(catchment_radius in catchment_radiuseS){
                            illegal1 = llu_protectforest, # it is in a protected forest estate
                            illegal2010 = (!concession), # it's not in concessions as snapshot in 2010   
                            illegal2_2020 = (!concession_2020 & llu_protectforest), # it's not in concessions, even issued after 2010   
-                           illegal2 = (!concession & llu_protectforest) # it's not in concession and it's in a protected forest zone designation 
+                           illegal2 = (!concession & llu_protectforest), # it's not in concession and it's in a protected forest zone designation 
+                           legal2 = (concession & !llu_protectforest) # note this is not equivalent to !illegal2
                            )
   # yields many missing in illegal because many grid cells are within a mising land use legal classification. More precisely: 
   # Places within a concession are considered legal (illegal = FALSE) even if llu is missing (because FALSE & NA = FALSE)
@@ -1083,7 +1084,7 @@ for(catchment_radius in c(3e4, 5e4)){ # 1e4,
   
   parcels <- inner_join(parcels, 
                         land_des[,c("lonlat","year",
-                                    "rspo_cert", "concession", "llu", "illegal1", "illegal2010", "illegal2_2020", "illegal2")],
+                                    "rspo_cert", "concession", "llu", "illegal1", "illegal2010", "illegal2_2020", "legal2", "illegal2")],
                         by = c("lonlat","year"))
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
