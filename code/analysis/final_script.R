@@ -126,10 +126,10 @@ distribution = "quasipoisson"
 fe = "reachable + district_year"#
 offset = FALSE
 lag_or_not = "_lag1"
-controls = c("n_reachable_uml", "illegal2", "pct_pfc2000_total")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
+controls = c("n_reachable_uml", "ill_or_concession")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
 remaining_forest = FALSE
 control_lncpo = FALSE # should the CPO price treatment of interest be included in the controls (for regressions on FFB price)
-interaction_terms = c("illegal2", "pct_pfc2000_total") #  NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
+interaction_terms = c("ill_or_concession") #  NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
 interact_regressors = TRUE
 interacted = "regressors"
 pya_ov = FALSE
@@ -177,7 +177,7 @@ make_base_reg <- function(island,
                           interacted = "regressors",
                           interact_regressors = TRUE, # if there are two regressors (e.g. ffb and cpo), should their interaction be included in the model? 
                           pya_ov = FALSE, # logical, whether the lagged (by one year) outcome_variable should be added in controls
-                          illegal = "all", # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
+                          illegal = "all", # the default, "all" includes all data in the regression. "in_concession" for legal plantations ony. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
                           min_forest_2000 = 0, 
                           min_coverage = 0, # fraction, from 0 to 1. Minimum share of reachable IBS over all reachable (UML), for an obs.to be included in sample. 
                           weights = FALSE, # logical, should obs. be weighted by the share of our sample reachable mills in all (UML) reachable mills. 
@@ -491,12 +491,10 @@ make_base_reg <- function(island,
   
   ## CONTROLS
   # Make illegal-legal dummies
-  if("illegal2"%in%controls){
-    d = d %>% mutate(illegal2 = if_else(illegal2, 1, 0))
-  }
-  if("illegal1"%in%controls){
-    d = d %>% mutate(illegal1 = if_else(illegal1, 1, 0))
-  }
+  # The main one, ill_or_concession, is defined as:  
+  # TRUE = illegal = illegal2 (off concession & in forest zone)
+  # FALSE = legal = in concession
+  # NA otherwise 
   if("ill_or_concession" %in% controls){
     d = 
       d %>% 
@@ -505,7 +503,14 @@ make_base_reg <- function(island,
         !illegal2010 & !is.na(illegal2010) ~ 0, # this is parcels in concessions in 2010
         TRUE ~ NA
       ))
-    # d$ill_or_concession %>% summary()
+    # d$ill_or_concession %>% table()
+    # d$illegal2 %>% table()
+  }
+  if("illegal2"%in%controls){
+    d = d %>% mutate(illegal2 = if_else(illegal2, 1, 0))
+  }
+  if("illegal1"%in%controls){
+    d = d %>% mutate(illegal1 = if_else(illegal1, 1, 0))
   }
   if("ill_or_leg" %in% controls){
     d = 
@@ -793,7 +798,33 @@ make_base_reg <- function(island,
   d <- dplyr::filter(d, rspo_cert == FALSE)
   #d <- d[d$rspo_cert==FALSE,]
   
-  # are legal, illegal, or neither
+  # main legal
+  if(illegal == "in_concession"){
+    d <- d[!is.na(d$illegal2010) & d$illegal2010 == FALSE, ]
+  }
+  # Alternative definitions used in RC 
+  # if(illegal == "legal2"){
+  #   d <- d[!is.na(d$legal2) & d$legal2 == TRUE, ]
+  # }
+  if(illegal == "no_ill2"){
+    d <- d[!is.na(d$illegal2) & d$illegal2 == FALSE, ]
+  }
+  if(illegal == "either_concession"){
+    d <- d[!is.na(d$concession_2020) & (d$concession == TRUE | d$concession_2020 == TRUE), ]
+  }
+  # main illegal
+  if(illegal == "ill2"){
+    d <- d[!is.na(d$illegal2) & d$illegal2 == TRUE, ]
+  }
+  # Alternative definitions used in RC 
+  if(illegal == "out_concession"){
+    d <- d[!is.na(d$illegal2010) & d$illegal2010 == TRUE, ] # this is !concession in 2010
+  }
+  if(illegal == "ill2_2020"){
+    d <- d[!is.na(d$illegal2_2020) & d$illegal2_2020 == TRUE, ]
+  }
+  
+  # others, not used. 
   if(illegal == "no_ill1"){
     d <- d[!is.na(d$illegal1) & d$illegal1 == FALSE, ]
   }
@@ -803,18 +834,7 @@ make_base_reg <- function(island,
   if(illegal == "ill1"){
     d <- d[!is.na(d$illegal2) & d$illegal1 == TRUE, ]
   }  
-  if(illegal == "ill2"){
-    d <- d[!is.na(d$illegal2) & d$illegal2 == TRUE, ]
-  }
-  if(illegal == "alt"){
-    d <- d[!is.na(d$illegal2_2020) & d$illegal2_2020 == TRUE, ]
-  }
-  if(illegal == "in_concession"){
-    d <- d[!is.na(d$illegal2010) & d$illegal2010 == FALSE, ]
-  }
-  if(illegal == "out_concession"){
-    d <- d[!is.na(d$illegal2010) & d$illegal2010 == TRUE, ]
-  }
+
   
   # make the sample comparable, by requiring that the main regressor be not missing either 
   if(reduced_form_iv){
@@ -906,16 +926,17 @@ make_base_reg <- function(island,
   }
   
   # If this is the pooled regression with interaction by illegal, then use exactly the same samples: 
-  if("illegal2Xln_wa_cpo_price_imp1_4ya_lag1" %in% interaction_vars){
+  if("ill_or_concessionXln_wa_cpo_price_imp1_4ya_lag1" %in% interaction_vars){
     # Pooled data 
     if(outcome_variable == "lucpfip_pixelcount"){
       pdf <- rbind(
-        res_data_list_full[["both_i_no_ill2"]][[2]],
+        res_data_list_full[["both_i_in_concession"]][[2]],
         res_data_list_full[["both_i_ill2"]][[2]])
     }
+    # Requires to have already run the regressions to work; 
     if(outcome_variable == "lucpfip_rapid_pixelcount"){
       pdf <- rbind(
-        res_data_list_dyn[["both_rapid_no_ill2"]][[2]],
+        res_data_list_dyn[["both_rapid_in_concession"]][[2]],
         res_data_list_dyn[["both_rapid_ill2"]][[2]])
     }
     d_clean = 
@@ -1055,14 +1076,14 @@ make_base_reg <- function(island,
 # for the K first regressors in the models fitted by make_base_reg 
 # If there are interactions in the models, the APEs (and SEs) of the interaction effects are computed (may not work if K > 1 then)
 
-# res_data <- res_data_list_byplantation[[1]]
+# res_data <- res_data_list_interact[[1]]
 # reg_res <- res_data[[1]]
 # d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
 # rm(res_data)
 # k = 1
 # K=1
 # cumulative <- TRUE
-# controls_pe = FALSE
+# controls_pe = TRUE
 # # SE = "cluster"
 # CLUSTER = "reachable"
 # stddev = FALSE
@@ -1778,8 +1799,8 @@ make_APEs_discrete_interaction <- function(#res_data,
   
   # add a row to indicate controls
   mat <- rbind(mat, reg_res$nobs)
-  row.names(mat)[nrow(mat)] <- "Controls"
-  mat[row.names(mat)=="Controls",] <- if_else(length(interaction_terms)>1, "X", " ")
+  row.names(mat)[nrow(mat)] <- "Extra controls"
+  mat[row.names(mat)=="Extra controls",] <- if_else(length(interaction_terms)>1, "X", " ")
   
   # add a row to indicate FE 1 
   mat <- rbind(mat, reg_res$nobs)
@@ -1798,8 +1819,8 @@ make_APEs_discrete_interaction <- function(#res_data,
   
   # add a row for p-value of equal variance test
   mat <- rbind(mat, reg_res$nobs)
-  row.names(mat)[nrow(mat)] <- "p-value"
-  mat[row.names(mat)=="p-value",] <- NA
+  row.names(mat)[nrow(mat)] <- "Residual variance equality"
+  mat[row.names(mat)=="Residual variance equality",] <- NA
   
   # add a row with the number of observations
   mat <- rbind(mat, reg_res$nobs)
@@ -2230,7 +2251,7 @@ make_des_table_ibs <- function(ibs_isl){
 
 # MAIN REGRESSIONS ------------------------------------------------------------------------
 
-## Table 3. CPO PRICE ELASTICITY ACROSS PLANTATION TYPES -----------------
+## Table 2. CPO PRICE ELASTICITY ACROSS PLANTATION TYPES -----------------
 ### REGRESSIONS ### 
 # infrastructure to store results
 res_data_list_full <- list()
@@ -2244,14 +2265,14 @@ size_list <- list("i","sm", "unr", "a")
 
 # legality definition
 ill_def <- 2
-ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
-# ill_status <- c("in_concession", paste0("ill",ill_def), "all")
+ill_status <- c("in_concession", paste0("ill",ill_def), "all")
+# ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
 
 for(SIZE in size_list){
   if(SIZE == "i"){
     # Industrial by illegal status
     for(ILL in ill_status){
-      if(ILL == "no_ill2"){# this is necessary to handle some convergence issue
+      if(ILL == "in_concession"){# this is necessary to handle some convergence issue
         higher_iter_glm <- 2000 
       } else {
         higher_iter_glm <- 200
@@ -2391,66 +2412,113 @@ rm(ape_mat)
 #   column_spec(column = ncol(ape_mat)+1,
 #               bold = TRUE)
 
-## Table 4. INDUSTRIAL LUC DYNAMICS --------------------------------------------------------------------------------------
 
-## Regressions
-# infrastructure to store results
-res_data_list_dyn <- list()
+## Table 3. INTERACTION BY ILLEGALITY -------------------------------------------------------------
+
+# To do pooled regression with interaction, we need the residuals' variance to be the same across groups made by the interaction term. 
+# Check whether this is the case with the level of clustering used in the main analysis (reachable): 
+
+# First, get the pooled data and the residuals from the pooled regression
+# Not for immediate conversion only, because in this case the equal variance assumption is not satisfied. 
+
+# FOR CLUSTER AT reachable^illegal2 THIS NEEDS TO BE PRODUCED IN THE DATA 
+res_data_list_byplantation <- list()
 elm <- 1
+ISL <- "both"
+illegal_var <- "ill_or_concession" # "illegal2"# 
+FE = "reachable + district_year"
 
-dyn_list <- list("rapid", "slow")
-
-# rapid and slow in comparable times: i.e. up to 2010
-for(DYN in dyn_list){
-  for(ILL in ill_status){
-    res_data_list_dyn[[elm]] <- make_base_reg(island = "both", 
-                                              outcome_variable = paste0("lucpfip_",DYN,"_pixelcount"),
-                                              illegal = ILL,
-                                              end_year = 2010,
-                                              offset = FALSE)
-    names(res_data_list_dyn)[elm] <- paste0("both_",DYN,"_",ILL)
-    elm <- elm + 1
-  }
+for(FE in c("reachable + district_year", "subdistrict + district_year", "district_year")){
+  res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
+                                                     outcome_variable = "lucpfip_pixelcount",
+                                                     interaction_terms = c(illegal_var),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                     controls          = c(illegal_var, "n_reachable_uml"), #
+                                                     fe = FE,
+                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                     offset = FALSE)
+  names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILL")
+  elm <- elm + 1
+  
+  # res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
+  #                                                    outcome_variable = "lucpfip_pixelcount",
+  #                                                    interaction_terms = c(illegal_var, "n_reachable_uml", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+  #                                                    controls =          c(illegal_var, "n_reachable_uml", "pct_pfc2000_total"),
+  #                                                    fe = FE,
+  #                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+  #                                                    offset = FALSE)
+  # names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILLandIFCandNREACH")
+  # elm <- elm + 1
+  
+  res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
+                                                     outcome_variable = "lucpfip_pixelcount",
+                                                     interaction_terms = c(illegal_var, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "wa_prex_cpo_imp1"), # # "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                     controls =          c(illegal_var, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "wa_prex_cpo_imp1"), # 
+                                                     fe = FE,
+                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. _imp1
+                                                     offset = FALSE)
+  names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILLandIFCandNREACHandOWN2")
+  elm <- elm + 1
+  
 }
 
-## PARTIAL EFFECTS
-rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat = list()
-reg_res_list = list()
-for(REGELM in 1:length(res_data_list_dyn)){
-  # get estimation results and data; this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-  res_data <- res_data_list_dyn[[REGELM]]
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+REGELM <- elm - 1
+ape_mat <- list()
+# Code to extract partial effects on discrete change and of controls
+for(REGELM in 1:length(res_data_list_byplantation)){
+  reg_name <- res_data_list_byplantation[REGELM] %>% names() %>% print()
+  
+  d_clean = res_data_list_byplantation[[REGELM]][[2]]
+  reg_res = res_data_list_byplantation[[REGELM]][[1]] 
+  
+  illegal_vars <- grep("ill", names(reg_res$coefficients), value = TRUE)
+  illint_var <- illegal_vars[2]
+  
+  # Make the adjusted clustering level
+  d_clean = 
+    d_clean %>% 
+    mutate(!!as.symbol(paste0("reachable_",illegal_var)) := paste0(reachable, !!as.symbol(illegal_var)))
+  
+  ape_mat1 <- make_APEs_discrete_interaction(interaction_dummy = illegal_var,
+                                             CLUSTER = "reachable",
+                                             controls_pe = TRUE,
+                                             stddev = FALSE,
+                                             rounding = 2)
+  
+  # Equal variance tests
+  d_clean$resid = reg_res$residuals
+  # unclustered test
+  res_variance <- d_clean %>%
+    group_by(lonlat, year, !!as.symbol(illegal_var)) %>% 
+    summarise(var_resid = mean(resid^2), .groups = "drop")
+  t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
+  
+  # clustered test
+  res_variance <- d_clean %>%
+    group_by(reachable, !!as.symbol(illegal_var)) %>% # reachable, 
+    summarise(var_resid = mean(resid^2), .groups = "drop")
+  eqvars_clust_test <- t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
+  
+  # save p-value of clustered test 
+  ape_mat1["Residual variance equality",] =  eqvars_clust_test$p.value %>% round(3)
+  
+  # save row names (same for all iterations)
+  rownames_ape_mat <- row.names(ape_mat1)
+  ape_mat[[REGELM]] <- ape_mat1
   reg_res_list[[REGELM]] <- reg_res
   rm(d_clean, reg_res)
 }
 lapply(reg_res_list, FUN = function(x) x$convStatus)
+
 ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+row.names(ape_mat) <- rownames_ape_mat
 ape_mat
 colnames(ape_mat) <- NULL
 
+
 options(knitr.table.format = "latex")
 kable(ape_mat, booktabs = T, align = "c",
-      caption = "Price elasticity of immediate and transitional deforestation in Indonesian industrial plantations") %>%
+      caption = "Price elasticity heterogeneity by plantation types") %>% #of 1 percentage change in medium-run price signal
   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  add_header_above(c(" " = 1,
-                     "Legal" = 1,
-                     "Illegal" = 1,
-                     "All" = 1, 
-                     "Legal" = 1,
-                     "Illegal" = 1,
-                     "All" = 1),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c(" " = 1,
-                     "Immediate conversion" = 3,
-                     "Transitional conversion" = 3),
-                   align = "c",
-                   strikeout = F) %>%
   add_header_above(c("Deforestation for:" = 1,
                      "Industrial plantations" = 6),
                    align = "c") %>%
@@ -2462,22 +2530,26 @@ kable(ape_mat, booktabs = T, align = "c",
                      "(5)" = 1, 
                      "(6)" = 1),
                    align = "c") %>%
-  pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
-  pack_rows("CPO price signal", 1, 2, indent = FALSE,
+  pack_rows("Partial effect of:", 1, 6, 
+            bold = TRUE, italic = FALSE)  %>%
+  pack_rows("Illegal*CPO price signal", 1, 2, indent = FALSE, 
             bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  pack_rows("Illegal", 3, 4, indent = FALSE,
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows("CPO price signal", 5, 6, indent = FALSE, 
+            bold = FALSE, italic = TRUE) %>% 
+  row_spec(6, extra_latex_after = "\\\\") %>% 
+  pack_rows("Fixed effects:", 8, 10, 
+            bold = TRUE, italic = FALSE, latex_gap_space = "0.3em") %>% 
+  pack_rows("p-value in test of:", 11, 11,
+            bold = TRUE, italic = FALSE, latex_gap_space = "0.3em") %>% 
+  # row_spec(11, extra_latex_after = "\\\\") %>% 
+  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0.3em")  %>%
   column_spec(column = 1,
-              width = "10em",
-              latex_valign = "m") #%>%
-  # column_spec(column = c(2:(ncol(ape_mat))),
-  #             width = "4em",
-  #             latex_valign = "c")
+              width = "14em",
+              latex_valign = "m") 
 
-
-rm(res_data_list_dyn)
-
-
-## Table 5. FFB SMALLHOLDERS -----------------------------------------------------------------------------------------
+## Table 4. FFB SMALLHOLDERS -----------------------------------------------------------------------------------------
 # infrastructure to store results
 res_data_list_ffbsm <- list()
 elm <- 1
@@ -2571,7 +2643,7 @@ rm(res_data)
 ape_mat3 <- make_APEs(reg_elm = SM_REG, K = 1, controls_pe=TRUE) 
 ape_mat3 <- ape_mat3[c(1,2,3,4,9,10)] %>% as.matrix()
 # add 2 rows to indicate whether we control
-ape_mat3 <- rbind(ape_mat3, matrix(ncol = ncol(ape_mat3), nrow = 2, data = c("", "Yes")))
+ape_mat3 <- rbind(ape_mat3, matrix(ncol = ncol(ape_mat3), nrow = 2, data = c("", "X")))
 # sort rows
 ape_mat3 <- ape_mat3[c(1:4,7:8,5:6),]
 ape_mat3
@@ -2586,7 +2658,7 @@ rm(res_data)
 ape_mat4 <- make_APEs(reg_elm = SM_REG, K = 1, controls_pe=TRUE) 
 ape_mat4 <- ape_mat4[c(1,2,5,6,11,12)] %>% as.matrix()
 # add 2 rows to indicate whether we control
-ape_mat4 <- rbind(ape_mat4, matrix(ncol = ncol(ape_mat4), nrow = 2, data = c("Yes", "Yes")))
+ape_mat4 <- rbind(ape_mat4, matrix(ncol = ncol(ape_mat4), nrow = 2, data = c("X", "X")))
 # sort rows
 ape_mat4 <- ape_mat4[c(1:4,7:8,5:6),]
 ape_mat4
@@ -2633,150 +2705,6 @@ kable(ape_mat, booktabs = T, align = "c",
 
 
 rm(res_data_list_ffbsm)
-
-## Table 6. PRICE DYNAMICS ---------------------------------------------------------------------------------
-
-## Regressions
-
-res_data_list_prdyn <- list()
-elm <- 1
-
-size_list <- list("i", "sm", "unr", "a")
-# legality definition
-ill_def <- 2
-ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
-for(SIZE in size_list){
-  if(SIZE == "i"){
-    # Industrial by illegal status
-    for(ILL in ill_status){
-      # With SR only 
-      # res_data_list_prdyn[[elm]] <- make_base_reg(island = ISL,
-      #                                             outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-      #                                             illegal = ILL,
-      #                                             only_sr = TRUE,
-      #                                             offset = FALSE)
-      # names(res_data_list_prdyn)[elm] <- paste0(ISL,"_",SIZE, "_",ILL,"_onlySR")
-      # elm <- elm + 1
-      # With SR AND MDR
-      res_data_list_prdyn[[elm]] <- make_base_reg(island = "both",
-                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                  illegal = ILL,
-                                                  dynamics = TRUE,
-                                                  interact_regressors = TRUE,
-                                                  offset = FALSE)
-      names(res_data_list_prdyn)[elm] <- paste0(ISL,"_",SIZE, "_",ILL,"_prdyn")
-      elm <- elm + 1
-    }
-  } else {
-    # If size == sm or a, we do want to include all legal statuses.
-    # If size == unr, the selection of illegal indus is handled in make_base_reg 
-    ILL <- "all"
-    # With SR only 
-    # res_data_list_prdyn[[elm]] <- make_base_reg(island = ISL,
-    #                                             outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-    #                                             illegal = ILL,
-    #                                             only_sr = TRUE,
-    #                                             offset = FALSE)
-    # names(res_data_list_prdyn)[elm] <- paste0(ISL,"_",SIZE, "_",ILL,"_onlySR")
-    # elm <- elm + 1
-    # With SR AND MDR
-    res_data_list_prdyn[[elm]] <- make_base_reg(island = "both",
-                                                outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                illegal = ILL,
-                                                dynamics = TRUE,
-                                                interact_regressors = TRUE,
-                                                offset = FALSE)
-    names(res_data_list_prdyn)[elm] <- paste0(ISL,"_",SIZE, "_",ILL,"_prdyn")
-    elm <- elm + 1
-  }}
-names(res_data_list_prdyn)
-
-## PARTIAL EFFECTS
-# With SR only 
-rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat = list()
-reg_res_list = list()
-for(REGELM in 1:length(res_data_list_prdyn)){ #c(1,3,5,7,9,11)
-  # # get estimation results and data; this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-  # res_data <- res_data_list_prdyn[[REGELM]]
-  # reg_res <- res_data[[1]]
-  # d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  # rm(res_data)
-  # temp_mat <- make_APEs(reg_elm = REGELM, K = 1) # and for the same reason, this cannot be wrapped in other functions
-  # # add 4 lines to temp_mat (equivalent to estimate and CI of MR and interaction)
-  # temp_mat <- rbind(temp_mat, matrix(ncol = ncol(temp_mat), nrow = 4))
-  # temp_mat <- temp_mat[c(1,2,5,6,7,8,3,4),] # rearrange rows
-  # temp_mat[is.na(temp_mat)] <- "" 
-  # ape_mat[[REGELM]] <- temp_mat
-  # reg_res_list[[REGELM]] <- reg_res
-  # rm(d_clean, reg_res)
-  # REGELM <- REGELM + 1
-  
-  # With SR AND MDR
-  res_data <- res_data_list_prdyn[[REGELM]]
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM, K = 2, rounding = 3) 
-  reg_res_list[[REGELM]] <- reg_res
-  rm(d_clean, reg_res)
-}
-lapply(reg_res_list, FUN = function(x) x$convStatus)
-ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-ape_mat
-colnames(ape_mat) <- NULL
-
-options(knitr.table.format = "latex")
-kable(ape_mat, booktabs = T, align = "c",
-      caption = "Partial effects of short- and medium-run price signals on deforestation across Indonesian oil palm plantations") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  
-  add_header_above(c(" " = 1,
-                     "Legal" = 1,
-                     "Illegal" = 1,
-                     "All" = 1, 
-                     " " = 3),
-                   bold = F,
-                   align = "c") %>%
-  add_header_above(c("Deforestation for:" = 1,
-                     "Industrial plantations" = 3,
-                     "Smallholder plantations" = 1, 
-                     "Unregulated plantations" = 1, 
-                     "All" = 1),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1, 
-                     "(4)" = 1,
-                     "(5)" = 1, 
-                     "(6)" = 1#,
-                     # "(7)" = 1,
-                     # "(8)" = 1, 
-                     # "(9)" = 1, 
-                     # "(10)" = 1,
-                     # "(11)" = 1, 
-                     # "(12)" = 1
-                     ),
-                   align = "c") %>%
-  pack_rows("Elasticity to:", 1, 4, 
-            bold = TRUE)  %>%
-  pack_rows("Short-run price signal", 1, 2, indent = FALSE, # short run is indeed always before MR in the regressor vector construction in make_base_reg
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows("Medium-run price signal", 3, 4, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows("Interaction", 5, 6, 
-            bold = TRUE)  %>%
-  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              width = "12em",
-              latex_valign = "m") 
-
-
-rm(res_data_list_prdyn)
-
 
 # DESCRIPTIVE STATISTICS ------------------------------------------------------------------------
 ## Table 1. Des.stats. by plantation type ---------------------------------
@@ -2841,7 +2769,7 @@ kable(des_table, booktabs = T, align = "c",
                    align = "c", 
                    strikeout = F) %>% 
   add_header_above(c(" " = 1, 
-                     "# grid cells = 3983 \n # grid cell-year = 24131" = 2,
+                     "# grid cells = 3431 \n # grid cell-year = 20532" = 2,
                      "# grid cells = 3189 \n # grid cell-year = 17091" = 2, 
                      "# grid cells = 11782 \n # grid cell-year = 65368" = 2, 
                      "# grid cells = 3211 \n # grid cell-year = 20721" = 2, 
@@ -2850,7 +2778,7 @@ kable(des_table, booktabs = T, align = "c",
                    align = "c",
                    strikeout = F) %>% 
   add_header_above(c(" " = 1,
-                     "Not illegal" = 2,
+                     "Legal" = 2,
                      "Illegal" = 2, 
                      "All" = 2,
                      " " = 6), 
@@ -3062,7 +2990,7 @@ rm(res_data_list_des)
 
 
 
-## Table A.2 IBS -----------------------------------------------------------
+## Table A.2. IBS -----------------------------------------------------------
 
 # all IBS oil palm related establishments. 
 ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
@@ -3120,7 +3048,7 @@ kable(des_table, booktabs = T, align = "c",
            escape = TRUE) 
 
 
-## Table A.3 Des.stats. with/without NAs  ------------------------------------------------------------------------
+## Table A.3. Des.stats. with/without NAs  ------------------------------------------------------------------------
 
 ### OVERALL 
 res_data_list_des <- list()
@@ -3216,7 +3144,7 @@ df =
   rbind(price_ts) %>% 
   filter(year < 2015) %>% 
   mutate(variable = case_when(
-    variable == "both_i_no_ill2" ~ "Legal industrial plantations",
+    variable == "both_i_in_concession" ~ "Legal industrial plantations",
     variable == "both_i_ill2" ~ "Illegal industrial plantations",
     variable == "both_i_all" ~ "All industrial plantations",
     variable == "both_sm_all" ~ "Smallholder plantations",
@@ -3783,10 +3711,530 @@ ggsave(map,
 
 
 # ADDITIONAL REGRESSIONS --------------------------------------------------------
+## FALSIFICATION TEST (MILL-LEVEL) ####
+
+ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
+
+# Restrict to analysis sample 
+as <- ibs[ibs$analysis_sample==TRUE,] 
+
+as <- mutate(as, in_kton_ffb_imp1 = in_ton_ffb_imp1/1000)
+
+# make lagged var at mill level 
+for(LAG in 1:3){
+  as <- 
+    DataCombine::slide(as,
+                       Var = "in_kton_ffb_imp1",
+                       TimeVar = "year",
+                       GroupVar = "firm_id",
+                       NewVar = paste0("in_kton_ffb_imp1_lag",LAG), 
+                       slideBy = -LAG,
+                       keepInvalid = TRUE)
+  
+  as <- 
+    DataCombine::slide(as,
+                       Var = "cpo_price_imp1",
+                       TimeVar = "year",
+                       GroupVar = "firm_id",
+                       NewVar = paste0("cpo_price_imp1_lag",LAG), 
+                       slideBy = -LAG,
+                       keepInvalid = TRUE)
+}
+
+as <- 
+  as %>% 
+  mutate(
+    # Make PYA for both dep and indep vars. 
+    cpo_price_imp1_4pya   = rowMeans(across(.cols = starts_with("cpo_price_imp1")), na.rm = FALSE), 
+    in_kton_ffb_imp1_4pya = rowMeans(across(.cols = starts_with("in_kton_ffb_imp1")), na.rm = FALSE), 
+    # This would be the closest equivalent to the price signal used in used in analysis. 
+    ln_cpo_price_imp1 = log(cpo_price_imp1), 
+    ln_cpo_price_imp1_4pya = log(cpo_price_imp1_4pya)
+  )
+
+# as %>% dplyr::select(firm_id, year, starts_with("in_kton_ffb_imp1")) %>% View()
+
+### Table A.4. CPO price in level ---------------------- 
+# Regressions Price CPO ~ FFB vol 
+fals_1 <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 | district^year"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+fals_1_wth <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 | district^year + firm_id"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+
+fals_2 <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 | district^year"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+fals_2_wth <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+
+fals_3 <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 | district^year"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+fals_3_wth <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+
+fals_4 <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 + in_kton_ffb_imp1_lag3 | district^year"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+fals_4_wth <-
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 + in_kton_ffb_imp1_lag3 | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+
+fals_5 <- 
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1_4pya | district^year"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+fals_5_wth <- 
+  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1_4pya | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+
+# collect 
+res_col <- list(fals_1,
+                fals_1_wth,
+                fals_2,
+                fals_2_wth,
+                fals_3,
+                fals_3_wth,
+                fals_4,
+                fals_4_wth,
+                fals_5,
+                fals_5_wth)
+
+df <- 
+  etable(res_col,
+         coefstat = "confint",
+         tex = F, 
+         se.below = TRUE,
+         digits = "s3",
+         signif.code=NA,
+         depvar = FALSE,
+         dict = c(cpo_price_imp1 = "CPO price",
+                  in_kton_ffb_imp1 = "FFB input",
+                  in_kton_ffb_imp1_lag1 = "FFB input t-1",
+                  in_kton_ffb_imp1_lag2 = "FFB input t-2",
+                  in_kton_ffb_imp1_lag3 = "FFB input t-3",
+                  in_kton_ffb_imp1_4pya = "FFB input 4 past year average", 
+                  firm_id = "mill")
+  )
+
+names(df)[1] <- "colnm"
+df
+
+df <- df %>% filter(!colnm %in% c("Fixed-Effects:", "_____________________", "_____________________________", 
+                                  "S.E.: Clustered", "VCOV: Clustered", "R2", "Within R2"))
+row.names(df) <- df$colnm
+df <- df %>% dplyr::select(-colnm) %>% as.matrix()
+# View(df)
+
+df <- rbind(df, sapply(res_col, FUN = function(x) x$fixef_sizes[1]))
+row.names(df) <- c(rep(c("Estimate","95% CI"), (nrow(df)-4)/2), "District-year", "Mill", "Observations", "Clusters") 
+# df
+colnames(df) <- NULL
+
+options(knitr.table.format = "latex")
+kable(df, booktabs = T, align = "c",
+      caption = "Mill-level regressions of CPO output prices on FFB input volumes") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  
+  add_header_above(c(" " = 1,
+                     "CPO output price" = 10),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1, 
+                     "(7)" = 1,
+                     "(8)" = 1, 
+                     "(9)" = 1, 
+                     "(10)" = 1),
+                   align = "c") %>%
+  pack_rows("Regression coefficient of:", 1, 10, 
+            bold = TRUE)  %>% 
+  pack_rows(" FFB input kton in year t", 1, 2, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" FFB input kton in year t-1", 3, 4, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" FFB input kton in year t-2", 5, 6, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" FFB input kton in year t-3", 7, 8, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" FFB input kton, 4 past year average", 9, 10, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  
+  pack_rows("Fixed-effects:", 11, 12,
+            bold = TRUE)  %>% 
+  pack_rows(" ", nrow(df)-1, nrow(df), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              underline = FALSE, # useless - line under "Deforestation for:" will need to be removed manually in Overleaf 
+              width = "15em",
+              latex_valign = "m") 
 
 
 
-## Table A.2 ANNUAL EFFECTS ---------------------------------------------------------------------------------
+### Table A.5. CPO price in log ---------------------- 
+# Regressions log(Price CPO) ~ FFB vol 
+fals_1 <-
+  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 | district^year"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+fals_1_wth <-
+  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 | district^year + firm_id"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+
+fals_2 <-
+  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 | district^year"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+fals_2_wth <-
+  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+
+fals_3 <-
+  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 | district^year"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+fals_3_wth <-
+  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+
+fals_4 <-
+  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 + in_kton_ffb_imp1_lag3 | district^year"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+fals_4_wth <-
+  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 + in_kton_ffb_imp1_lag3 | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+
+fals_5 <- 
+  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1_4pya | district^year"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+fals_5_wth <- 
+  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1_4pya | district^year  + firm_id"),
+                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
+
+# collect 
+res_col <- list(fals_1,
+                fals_1_wth,
+                fals_2,
+                fals_2_wth,
+                fals_3,
+                fals_3_wth,
+                fals_4,
+                fals_4_wth,
+                fals_5,
+                fals_5_wth)
+
+df <- 
+  etable(res_col,
+         coefstat = "confint",
+         tex = F, 
+         se.below = TRUE,
+         digits = "s3",
+         signif.code=NA,
+         depvar = FALSE,
+         dict = c(ln_cpo_price_imp1 = "CPO price",
+                  in_kton_ffb_imp1 = "FFB input",
+                  in_kton_ffb_imp1_lag1 = "FFB input t-1",
+                  in_kton_ffb_imp1_lag2 = "FFB input t-2",
+                  in_kton_ffb_imp1_lag3 = "FFB input t-3",
+                  in_kton_ffb_imp1_4pya = "FFB input 4 past year average", 
+                  firm_id = "mill")
+  )
+
+names(df)[1] <- "colnm"
+df
+
+df <- df %>% filter(!colnm %in% c("Fixed-Effects:", "_____________________", "_____________________________", 
+                                  "S.E.: Clustered", "VCOV: Clustered", "R2", "Within R2"))
+row.names(df) <- df$colnm
+df <- df %>% dplyr::select(-colnm) %>% as.matrix()
+View(df)
+
+df <- rbind(df, sapply(res_col, FUN = function(x) x$fixef_sizes[1]))
+row.names(df) <- c(rep(c("Estimate","95% CI"), (nrow(df)-4)/2), "District-year", "Mill", "Observations", "Clusters") 
+df
+colnames(df) <- NULL
+
+options(knitr.table.format = "latex")
+kable(df, booktabs = T, align = "c",
+      caption = "Mill-level regressions of CPO output prices on FFB input volumes") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  
+  add_header_above(c(" " = 1,
+                     "Log of CPO output price" = 10),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1, 
+                     "(7)" = 1,
+                     "(8)" = 1, 
+                     "(9)" = 1, 
+                     "(10)" = 1),
+                   align = "c") %>%
+  pack_rows("Regression coefficient of:", 1, 10, 
+            bold = TRUE)  %>% 
+  pack_rows(" FFB input kton in year t", 1, 2, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" FFB input kton in year t-1", 3, 4, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" FFB input kton in year t-2", 5, 6, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" FFB input kton in year t-3", 7, 8, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" FFB input kton, 4 past year average", 9, 10, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  
+  pack_rows("Fixed-effects:", 11, 12,
+            bold = TRUE)  %>% 
+  pack_rows(" ", nrow(df)-1, nrow(df), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              underline = FALSE, # useless - line under "Deforestation for:" will need to be removed manually in Overleaf 
+              width = "15em",
+              latex_valign = "m") 
+
+
+
+## Table A.6. INDUSTRIAL LUC DYNAMICS --------------------------------------------------------------------------------------
+
+## Regressions
+# infrastructure to store results
+res_data_list_dyn <- list()
+elm <- 1
+
+dyn_list <- list("rapid", "slow")
+
+# rapid and slow in comparable times: i.e. up to 2010
+for(DYN in dyn_list){
+  for(ILL in ill_status){
+    res_data_list_dyn[[elm]] <- make_base_reg(island = "both", 
+                                              outcome_variable = paste0("lucpfip_",DYN,"_pixelcount"),
+                                              illegal = ILL,
+                                              end_year = 2010,
+                                              offset = FALSE)
+    names(res_data_list_dyn)[elm] <- paste0("both_",DYN,"_",ILL)
+    elm <- elm + 1
+  }
+}
+
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_dyn)){
+  # get estimation results and data; this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+  res_data <- res_data_list_dyn[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+  reg_res_list[[REGELM]] <- reg_res
+  Ybar = d_clean %>% dplyr::pull(starts_with("lucpfip_")) %>% mean()
+  print(Ybar*pixel_area_ha)
+  rm(d_clean, reg_res)
+}
+lapply(reg_res_list, FUN = function(x) x$convStatus)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "c",
+      caption = "Price elasticity of immediate and transitional deforestation in Indonesian industrial plantations") %>%
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1, 
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "Immediate conversion" = 3,
+                     "Transitional conversion" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c("Deforestation for:" = 1,
+                     "Industrial plantations" = 6),
+                   align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1),
+                   align = "c") %>%
+  pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  pack_rows("CPO price signal", 1, 2, indent = FALSE,
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              width = "10em",
+              latex_valign = "m") #%>%
+# column_spec(column = c(2:(ncol(ape_mat))),
+#             width = "4em",
+#             latex_valign = "c")
+
+rm(res_data_list_dyn)
+
+
+## Table A.7. PRICE DYNAMICS ---------------------------------------------------------------------------------
+
+## Regressions
+
+res_data_list_prdyn <- list()
+elm <- 1
+
+size_list <- list("i", "sm", "unr", "a")
+# legality definition
+ill_def <- 2
+ill_status <- c("in_concession", paste0("ill",ill_def), "all")
+for(SIZE in size_list){
+  if(SIZE == "i"){
+    # Industrial by illegal status
+    for(ILL in ill_status){
+      # With SR only 
+      # res_data_list_prdyn[[elm]] <- make_base_reg(island = ISL,
+      #                                             outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+      #                                             illegal = ILL,
+      #                                             only_sr = TRUE,
+      #                                             offset = FALSE)
+      # names(res_data_list_prdyn)[elm] <- paste0(ISL,"_",SIZE, "_",ILL,"_onlySR")
+      # elm <- elm + 1
+      # With SR AND MDR
+      res_data_list_prdyn[[elm]] <- make_base_reg(island = "both",
+                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                  illegal = ILL,
+                                                  dynamics = TRUE,
+                                                  interact_regressors = TRUE,
+                                                  offset = FALSE)
+      names(res_data_list_prdyn)[elm] <- paste0(ISL,"_",SIZE, "_",ILL,"_prdyn")
+      elm <- elm + 1
+    }
+  } else {
+    # If size == sm or a, we do want to include all legal statuses.
+    # If size == unr, the selection of illegal indus is handled in make_base_reg 
+    ILL <- "all"
+    # With SR only 
+    # res_data_list_prdyn[[elm]] <- make_base_reg(island = ISL,
+    #                                             outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+    #                                             illegal = ILL,
+    #                                             only_sr = TRUE,
+    #                                             offset = FALSE)
+    # names(res_data_list_prdyn)[elm] <- paste0(ISL,"_",SIZE, "_",ILL,"_onlySR")
+    # elm <- elm + 1
+    # With SR AND MDR
+    res_data_list_prdyn[[elm]] <- make_base_reg(island = "both",
+                                                outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                illegal = ILL,
+                                                dynamics = TRUE,
+                                                interact_regressors = TRUE,
+                                                offset = FALSE)
+    names(res_data_list_prdyn)[elm] <- paste0(ISL,"_",SIZE, "_",ILL,"_prdyn")
+    elm <- elm + 1
+  }}
+names(res_data_list_prdyn)
+
+## PARTIAL EFFECTS
+# With SR only 
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_prdyn)){ #c(1,3,5,7,9,11)
+  # # get estimation results and data; this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+  # res_data <- res_data_list_prdyn[[REGELM]]
+  # reg_res <- res_data[[1]]
+  # d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  # rm(res_data)
+  # temp_mat <- make_APEs(reg_elm = REGELM, K = 1) # and for the same reason, this cannot be wrapped in other functions
+  # # add 4 lines to temp_mat (equivalent to estimate and CI of MR and interaction)
+  # temp_mat <- rbind(temp_mat, matrix(ncol = ncol(temp_mat), nrow = 4))
+  # temp_mat <- temp_mat[c(1,2,5,6,7,8,3,4),] # rearrange rows
+  # temp_mat[is.na(temp_mat)] <- "" 
+  # ape_mat[[REGELM]] <- temp_mat
+  # reg_res_list[[REGELM]] <- reg_res
+  # rm(d_clean, reg_res)
+  # REGELM <- REGELM + 1
+  
+  # With SR AND MDR
+  res_data <- res_data_list_prdyn[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM, K = 2, rounding = 3) 
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+lapply(reg_res_list, FUN = function(x) x$convStatus)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "c",
+      caption = "Partial effects of short- and medium-run price signals on deforestation across Indonesian oil palm plantations") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  
+  add_header_above(c(" " = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1, 
+                     " " = 3),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c("Deforestation for:" = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 1, 
+                     "Unregulated plantations" = 1, 
+                     "All" = 1),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1#,
+                     # "(7)" = 1,
+                     # "(8)" = 1, 
+                     # "(9)" = 1, 
+                     # "(10)" = 1,
+                     # "(11)" = 1, 
+                     # "(12)" = 1
+  ),
+  align = "c") %>%
+  pack_rows("Elasticity to:", 1, 4, 
+            bold = TRUE)  %>%
+  pack_rows("Short-run price signal", 1, 2, indent = FALSE, # short run is indeed always before MR in the regressor vector construction in make_base_reg
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows("Medium-run price signal", 3, 4, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows("Interaction", 5, 6, 
+            bold = TRUE)  %>%
+  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              width = "12em",
+              latex_valign = "m") 
+
+
+rm(res_data_list_prdyn)
+
+
+
+## Table A.8. ANNUAL EFFECTS ---------------------------------------------------------------------------------
 
 # infrastructure to store results
 res_data_list_full_annual <- list()
@@ -3799,7 +4247,7 @@ size_list <- list("i","sm", "unr", "a")
 
 # legality definition
 ill_def <- 2
-ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
+ill_status <- c("in_concession", paste0("ill",ill_def), "all")
 
 for(SIZE in size_list){
   if(SIZE == "i"){
@@ -3935,1045 +4383,9 @@ kable(ape_mat, booktabs = T, align = "c",
               width = "12em",
               latex_valign = "m") 
 
-## Table A.4 LAGGED OUTCOME ROBUSTNESS CHECKS -------------------------
 
-res_data_list_lagov <- list()
-SIZE <- "a"
-ISL <- "both"
-i <- 1
 
-# Control for 5-year lagged deforestation 
-res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
-                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                          controls = c("n_reachable_uml",
-                                                       "lucpfap_pixelcount_lag4_lag1"))
-
-
-# Control for 5-year lagged deforestation in the neighbor grid cells
-i <- i + 1
-res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
-                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                          controls = c("n_reachable_uml",
-                                                       "ngb_ov_lag4_lag1"))
-
-min_year_with_lags <- res_data_list_lagov[[i]][[2]] %>% pull(year) %>% min()
-min_year_with_lags
-
-# The main specification, on the same time period as with lags
-i <- i + 1
-res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
-                                          start_year = min_year_with_lags,
-                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                          controls = c("n_reachable_uml"))
-
-
-# control for t-5 to t-8 average deforestation 
-i <- i + 1
-res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
-                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                          controls = c("n_reachable_uml",
-                                                       "lucpfap_pixelcount_lag4_4pya"))
-
-# control for t-5 to t-8 average deforestation in the neighbor grid cells
-i <- i + 1
-res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
-                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                          controls = c("n_reachable_uml",
-                                                       "ngb_ov_lag4_4pya"))
-
-min_year_with_lags <- res_data_list_lagov[[i]][[2]] %>% pull(year) %>% min()
-min_year_with_lags
-
-## The main specification, on the same time period as with lags
-i <- i + 1
-res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
-                                          start_year = min_year_with_lags,
-                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                          controls = c("n_reachable_uml"))
-i
-
-rm(i)
-
-## PARTIAL EFFECTS
-rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat = list()
-reg_res_list = list()
-for(REGELM in 1:length(res_data_list_lagov)){
-  # get estimation results and data
-  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-  res_data <- res_data_list_lagov[[REGELM]]
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
-  reg_res_list[[REGELM]] <- reg_res
-  rm(d_clean, reg_res)
-}
-ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-ape_mat
-colnames(ape_mat) <- NULL
-
-options(knitr.table.format = "latex")
-kable(ape_mat, booktabs = T, align = "c",
-      caption = "Price elasticities of deforestation conditional on past deforestation") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  add_header_above(c(" " = 1,
-                     "Sample period: 2006-2014" = 3,
-                     "Sample period: 2009-2014" = 3),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c(" " = 1,
-                     "In plantation site i" = 1,
-                     "In i's 8 neighbors" = 1,
-                     " " = 1,
-                     "In plantation site i" = 1,
-                     "In i's 8 neighbors" = 1,
-                     " " = 1),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c("Conditional on deforestation" = 1,
-                     "the year preceding price signal" = 2,
-                     "Not" = 1,
-                     "the four years preceding price signal" = 2,
-                     "Not" = 1),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c("Deforestation for:" = 1,
-                     "All plantations" = 6),
-                   align = "c") %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1, 
-                     "(4)" = 1,
-                     "(5)" = 1, 
-                     "(6)" = 1),
-                   align = "c") %>%
-  pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
-  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
-            bold = FALSE, italic = TRUE) %>% 
-  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              width = "10em",
-              latex_valign = "m") 
-
-rm(ape_mat)
-
-
-## FALSIFICATION TEST (MILL-LEVEL) ####
-
-ibs <- read.dta13(file.path("temp_data/IBS_UML_panel_final.dta"))
-
-# Restrict to analysis sample 
-as <- ibs[ibs$analysis_sample==TRUE,] 
-
-as <- mutate(as, in_kton_ffb_imp1 = in_ton_ffb_imp1/1000)
-
-# make lagged var at mill level 
-for(LAG in 1:3){
-  as <- 
-    DataCombine::slide(as,
-                       Var = "in_kton_ffb_imp1",
-                       TimeVar = "year",
-                       GroupVar = "firm_id",
-                       NewVar = paste0("in_kton_ffb_imp1_lag",LAG), 
-                       slideBy = -LAG,
-                       keepInvalid = TRUE)
-  
-  as <- 
-    DataCombine::slide(as,
-                       Var = "cpo_price_imp1",
-                       TimeVar = "year",
-                       GroupVar = "firm_id",
-                       NewVar = paste0("cpo_price_imp1_lag",LAG), 
-                       slideBy = -LAG,
-                       keepInvalid = TRUE)
-}
-
-as <- 
-  as %>% 
-  mutate(
-    # Make PYA for both dep and indep vars. 
-    cpo_price_imp1_4pya   = rowMeans(across(.cols = starts_with("cpo_price_imp1")), na.rm = FALSE), 
-    in_kton_ffb_imp1_4pya = rowMeans(across(.cols = starts_with("in_kton_ffb_imp1")), na.rm = FALSE), 
-    # This would be the closest equivalent to the price signal used in used in analysis. 
-    ln_cpo_price_imp1 = log(cpo_price_imp1), 
-    ln_cpo_price_imp1_4pya = log(cpo_price_imp1_4pya)
-  )
-
-# as %>% dplyr::select(firm_id, year, starts_with("in_kton_ffb_imp1")) %>% View()
-
-### Table A.5 CPO price in level ---------------------- 
-# Regressions Price CPO ~ FFB vol 
-fals_1 <-
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 | district^year"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-fals_1_wth <-
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 | district^year + firm_id"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-
-fals_2 <-
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 | district^year"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-fals_2_wth <-
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 | district^year  + firm_id"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-
-fals_3 <-
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 | district^year"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-fals_3_wth <-
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 | district^year  + firm_id"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-
-fals_4 <-
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 + in_kton_ffb_imp1_lag3 | district^year"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-fals_4_wth <-
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 + in_kton_ffb_imp1_lag3 | district^year  + firm_id"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-
-fals_5 <- 
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1_4pya | district^year"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-fals_5_wth <- 
-  fixest::feols(fml = as.formula("cpo_price_imp1 ~ in_kton_ffb_imp1_4pya | district^year  + firm_id"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-
-# collect 
-res_col <- list(fals_1,
-                fals_1_wth,
-                fals_2,
-                fals_2_wth,
-                fals_3,
-                fals_3_wth,
-                fals_4,
-                fals_4_wth,
-                fals_5,
-                fals_5_wth)
-
-df <- 
-  etable(res_col,
-    coefstat = "confint",
-    tex = F, 
-    se.below = TRUE,
-    digits = "s3",
-    signif.code=NA,
-    depvar = FALSE,
-    dict = c(cpo_price_imp1 = "CPO price",
-             in_kton_ffb_imp1 = "FFB input",
-             in_kton_ffb_imp1_lag1 = "FFB input t-1",
-             in_kton_ffb_imp1_lag2 = "FFB input t-2",
-             in_kton_ffb_imp1_lag3 = "FFB input t-3",
-             in_kton_ffb_imp1_4pya = "FFB input 4 past year average", 
-             firm_id = "mill")
-  )
-
-names(df)[1] <- "colnm"
-df
-
-df <- df %>% filter(!colnm %in% c("Fixed-Effects:", "_____________________", "_____________________________", 
-                                  "S.E.: Clustered", "VCOV: Clustered", "R2", "Within R2"))
-row.names(df) <- df$colnm
-df <- df %>% dplyr::select(-colnm) %>% as.matrix()
-# View(df)
-
-df <- rbind(df, sapply(res_col, FUN = function(x) x$fixef_sizes[1]))
-row.names(df) <- c(rep(c("Estimate","95% CI"), (nrow(df)-4)/2), "District-year", "Mill", "Observations", "Clusters") 
-# df
-colnames(df) <- NULL
-
-options(knitr.table.format = "latex")
-kable(df, booktabs = T, align = "c",
-      caption = "Mill-level regressions of CPO output prices on FFB input volumes") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  
-  add_header_above(c(" " = 1,
-                     "CPO output price" = 10),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1, 
-                     "(4)" = 1,
-                     "(5)" = 1, 
-                     "(6)" = 1, 
-                     "(7)" = 1,
-                     "(8)" = 1, 
-                     "(9)" = 1, 
-                     "(10)" = 1),
-                   align = "c") %>%
-  pack_rows("Regression coefficient of:", 1, 10, 
-            bold = TRUE)  %>% 
-  pack_rows(" FFB input kton in year t", 1, 2, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input kton in year t-1", 3, 4, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input kton in year t-2", 5, 6, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input kton in year t-3", 7, 8, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input kton, 4 past year average", 9, 10, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  
-  pack_rows("Fixed-effects:", 11, 12,
-            bold = TRUE)  %>% 
-  pack_rows(" ", nrow(df)-1, nrow(df), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              underline = FALSE, # useless - line under "Deforestation for:" will need to be removed manually in Overleaf 
-              width = "15em",
-              latex_valign = "m") 
-
-
-
-### Table A.6 CPO price in log ---------------------- 
-# Regressions log(Price CPO) ~ FFB vol 
-fals_1 <-
-  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 | district^year"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-fals_1_wth <-
-  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 | district^year + firm_id"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-
-fals_2 <-
-  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 | district^year"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-fals_2_wth <-
-  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 | district^year  + firm_id"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-
-fals_3 <-
-  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 | district^year"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-fals_3_wth <-
-  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 | district^year  + firm_id"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-
-fals_4 <-
-  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 + in_kton_ffb_imp1_lag3 | district^year"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-fals_4_wth <-
-  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1 + in_kton_ffb_imp1_lag1 + in_kton_ffb_imp1_lag2 + in_kton_ffb_imp1_lag3 | district^year  + firm_id"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-
-fals_5 <- 
-  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1_4pya | district^year"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-fals_5_wth <- 
-  fixest::feols(fml = as.formula("ln_cpo_price_imp1 ~ in_kton_ffb_imp1_4pya | district^year  + firm_id"),
-                data = as) # %>% filter(!is.na(in_kton_ffb_imp1_4pya)))
-
-# collect 
-res_col <- list(fals_1,
-                fals_1_wth,
-                fals_2,
-                fals_2_wth,
-                fals_3,
-                fals_3_wth,
-                fals_4,
-                fals_4_wth,
-                fals_5,
-                fals_5_wth)
-
-df <- 
-  etable(res_col,
-         coefstat = "confint",
-         tex = F, 
-         se.below = TRUE,
-         digits = "s3",
-         signif.code=NA,
-         depvar = FALSE,
-         dict = c(ln_cpo_price_imp1 = "CPO price",
-                  in_kton_ffb_imp1 = "FFB input",
-                  in_kton_ffb_imp1_lag1 = "FFB input t-1",
-                  in_kton_ffb_imp1_lag2 = "FFB input t-2",
-                  in_kton_ffb_imp1_lag3 = "FFB input t-3",
-                  in_kton_ffb_imp1_4pya = "FFB input 4 past year average", 
-                  firm_id = "mill")
-  )
-
-names(df)[1] <- "colnm"
-df
-
-df <- df %>% filter(!colnm %in% c("Fixed-Effects:", "_____________________", "_____________________________", 
-                                  "S.E.: Clustered", "VCOV: Clustered", "R2", "Within R2"))
-row.names(df) <- df$colnm
-df <- df %>% dplyr::select(-colnm) %>% as.matrix()
-View(df)
-
-df <- rbind(df, sapply(res_col, FUN = function(x) x$fixef_sizes[1]))
-row.names(df) <- c(rep(c("Estimate","95% CI"), (nrow(df)-4)/2), "District-year", "Mill", "Observations", "Clusters") 
-df
-colnames(df) <- NULL
-
-options(knitr.table.format = "latex")
-kable(df, booktabs = T, align = "c",
-      caption = "Mill-level regressions of CPO output prices on FFB input volumes") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  
-  add_header_above(c(" " = 1,
-                     "Log of CPO output price" = 10),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1, 
-                     "(4)" = 1,
-                     "(5)" = 1, 
-                     "(6)" = 1, 
-                     "(7)" = 1,
-                     "(8)" = 1, 
-                     "(9)" = 1, 
-                     "(10)" = 1),
-                   align = "c") %>%
-  pack_rows("Regression coefficient of:", 1, 10, 
-            bold = TRUE)  %>% 
-  pack_rows(" FFB input kton in year t", 1, 2, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input kton in year t-1", 3, 4, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input kton in year t-2", 5, 6, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input kton in year t-3", 7, 8, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" FFB input kton, 4 past year average", 9, 10, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  
-  pack_rows("Fixed-effects:", 11, 12,
-            bold = TRUE)  %>% 
-  pack_rows(" ", nrow(df)-1, nrow(df), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              underline = FALSE, # useless - line under "Deforestation for:" will need to be removed manually in Overleaf 
-              width = "15em",
-              latex_valign = "m") 
-
-## Table A.6 INTERACTION BY TYPE OF PLANTATION & INITIAL FOREST COVER -------------------------------------------------------------
-
-# To do pooled regression with interaction, we need the residuals' variance to be the same across groups made by the interaction term. 
-# Check whether this is the case with the level of clustering used in the main analysis (reachable): 
-
-# First, get the pooled data and the residuals from the pooled regression
-# Not for immediate conversion only, because in this case the equal variance assumption is not satisfied. 
-
-# FOR CLUSTER AT reachable^illegal2 THIS NEEDS TO BE PRODUCED IN THE DATA 
-res_data_list_byplantation <- list()
-elm <- 1
-ISL <- "both"
-illegal_var <- "ill_or_concession" # "illegal2"
-FE = "reachable + district_year"
-
-for(FE in c("reachable + district_year", "subdistrict + district_year", "district_year")){
-  res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
-                                                     outcome_variable = "lucpfip_pixelcount",
-                                                     interaction_terms = c(illegal_var),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                     controls          = c(illegal_var, "n_reachable_uml"), #
-                                                     fe = FE,
-                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-                                                     offset = FALSE)
-  names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILL")
-  elm <- elm + 1
-  
-  # res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
-  #                                                    outcome_variable = "lucpfip_pixelcount",
-  #                                                    interaction_terms = c(illegal_var, "n_reachable_uml", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-  #                                                    controls =          c(illegal_var, "n_reachable_uml", "pct_pfc2000_total"),
-  #                                                    fe = FE,
-  #                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-  #                                                    offset = FALSE)
-  # names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILLandIFCandNREACH")
-  # elm <- elm + 1
-  
-  res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
-                                                     outcome_variable = "lucpfip_pixelcount",
-                                                     interaction_terms = c(illegal_var, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "wa_prex_cpo_imp1"), # # "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                     controls =          c(illegal_var, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "wa_prex_cpo_imp1"), # 
-                                                     fe = FE,
-                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. _imp1
-                                                     offset = FALSE)
-  names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILLandIFCandNREACHandOWN2")
-  elm <- elm + 1
- 
-}
-
-REGELM <- elm - 1
-ape_mat <- list()
-# Code to extract partial effects on discrete change and of controls
-for(REGELM in 1:length(res_data_list_byplantation)){
-  reg_name <- res_data_list_byplantation[REGELM] %>% names() %>% print()
-  
-  d_clean = res_data_list_byplantation[[REGELM]][[2]]
-  reg_res = res_data_list_byplantation[[REGELM]][[1]] 
-  
-  illegal_vars <- grep("ill", names(reg_res$coefficients), value = TRUE)
-  illegal_var <- illegal_vars[1]
-  illint_var <- illegal_vars[2]
-  
-  # Make the adjusted clustering level
-  d_clean = 
-    d_clean %>% 
-    mutate(!!as.symbol(paste0("reachable_",illegal_var)) := paste0(reachable, !!as.symbol(illegal_var)))
-  
-  ape_mat1 <- make_APEs_discrete_interaction(interaction_dummy = illegal_var,
-                                             CLUSTER = "reachable",
-                                             controls_pe = TRUE,
-                                             stddev = FALSE,
-                                             rounding = 2)
-  
-  # Equal variance tests
-  d_clean$resid = reg_res$residuals
-  # unclustered test
-  res_variance <- d_clean %>%
-    group_by(lonlat, year, !!as.symbol(illegal_var)) %>% 
-    summarise(var_resid = mean(resid^2), .groups = "drop")
-  t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
-  
-  # clustered test
-  res_variance <- d_clean %>%
-    group_by(reachable, !!as.symbol(illegal_var)) %>% # reachable, 
-    summarise(var_resid = mean(resid^2), .groups = "drop")
-  eqvars_clust_test <- t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
-  
-  # save p-value of clustered test 
-  ape_mat1["p-value",] =  eqvars_clust_test$p.value %>% round(3)
-  
-  # save row names (same for all iterations)
-  rownames_ape_mat <- row.names(ape_mat1)
-  ape_mat[[REGELM]] <- ape_mat1
-  reg_res_list[[REGELM]] <- reg_res
-  rm(d_clean, reg_res)
-}
-lapply(reg_res_list, FUN = function(x) x$convStatus)
-
-ape_mat 
-
-ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-row.names(ape_mat) <-rownames_ape_mat
-ape_mat
-colnames(ape_mat) <- NULL
-
-
-options(knitr.table.format = "latex")
-kable(ape_mat, booktabs = T, align = "c",
-      caption = "Price elasticity heterogeneity by plantation types") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  add_header_above(c("Deforestation for:" = 1,
-                     "Industrial plantations" = 6),
-                   align = "c") %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1, 
-                     "(4)" = 1,
-                     "(5)" = 1, 
-                     "(6)" = 1),
-                   align = "c") %>%
-  pack_rows("Partial effect of:", 1, 6, 
-            bold = TRUE, italic = FALSE)  %>%
-  pack_rows("Illegality*CPO price signal", 1, 2, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows("Illegality", 3, 4, indent = FALSE,
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows("CPO price signal", 5, 6, indent = FALSE, 
-            bold = FALSE, italic = TRUE) %>% 
-  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              width = "12em",
-              latex_valign = "m") 
-
-# ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## 
-
-# Code to extract regression coefficients
-table_names = c("Estimate", 
-                "95% CI", 
-                "Estimate Interaction",
-                "95% CI Interaction",
-                "Estimate # reachable mills",
-                "95% CI # reachable mills",
-                "Estimate Initial forest cover (%)",
-                "95% CI Initial forest cover (%)",
-                "Estimate Mill ownership dom. private (%)",
-                "95% CI Mill ownership dom. private (%)",
-                "Estimate Mill ownership foreign (%)",
-                "95% CI Mill ownership foreign (%)",
-                "Estimate Mill CPO exports (%)",
-                "95% CI Mill CPO exports (%)",
-                "p-value",
-                "Observations", 
-                "Clusters")
-tab_df = matrix(ncol = length(res_data_list_byplantation), 
-                nrow = length(table_names)) 
-row.names(tab_df) <- table_names
-
-REGELM <- elm -1 
-
-cluster_level <-  "reachable^illegal2" #  "reachable" #
-
-for(REGELM in 1:length(res_data_list_byplantation)){
-  reg_name <- res_data_list_byplantation[REGELM] %>% names() %>% print()
-  if(cluster_level == "reachable^illegal2" & grepl("ill_or_concession", reg_name)){
-    cluster_level <- "reachable^ill_or_concession"
-  }
-  d_clean = res_data_list_byplantation[[REGELM]][[2]]
-  reg_res = res_data_list_byplantation[[REGELM]][[1]] #%>% summary(cluster = cluster_level) 
-  
-  CI_table =  etable(reg_res,
-                        coefstat = "confint",
-                        tex = F, 
-                        se.below = TRUE,
-                        digits = "s3",
-                        signif.code=NA,
-                        depvar = FALSE)
-  
-  row.names(CI_table) = CI_table[,1]
-  # APE elasticity 
-  ape_mat1 <- make_APEs(rounding = 3)
-  # Works but useless.. 
-  # if(nrow(ape_mat1)==6){row.names(ape_mat1)  = table_names[c(1:4, 10,11)]}
-  # if(nrow(ape_mat1)==8){row.names(ape_mat1)  = table_names[c(1:6, 10,11)]}
-  # if(nrow(ape_mat1)==10){row.names(ape_mat1) = table_names[c(1:8, 10,11)]}
-  
-  # Main price elasticity estimate and sample sizes
-  tab_df[1:2,REGELM] <- ape_mat1[1:2]
-  tab_df[(nrow(tab_df)-1):nrow(tab_df),REGELM] <- ape_mat1[(nrow(ape_mat1)-1):nrow(ape_mat1)] 
-  
-
-  # identify illegal var used 
-  illegal_vars <- grep("ill", names(reg_res$coefficients), value = TRUE)
-  illegal_var <- illegal_vars[1]
-  illint_var <- illegal_vars[2]
-  # Coefficients
-  tab_df["Estimate Illegality", REGELM] <- reg_res$coefficients[illint_var] %>% round(3)
-  tab_df["95% CI Illegality",   REGELM] <- CI_table[match(illint_var, row.names(CI_table))+1,"reg_res"] %>% str_squish()
-
-  tab_df["Estimate Illegality", REGELM] <- reg_res$coefficients[illint_var] %>% round(3)
-  tab_df["95% CI Illegality",   REGELM] <- CI_table[match(illint_var, row.names(CI_table))+1,"reg_res"] %>% str_squish()
-  
-  tab_df["Estimate # reachable mills", REGELM] <- reg_res$coefficients["n_reachable_umlXln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
-  tab_df["95% CI # reachable mills",   REGELM] <- CI_table[match("n_reachable_umlXln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
-  
-  tab_df["Estimate Initial forest cover (%)", REGELM] <- reg_res$coefficients["pct_pfc2000_totalXln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
-  tab_df["95% CI Initial forest cover (%)",   REGELM] <- CI_table[match("pct_pfc2000_totalXln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
-  
-  tab_df["Estimate Mill ownership dom. private (%)", REGELM] <- reg_res$coefficients["wa_pct_own_nat_priv_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
-  tab_df["95% CI Mill ownership dom. private (%)",   REGELM] <- CI_table[match("wa_pct_own_nat_priv_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
-  
-  tab_df["Estimate Mill ownership foreign (%)", REGELM] <- reg_res$coefficients["wa_pct_own_for_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
-  tab_df["95% CI Mill ownership foreign (%)",   REGELM] <- CI_table[match("wa_pct_own_for_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
-  
-  tab_df["Estimate Mill CPO exports (%)", REGELM] <- reg_res$coefficients["wa_prex_cpo_imp1Xln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
-  tab_df["95% CI Mill CPO exports (%)",   REGELM] <- CI_table[match("wa_prex_cpo_imp1Xln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
-  
-  # Equal variance tests
-  d_clean$resid = reg_res$residuals
-  # unclustered test
-  res_variance <- d_clean %>%
-    group_by(lonlat, year, !!as.symbol(illegal_var)) %>% 
-    summarise(var_resid = mean(resid^2), .groups = "drop")
-  t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
-
-  # clustered test
-  res_variance <- d_clean %>%
-    group_by(reachable, !!as.symbol(illegal_var)) %>% # reachable, 
-    summarise(var_resid = mean(resid^2), .groups = "drop")
-  eqvars_clust_test <- t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
-  
-  # save p-value of clustered test 
-  tab_df["p-value", REGELM] =  eqvars_clust_test$p.value %>% round(3)
-}
-
-tab_df
-
-
-
-
-REGELM <- elm - 1
-res_data <- res_data_list_byplantation[[REGELM]]
-reg_res <- res_data[[1]]
-d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-rm(res_data)
-ape_mat1 <- make_APEs(rounding = 3) # and for the same reason, this cannot be wrapped in other functions
-reg_res %>% summary(cluster = "reachable")
-
-res_data_list_byplantation[[REGELM]][[1]]$coeftable
-## PARTIAL EFFECTS
-# rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat = list()
-reg_res_list = list()
-for(REGELM in 1:length(res_data_list_byplantation)){
-  # get estimation results and data
-  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-  res_data <- res_data_list_byplantation[[REGELM]]
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  rm(res_data)
-  ape_mat1 <- make_APEs(rounding = 3) # and for the same reason, this cannot be wrapped in other functions
-  reg_res %>% summary(cluster = "reachable")
-  # arrange depending on interaction set - must make 12 rows in sum 
-  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUS"){ 
-    # This has 6 rows. Add 6 rows after 4th one. 
-    ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), 
-                      matrix(ncol = ncol(ape_mat1), nrow = 6, data = ""), 
-                      matrix(ape_mat1[5:6,]))
-  }
-  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUSandIFC"){ 
-    # This has 8 rows. Add 4 rows after 4th one (4 last rows are IFC and N)
-    ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), 
-                      matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
-                      matrix(ape_mat1[5:8,]))
-  }
-  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUSandILL"){ 
-    # This has 8 rows. Add 4 rows after 6th one (2 last rows are N)
-    ape_mat1 <- rbind(matrix(ape_mat1[1:6,]), 
-                      matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
-                      matrix(ape_mat1[7:8,]))
-  }
-  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUSandILLandIFC"){ 
-    # This has 10 rows. Add 2 rows after 6th one (4 last rows are IFC and N)
-    ape_mat1 <- rbind(matrix(ape_mat1[1:6,]), 
-                      matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), 
-                      matrix(ape_mat1[7:10,]))
-  }
-  if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLINDUS"){ 
-    # This has 6 rows. Add 4 rows after 2nd one, and 2 rows after the 4th one.  
-    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
-                      matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
-                      matrix(ape_mat1[3:4,]), 
-                      matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""),
-                      matrix(ape_mat1[5:6,])
-                      )
-  }
-  if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLINDUSandIFC"){ 
-    # This has 8 rows. Add 4 rows after 2nd one
-    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
-                      matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
-                      matrix(ape_mat1[3:8,])
-    )
-  }
-  if(names(res_data_list_byplantation[REGELM]) == "both_a_byIFC"){ 
-    # This has 6 rows. Add 6 rows after 2nd one
-    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
-                      matrix(ncol = ncol(ape_mat1), nrow = 6, data = ""), 
-                      matrix(ape_mat1[3:6,])
-    )
-  }
-  ape_mat[[REGELM]] <- ape_mat1
-  reg_res_list[[REGELM]] <- reg_res
-  rm(d_clean, reg_res)
-}
-lapply(reg_res_list, FUN = function(x) x$convStatus)
-
-
-
-rm(res_data_list_byplantation)
-
-
-# 1. by INDUS 
-res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
-                                                   outcome_variable = paste0("lucpfap_pixelcount"),
-                                                   interaction_terms =           c("share_indus"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   controls = c("n_reachable_uml", "share_indus"),
-                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-                                                   offset = FALSE)
-names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUS")
-elm <- elm + 1
-
-# 2. by INDUS and IFC
-res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
-                                                   outcome_variable = paste0("lucpfap_pixelcount"),
-                                                   interaction_terms =           c("share_indus", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   controls = c("n_reachable_uml", "share_indus", "pct_pfc2000_total"),
-                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-                                                   offset = FALSE)
-names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandIFC")
-elm <- elm + 1
-
-
-# # 3. by INDUSxILL
-# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
-#                                                    outcome_variable = paste0("lucpfip_pixelcount"),
-#                                                    interaction_terms =           c("share_illindus"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-#                                                    controls = c("n_reachable_uml", "share_illindus"),
-#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-#                                                    offset = FALSE)
-# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLINDUS_inINDUS")
-# elm <- elm + 1
-# # 4. by INDUSxILL and IFC, controlling for indus
-# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
-#                                                    outcome_variable = paste0("lucpfip_pixelcount"),
-#                                                    interaction_terms =           c("share_illindus", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-#                                                    controls = c("n_reachable_uml", "share_illindus", "pct_pfc2000_total", "share_indus"),
-#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-#                                                    offset = FALSE)
-# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLINDUSandIFC_ctrlINDUS")
-# elm <- elm + 1
-
-# # 3. by INDUS and ILL
-# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
-#                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-#                                                    interaction_terms =           c("share_indus", "illegal2"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-#                                                    controls = c("n_reachable_uml", "share_indus", "illegal2"),
-#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-#                                                    offset = FALSE)
-# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandILL")
-# elm <- elm + 1
-# 
-# # 4. by INDUS and ILL and IFC
-# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
-#                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-#                                                    interaction_terms =           c("share_indus", "illegal2", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-#                                                    controls = c("n_reachable_uml", "share_indus", "illegal2", "pct_pfc2000_total"),
-#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-#                                                    offset = FALSE)
-# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandILLandIFC")
-# elm <- elm + 1
-# 
-# # 5. by INDUSxILL
-# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
-#                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-#                                                    interaction_terms =           c("share_illindus"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-#                                                    controls = c("n_reachable_uml", "share_illindus"),
-#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-#                                                    offset = FALSE)
-# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLINDUS")
-# elm <- elm + 1
-# 
-# # 6. by INDUSxILL and IFC
-# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
-#                                                    outcome_variable = paste0("lucpfap_pixelcount"),
-#                                                    interaction_terms =           c("share_illindus", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-#                                                    controls = c("n_reachable_uml", "share_illindus", "pct_pfc2000_total"),
-#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-#                                                    offset = FALSE)
-# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLINDUSandIFC")
-# elm <- elm + 1
-
-
-# # OR 
-# ### For each plantation type 
-# res_data_list_interact_ifc <- list()
-# elm <- 1
-# 
-# size_list <- list("i","sm", "unr", "a")
-# 
-# # legality definition
-# ill_def <- 2
-# ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
-# 
-# for(SIZE in size_list){
-#   if(SIZE == "i"){
-#     # Industrial by illegal status
-#     for(ILL in ill_status){
-#       res_data_list_interact_ifc[[elm]] <- make_base_reg(island = ISL,
-#                                                      outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-#                                                      interaction_terms = c("pfc2000_total_pixelcount"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-#                                                      controls = c("n_reachable_uml", "pfc2000_total_pixelcount"),
-#                                                      illegal = ILL,
-#                                                      n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-#                                                      offset = FALSE)
-#       names(res_data_list_interact_ifc)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-#       elm <- elm + 1
-#     }
-#   } else {
-#     # If size == sm or a, we do want to include all legal statuses.
-#     # If size == unr, the selection of illegal indus is handled in make_base_reg 
-#     ILL <- "all"
-#     res_data_list_interact_ifc[[elm]] <- make_base_reg(island = ISL,
-#                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-#                                                    interaction_terms = c("pfc2000_total_pixelcount"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-#                                                    controls = c("n_reachable_uml", "pfc2000_total_pixelcount"),
-#                                                    illegal = ILL,
-#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-#                                                    offset = FALSE)
-#     names(res_data_list_interact_ifc)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-#     elm <- elm + 1
-#   }}
-# 
-# ## PARTIAL EFFECTS
-# rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-# ape_mat = list()
-# reg_res_list = list()
-# for(REGELM in 1:length(res_data_list_interact_ifc)){
-#   # get estimation results and data
-#   # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-#   res_data <- res_data_list_interact_ifc[[REGELM]]
-#   reg_res <- res_data[[1]]
-#   d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-#   rm(res_data)
-#   ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM, rounding = 7) # and for the same reason, this cannot be wrapped in other functions
-#   reg_res_list[[REGELM]] <- reg_res
-#   rm(d_clean, reg_res)
-# }
-# # ape_mat <- lapply(res_data_list_interact_ifc, FUN = make_APEs) # this was the way to do it until it stopped working, on R 4.5 
-# lapply(reg_res_list, FUN = function(x) x$convStatus)
-# 
-# ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-# row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-# ape_mat
-# colnames(ape_mat) <- NULL
-
-
-### Coeff difference tests --------------------
-# This below is not used anymore. 
-# compare_APEs_across_groups <- function(group1, group2, m0 = 0, alternative = "two.sided") { 
-#   # important that it's selecting the "1" (resp. 2) row, and not the "Estimate" (resp. "SE") row in cases where there are several 
-#   # rows with the same names, i.e. if APEs of interaction effects have been computed as well. 
-#   ape1 <- ape_mat[1,group1] 
-#   ape2 <- ape_mat[1,group2]
-#   # # n1 <- ape_mat["Observations","Sumatra industrial"]
-#   # # n2 <- ape_mat["Observations","Sumatra smallholders"]
-#   sigma1 <- ape_mat[2,group1]^2
-#   sigma2 <- ape_mat[2,group2]^2
-#   
-#   statistic <- (ape1 - ape2 - m0) / sqrt(sigma1 + sigma2)
-#   
-#   pval <- if (alternative == "two.sided") { 
-#     2 * pnorm(abs(statistic), lower.tail = FALSE) 
-#   } else if (alternative == "less") { 
-#     pnorm(statistic, lower.tail = TRUE) 
-#   } else { 
-#     pnorm(statistic, lower.tail = FALSE) 
-#   } 
-#   # LCL <- (M1 - M2 - S * qnorm(1 - alpha / 2)) UCL <- (M1 - M2 + S * qnorm(1 - alpha / 2)) value <- list(mean1 = M1, mean2 = M2, m0 = m0, sigma1 = sigma1, sigma2 = sigma2, S = S, statistic = statistic, p.value = p, LCL = LCL, UCL = UCL, alternative = alternative) 
-#   # print(sprintf("P-value = %g",p)) # print(sprintf("Lower %.2f%% Confidence Limit = %g", 
-#   # alpha, LCL)) # print(sprintf("Upper %.2f%% Confidence Limit = %g", # alpha, UCL)) return(value) } test <- t.test_knownvar(dat1$sample1, dat1$sample2, V1 = 1, V2 = 1 )
-#   return(pval)
-# }
-
-compare_coeffs_across_groups <- function(group1, group2, m0 = 0, alternative = "two.sided") { 
-  # important that it's selecting the "1" (resp. 2) row, and not the "Estimate" (resp. "SE") row in cases where there are several 
-  # rows with the same names, i.e. if APEs of interaction effects have been computed as well. 
-  reg_sum1 <- res_data_list_full[[group1]][[1]] %>% summary()
-  reg_sum2 <- res_data_list_full[[group2]][[1]] %>% summary()
-  
-  coeff1 <- reg_sum1$coefficients[1]
-  coeff2 <- reg_sum2$coefficients[1]
-
-  sigma1 <- reg_sum1$se[1]^2
-  sigma2 <- reg_sum2$se[1]^2
-  
-  statistic <- (coeff1 - coeff2 - m0) / sqrt(sigma1 + sigma2)
-  
-  pval <- if (alternative == "two.sided") { 
-    2 * pnorm(abs(statistic), lower.tail = FALSE) 
-  } else if (alternative == "less") { 
-    pnorm(statistic, lower.tail = TRUE) 
-  } else { 
-    pnorm(statistic, lower.tail = FALSE) 
-  } 
-  # LCL <- (M1 - M2 - S * qnorm(1 - alpha / 2)) UCL <- (M1 - M2 + S * qnorm(1 - alpha / 2)) value <- list(mean1 = M1, mean2 = M2, m0 = m0, sigma1 = sigma1, sigma2 = sigma2, S = S, statistic = statistic, p.value = p, LCL = LCL, UCL = UCL, alternative = alternative) 
-  # print(sprintf("P-value = %g",p)) # print(sprintf("Lower %.2f%% Confidence Limit = %g", 
-  # alpha, LCL)) # print(sprintf("Upper %.2f%% Confidence Limit = %g", # alpha, UCL)) return(value) } test <- t.test_knownvar(dat1$sample1, dat1$sample2, V1 = 1, V2 = 1 )
-  return(pval)
-}
-
-
-
-
-## infrastructure to store results
-ape_mat_list <- list()
-elm <- 1
-
-# make the APE. Note the difference: Standard errors are returnd with make_APEs_1regr, not CI95. 
-rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat = list()
-reg_res_list = list()
-for(REGELM in 1:length(res_data_list_full)){
-  res_data <- res_data_list_full[[REGELM]]
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs_1regr(res_data = res_data_list_full[[REGELM]]) # and for the same reason, this cannot be wrapped in other functions
-  rm(d_clean, reg_res, res_data)
-}
-ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-
-rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat = list()
-reg_res_list = list()
-for(REGELM in 1:length(res_data_list_full)){
-  res_data <- res_data_list_full[[REGELM]]
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs() # and for the same reason, this cannot be wrapped in other functions
-  reg_res_list[[REGELM]] <- reg_res
-  rm(d_clean, reg_res)
-}
-ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-colnames(ape_mat) <- names(res_data_list_full)
-# keep ape_mat like this for later comparisons between APEs
-
-# fill the matrix of p values of equality tests BY ROW
-
-# comp_ape_mat["industrial = smallholders",paste0("both_a_all")] 
-i_vs_sm <- compare_APEs_across_groups(group1 = paste0("both_i_all"), 
-                                      group2 = paste0("both_sm_all")) 
-
-notill_vs_ill <- compare_APEs_across_groups(group1 = paste0("both_i_no_ill2"), 
-                                            group2 = paste0("both_i_ill2")) 
-
-leg_vs_ill <- compare_APEs_across_groups(group1 = paste0("both_i_in_concession"), 
-                                         group2 = paste0("both_i_ill2")) 
-
-
-illindus_vs_sm <- compare_APEs_across_groups(group1 = paste0("both_i_ill2"), 
-                                             group2 = paste0("both_sm_all")) 
-
-# Old code to produce former table of p-values. 
-# groups <- c("both_i_no_ill2", "both_i_ill2",
-#             "both_i_all",
-#             "both_sm_all")
-# 
-# comparisons <- c("industrial = smallholders",
-#                  "legal indus. = illegal indus.")#,"primary forest = broadly def. forest"
-# 
-# comp_ape_mat <- matrix(ncol = length(groups), nrow = length(comparisons), data = NA)
-# colnames(comp_ape_mat) <- groups
-# row.names(comp_ape_mat) <- comparisons
-# 
-# for(SIZE in size_list){
-#   comp_ape_mat["legal = illegal",paste0("both_",SIZE,"_all")] <- compare_APEs_across_groups(group1 = paste0("both_",SIZE,"_no_ill2"), 
-#                                                                                             group2 = paste0("both_",SIZE,"_ill2")) 
-# }
-# 
-# comp_ape_mat <- comp_ape_mat %>% formatC(digits = 4, format = "f")
-# comp_ape_mat[comp_ape_mat=="   NA"] <- "" 
-# comp_ape_mat
-# colnames(comp_ape_mat) <- NULL
-# 
-# options(knitr.table.format = "latex")
-# kable(comp_ape_mat, booktabs = T, align = "c",
-#       caption = "p-values from equality tests of price elasticities") %>% #of 1 percentage change in medium-run price signal
-#   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-#   add_header_above(c("Ho" = 1,
-#                      "Legal" = 1,
-#                      "Illegal" = 1,
-#                      "All" = 1,
-#                      " " = 1,
-#                      " " = 1),
-#                    bold = F,
-#                    align = "c") %>%  
-#   add_header_above(c("Deforestation for:" = 1,
-#                      "All plantations" = 3,
-#                      "Industrial plantations" = 1,
-#                      "Smallholder plantations" = 1),
-#                    bold = F,
-#                    align = "c") %>%
-#   column_spec(column = 1,
-#               width = "13em",
-#               latex_valign = "m") %>% 
-#   column_spec(column = c(2:(ncol(comp_ape_mat))),
-#               width = "5em",
-#               latex_valign = "m")
-
-
-
-## Table A.7 PRICE VARIABILITY ----------------------------------------------------
+## Table A.9. PRICE VARIABILITY ----------------------------------------------------
 # infrastructure to store results
 res_data_list_variability <- list()
 elm <- 1
@@ -4985,7 +4397,7 @@ size_list <- list("i","sm", "unr", "a")
 
 # legality definition
 ill_def <- 2
-ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
+ill_status <- c("in_concession", paste0("ill",ill_def), "all")
 
 for(SIZE in size_list){
   if(SIZE == "i"){
@@ -5072,518 +4484,10 @@ kable(ape_mat, booktabs = T, align = "c",
 
 rm(ape_mat)
 
-## Table A.8 ISLAND BREAKDOWN ----------------------------------------------------
-# For temporal breakdown, check github before 30/06/2025 but even there it is old code that was not used at that time. 
-ape_mat_list <- list()
-isl_list <- list("Sumatra", "Kalimantan") 
-for(ISL in isl_list){
-  res_data_list_bd <- list()
-  elm <- 1
-  
-  size_list <- list("i","sm", "unr", "a")
-  
-  # legality definition
-  ill_def <- 2
-  ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
-  
-  for(SIZE in size_list){
-    if(SIZE == "i"){
-      # Industrial by illegal status
-      for(ILL in ill_status){
-        res_data_list_bd[[elm]] <- make_base_reg(island = ISL,
-                                                 outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                 illegal = ILL,
-                                                 n_iter_glm = 2000,
-                                                 offset = FALSE)
-        names(res_data_list_bd)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-        elm <- elm + 1
-      }
-    } else {
-      # If size == sm or a, we do want to include all legal statuses.
-      # If size == unr, the selection of illegal indus is handled in make_base_reg 
-      ILL <- "all"
-      res_data_list_bd[[elm]] <- make_base_reg(island = ISL,
-                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                               illegal = ILL,
-                                               n_iter_glm = 2000,
-                                               offset = FALSE)
-      names(res_data_list_bd)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-      elm <- elm + 1
-    }}
-  
-  ## PARTIAL EFFECTS
-  # Collect partial effects for this island
-  rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-  ape_mat = list()
-  reg_res_list = list()
-  for(REGELM in 1:length(res_data_list_bd)){
-    # get estimation results and data
-    # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-    res_data <- res_data_list_bd[[REGELM]]
-    reg_res <- res_data[[1]]
-    d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-    rm(res_data)
-    ape_mat[[REGELM]] <- make_APEs() # and for the same reason, this cannot be wrapped in other functions
-    reg_res_list[[REGELM]] <- reg_res
-    rm(d_clean, reg_res)
-  }
-  lapply(reg_res_list, FUN = function(x) x$convStatus) %>% print()
-  
-  ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-  row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-  ape_mat
-  colnames(ape_mat) <- NULL
-  # Store the island specific results
-  ape_mat_list[[ISL]] <- ape_mat
-}
-
-stacked_ape_mat <- rbind(ape_mat_list[[1]], ape_mat_list[[2]])
-
-options(knitr.table.format = "latex")
-kable(stacked_ape_mat, booktabs = T, align = "c",
-      caption = "Price elasticities of deforestation across the oil palm sector, by island") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  add_header_above(c(" " = 1,
-                     "Legal" = 1,
-                     "Illegal" = 1,
-                     "All" = 1, 
-                     " " = 3),
-                   bold = F,
-                   align = "c") %>%
-  add_header_above(c("Deforestation for:" = 1,
-                     "Industrial plantations" = 3,
-                     "Smallholder plantations" = 1, 
-                     "Unregulated plantations" = 1, 
-                     "All" = 1),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1, 
-                     "(4)" = 1,
-                     "(5)" = 1, 
-                     "(6)" = 1),
-                   align = "c") %>%
-  pack_rows("Sumatra elasticity to:", 1, 4, bold = TRUE)  %>% 
-  pack_rows("CPO price signal", 1, 4, indent = FALSE, 
-            bold = FALSE, italic = TRUE) %>% 
-  pack_rows(" ", 3, 4, indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  
-  pack_rows("Kalimantan elasticity to:", 5, 8, bold = TRUE)  %>%
-  pack_rows("CPO price signal", 5, 8, indent = FALSE, 
-            bold = FALSE, italic = TRUE) %>% 
-  pack_rows(" ", 7, 8, indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              width = "14em",
-              latex_valign = "m") 
 
 
 
-
-## Table A.9 SECONDARY FORESTS -----------------------
-
-# infrastructure to store results
-res_data_list_full_2ndry <- list()
-elm <- 1
-
-isl_list <- list("both")#"Sumatra", "Kalimantan", 
-ISL <- "both"
-
-size_list <- list("i","sm", "unr", "a")
-
-# legality definition
-ill_def <- 2
-ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
-
-for(SIZE in size_list){
-  if(SIZE == "i"){
-    # Industrial by illegal status
-    for(ILL in ill_status){
-      res_data_list_full_2ndry[[elm]] <- make_base_reg(island = ISL,
-                                                       outcome_variable = paste0("lucf",SIZE,"p_pixelcount"),
-                                                       illegal = ILL,
-                                                       offset = FALSE)
-      names(res_data_list_full_2ndry)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-      elm <- elm + 1
-    }
-  } else {
-    # If size == sm or a, we do want to include all legal statuses.
-    # If size == unr, the selection of illegal indus is handled in make_base_reg 
-    ILL <- "all"
-    res_data_list_full_2ndry[[elm]] <- make_base_reg(island = ISL,
-                                                     outcome_variable = paste0("lucf",SIZE,"p_pixelcount"),
-                                                     illegal = ILL,
-                                                     offset = FALSE)
-    names(res_data_list_full_2ndry)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-    elm <- elm + 1
-  }}
-
-## PARTIAL EFFECTS
-rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat = list()
-reg_res_list = list()
-for(REGELM in 1:length(res_data_list_full_2ndry)){
-  # get estimation results and data
-  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-  res_data <- res_data_list_full_2ndry[[REGELM]]
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
-  reg_res_list[[REGELM]] <- reg_res
-  rm(d_clean, reg_res)
-}
-# ape_mat <- lapply(res_data_list_full_2ndry, FUN = make_APEs) # this was the way to do it until it stopped working, on R 4.5 
-lapply(reg_res_list, FUN = function(x) x$convStatus)
-ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-ape_mat
-colnames(ape_mat) <- NULL
-
-# for(SIZE in size_list){
-#   for(ILL in ill_status){
-#     res_data_list_full_2ndry[[elm]] <- make_base_reg(island = ISL,
-#                                                      outcome_variable = paste0("lucf",SIZE,"p_pixelcount"), # note the absence of "p": it is not primary forest data. 
-#                                                      illegal = ILL,
-#                                                      offset = FALSE)
-#     names(res_data_list_full_2ndry)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-#     elm <- elm + 1
-#   }
-# }
-
-options(knitr.table.format = "latex")
-kable(ape_mat, booktabs = T, align = "c",
-      caption = "Price elasticities of secondary forest loss, across the Indonesian oil palm sector") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  add_header_above(c(" " = 1,
-                     "Legal" = 1,
-                     "Illegal" = 1,
-                     "All" = 1, 
-                     " " = 3),
-                   bold = F,
-                   align = "c") %>%
-  add_header_above(c("Secondary forest loss for:" = 1,
-                     "Industrial plantations" = 3,
-                     "Smallholder plantations" = 1, 
-                     "Unregulated plantations" = 1, 
-                     "All" = 1),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1, 
-                     "(4)" = 1,
-                     "(5)" = 1, 
-                     "(6)" = 1),
-                   align = "c") %>%
-  pack_rows("Elasticity to:", 1, 2, # indent = FALSE,
-            bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
-  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              width = "12em",
-              latex_valign = "m")
-
-
-rm(ape_mat)
-
-## Table A.10 INTERACTION BY N REACHABLE -------------------------------------------------------------
-res_data_list_interact <- list()
-elm <- 1
-
-size_list <- list("i","sm", "unr", "a")
-
-# legality definition
-ill_def <- 2
-ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
-
-for(SIZE in size_list){
-  if(SIZE == "i"){
-    # Industrial by illegal status
-    for(ILL in ill_status){
-      res_data_list_interact[[elm]] <- make_base_reg(island = ISL,
-                                                     outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                     interaction_terms = c("n_reachable_uml"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                     illegal = ILL,
-                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-                                                     offset = FALSE)
-      names(res_data_list_interact)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-      elm <- elm + 1
-    }
-  } else {
-    # If size == sm or a, we do want to include all legal statuses.
-    # If size == unr, the selection of illegal indus is handled in make_base_reg 
-    ILL <- "all"
-    res_data_list_interact[[elm]] <- make_base_reg(island = ISL,
-                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                   interaction_terms = c("n_reachable_uml"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                   illegal = ILL,
-                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-                                                   offset = FALSE)
-    names(res_data_list_interact)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-    elm <- elm + 1
-  }}
-
-## PARTIAL EFFECTS
-rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat = list()
-reg_res_list = list()
-for(REGELM in 1:length(res_data_list_interact)){
-  # get estimation results and data
-  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-  res_data <- res_data_list_interact[[REGELM]]
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM, rounding = 4) # and for the same reason, this cannot be wrapped in other functions
-  reg_res_list[[REGELM]] <- reg_res
-  rm(d_clean, reg_res)
-}
-# ape_mat <- lapply(res_data_list_interact, FUN = make_APEs) # this was the way to do it until it stopped working, on R 4.5 
-lapply(reg_res_list, FUN = function(x) x$convStatus)
-
-ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-ape_mat
-colnames(ape_mat) <- NULL
-
-# for(SIZE in size_list){
-#   for(ILL in ill_status){
-#     res_data_list_interact[[elm]] <- make_base_reg(island = "both",
-#                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-#                                                    interaction_terms = c("n_reachable_uml"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-#                                                    illegal = ILL,
-#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-#                                                    offset = FALSE)
-#     names(res_data_list_interact)[elm] <- paste0("both_",SIZE,"_",ILL)
-#     elm <- elm + 1
-#   }
-# }
-
-options(knitr.table.format = "latex")
-kable(ape_mat, booktabs = T, align = "c",
-      caption = "Price elasticity heterogeneity across ownership and local market development") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  add_header_above(c(" " = 1,
-                     "Legal" = 1,
-                     "Illegal" = 1,
-                     "All" = 1, 
-                     " " = 3),
-                   bold = F,
-                   align = "c") %>%
-  add_header_above(c("Deforestation for:" = 1,
-                     "Industrial plantations" = 3,
-                     "Smallholder plantations" = 1, 
-                     "Unregulated plantations" = 1, 
-                     "All" = 1),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1, 
-                     "(4)" = 1,
-                     "(5)" = 1, 
-                     "(6)" = 1),
-                   align = "c") %>%
-  pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
-  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
-            bold = FALSE, italic = TRUE) %>% 
-  
-  pack_rows("Moderation effect of:", 3, 4, 
-            bold = TRUE, italic = FALSE)  %>%
-  pack_rows("# reachable mills", 3, 4, indent = FALSE, 
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              width = "10em",
-              latex_valign = "m")
-
-
-rm(res_data_list_interact)
-
-## Table A.11 ILLEGAL MEASUREMENT ROBUSTNESS #### 
-res_data_list_illrob <- list()
-elm <- 1
-
-isl_list <- list("both")#"Sumatra", "Kalimantan", 
-ISL <- "both"
-
-size_list <- list("i","unr", "a")
-
-# legality definition
-ILL <- "alt"
-
-for(SIZE in size_list){
-  res_data_list_illrob[[elm]] <- make_base_reg(island = ISL,
-                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
-                                               illegal = ILL,
-                                               offset = FALSE)
-  names(res_data_list_illrob)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-  elm <- elm + 1
-}
-
-## PARTIAL EFFECTS
-rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat = list()
-reg_res_list = list()
-for(REGELM in 1:length(res_data_list_illrob)){
-  # get estimation results and data
-  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-  res_data <- res_data_list_illrob[[REGELM]]
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
-  reg_res_list[[REGELM]] <- reg_res
-  rm(d_clean, reg_res)
-}
-lapply(reg_res_list, FUN = function(x) x$convStatus)
-ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-ape_mat
-colnames(ape_mat) <- NULL
-
-options(knitr.table.format = "latex")
-kable(ape_mat, booktabs = T, align = "c",
-      caption = "Price elasticities of illegal deforestation according to 2020 concession map") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  add_header_above(c("Deforestation for:" = 1,
-                     "Industrial plantations" = 1,
-                     "Unregulated plantations" = 1, 
-                     "All" = 1),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1),
-                   align = "c") %>%pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
-  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
-            bold = FALSE, italic = TRUE) %>% 
-  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              width = "10em",
-              latex_valign = "m")
-
-rm(ape_mat)
-
-
-## Table A. 12 INTENSIVE MARGIN ROBUSTNESS -------------------------------------
-
-# infrastructure to store results
-res_data_list_intensive <- list()
-elm <- 1
-
-isl_list <- list("both")#"Sumatra", "Kalimantan", 
-ISL <- "both"
-
-size_list <- list("i","sm", "unr", "a")
-
-# legality definition
-ill_def <- 2
-ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
-
-for(SIZE in size_list){
-  if(SIZE == "i"){
-    # Industrial by illegal status
-    for(ILL in ill_status){
-      if(ILL == "no_ill2"){# this is necessary to handle some convergence issue
-        higher_iter_glm <- 2000 
-      } else {
-        higher_iter_glm <- 200
-      } 
-      res_data_list_intensive[[elm]] <- make_base_reg(island = ISL,
-                                                      outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                      illegal = ILL,
-                                                      margin = "intensive",
-                                                      n_iter_glm = higher_iter_glm,
-                                                      offset = FALSE)
-      names(res_data_list_intensive)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-      elm <- elm + 1
-    }
-  } else {
-    # If size == sm or a, we do want to include all legal statuses.
-    # If size == unr, the selection of illegal indus is handled in make_base_reg 
-    ILL <- "all"
-    higher_iter_glm <- 200
-    res_data_list_intensive[[elm]] <- make_base_reg(island = ISL,
-                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                    illegal = ILL,
-                                                    margin = "intensive",
-                                                    n_iter_glm = higher_iter_glm,
-                                                    offset = FALSE)
-    names(res_data_list_intensive)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
-    elm <- elm + 1
-  }}
-
-## PARTIAL EFFECTS
-rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
-ape_mat = list()
-reg_res_list = list()
-for(REGELM in 1:length(res_data_list_intensive)){
-  # get estimation results and data
-  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
-  res_data <- res_data_list_intensive[[REGELM]]
-  reg_res <- res_data[[1]]
-  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
-  rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
-  reg_res_list[[REGELM]] <- reg_res
-  rm(d_clean, reg_res)
-}
-lapply(reg_res_list, FUN = function(x) x$convStatus)
-ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-ape_mat
-colnames(ape_mat) <- NULL
-
-options(knitr.table.format = "latex")
-kable(ape_mat, booktabs = T, align = "c",
-      caption = "CPO price elasticity of deforestation across Indonesian oil palm plantations, away from direct mill vicinity") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  add_header_above(c(" " = 1,
-                     "Legal" = 1,
-                     "Illegal" = 1,
-                     "All" = 1, 
-                     " " = 3),
-                   bold = F,
-                   align = "c") %>%
-  add_header_above(c("Deforestation for:" = 1,
-                     "Industrial plantations" = 3,
-                     "Smallholder plantations" = 1, 
-                     "Unregulated plantations" = 1, 
-                     "All" = 1),
-                   align = "c",
-                   strikeout = F) %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1, 
-                     "(4)" = 1,
-                     "(5)" = 1, 
-                     "(6)" = 1),
-                   align = "c") %>%
-  pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
-  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
-            bold = FALSE, italic = TRUE) %>% 
-  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              width = "10em",
-              latex_valign = "m") 
-
-rm(ape_mat)
-
-
-
-
-
-
-
-## Table A.13 IN-LEVEL PRICES ROBUSTNESS ####
+## Table A.10 IN-LEVEL PRICES ROBUSTNESS ####
 # infrastructure to store results
 res_data_list_level <- list()
 elm <- 1
@@ -5595,18 +4499,18 @@ size_list <- list("i","sm", "unr", "a")
 
 # legality definition
 ill_def <- 2
-ill_status <- c(paste0("no_ill",ill_def), paste0("ill",ill_def), "all")
+ill_status <- c("in_concession", paste0("ill",ill_def), "all")
 
 for(SIZE in size_list){
   if(SIZE == "i"){
     # Industrial by illegal status
     for(ILL in ill_status){
       res_data_list_level[[elm]] <- make_base_reg(island = ISL,
-                                                 outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                                 illegal = ILL,
-                                                 log_prices = FALSE,
-                                                 n_iter_glm = 2000,
-                                                 offset = FALSE)
+                                                  outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                  illegal = ILL,
+                                                  log_prices = FALSE,
+                                                  n_iter_glm = 2000,
+                                                  offset = FALSE)
       names(res_data_list_level)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
       elm <- elm + 1
     }
@@ -5615,11 +4519,11 @@ for(SIZE in size_list){
     # If size == unr, the selection of illegal indus is handled in make_base_reg 
     ILL <- "all"
     res_data_list_level[[elm]] <- make_base_reg(island = ISL,
-                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-                                               illegal = ILL,
-                                               log_prices = FALSE,
-                                               n_iter_glm = 2000,
-                                               offset = FALSE)
+                                                outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                illegal = ILL,
+                                                log_prices = FALSE,
+                                                n_iter_glm = 2000,
+                                                offset = FALSE)
     names(res_data_list_level)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
     elm <- elm + 1
   }}
@@ -5841,7 +4745,693 @@ rm(d)
 
 
 
+## Table A.11. LAGGED OUTCOME ROBUSTNESS CHECKS -------------------------
+
+res_data_list_lagov <- list()
+SIZE <- "a"
+ISL <- "both"
+i <- 1
+
+# Here we compute the APE directly after each estimation because looping is intricate
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+
+# Control for 5-year lagged deforestation 
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml",
+                                                       "lucpfap_pixelcount_lag4_lag1"))
+reg_res <- res_data_list_lagov[[i]][[1]]
+d_clean <- res_data_list_lagov[[i]][[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+ape_mat1 <- make_APEs()
+# Insert 4 rows after the second one to mark which controls 
+ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                  matrix(ncol = ncol(ape_mat1), nrow = 4, data = c("X", " ", " ", " ")), 
+                  matrix(ape_mat1[3:4,]))
+ape_mat[[i]] <- ape_mat1
+
+# Control for 5-year lagged deforestation in the neighbor grid cells
+i <- i + 1
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml",
+                                                       "ngb_ov_lag4_lag1"))
+reg_res <- res_data_list_lagov[[i]][[1]]
+d_clean <- res_data_list_lagov[[i]][[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+ape_mat1 <- make_APEs()
+# Insert 4 rows after the second one to mark which controls 
+ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                  matrix(ncol = ncol(ape_mat1), nrow = 4, data = c(" ", "X", " ", " ")), 
+                  matrix(ape_mat1[3:4,]))
+ape_mat[[i]] <- ape_mat1
+
+(min_year_with_lags <- d_clean$year %>% min())
+
+# The main specification, on the same time period as with lags
+i <- i + 1
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          start_year = min_year_with_lags,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml"))
+reg_res <- res_data_list_lagov[[i]][[1]]
+d_clean <- res_data_list_lagov[[i]][[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+ape_mat1 <- make_APEs()
+# Insert 4 rows after the second one to mark which controls 
+ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                  matrix(ncol = ncol(ape_mat1), nrow = 4, data = c(" ", " ", " ", " ")), 
+                  matrix(ape_mat1[3:4,]))
+ape_mat[[i]] <- ape_mat1
+
+# control for t-5 to t-8 average deforestation 
+i <- i + 1
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml",
+                                                       "lucpfap_pixelcount_lag4_4pya"))
+reg_res <- res_data_list_lagov[[i]][[1]]
+d_clean <- res_data_list_lagov[[i]][[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+ape_mat1 <- make_APEs()
+# Insert 4 rows after the second one to mark which controls 
+ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                  matrix(ncol = ncol(ape_mat1), nrow = 4, data = c(" ", " ", "X", " ")), 
+                  matrix(ape_mat1[3:4,]))
+ape_mat[[i]] <- ape_mat1
+
+# control for t-5 to t-8 average deforestation in the neighbor grid cells
+i <- i + 1
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml",
+                                                       "ngb_ov_lag4_4pya"))
+reg_res <- res_data_list_lagov[[i]][[1]]
+d_clean <- res_data_list_lagov[[i]][[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+ape_mat1 <- make_APEs()
+# Insert 4 rows after the second one to mark which controls 
+ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                  matrix(ncol = ncol(ape_mat1), nrow = 4, data = c(" ", " ", " ", "X")), 
+                  matrix(ape_mat1[3:4,]))
+ape_mat[[i]] <- ape_mat1
+
+(min_year_with_lags <- d_clean$year %>% min())
+
+## The main specification, on the same time period as with lags
+i <- i + 1
+res_data_list_lagov[[i]] <- make_base_reg(island = ISL,
+                                          start_year = min_year_with_lags,
+                                          outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                          controls = c("n_reachable_uml"))
+reg_res <- res_data_list_lagov[[i]][[1]]
+d_clean <- res_data_list_lagov[[i]][[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+ape_mat1 <- make_APEs()
+# Insert 4 rows after the second one to mark which controls 
+ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                  matrix(ncol = ncol(ape_mat1), nrow = 4, data = c(" ", " ", " ", " ")), 
+                  matrix(ape_mat1[3:4,]))
+ape_mat[[i]] <- ape_mat1
+
+rm(i)
+
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c("Estimate",
+                        "95% CI",
+                        "In plantation site i",
+                        "In i's 8 neighbors",
+                        "In plantation site i",
+                        "In i's 8 neighbors",
+                        "Observations", 
+                        "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "c",
+      caption = "Price elasticities of deforestation conditional on past deforestation") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Sample period: 2006-2014" = 3,
+                     "Sample period: 2009-2014" = 3),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c("Deforestation for:" = 1,
+                     "All plantations" = 6),
+                   align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1),
+                   align = "c") %>%
+  pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
+            bold = FALSE, italic = TRUE) %>% 
+  pack_rows("Conditional on deforestation:", 3, 6, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  pack_rows("the year preceding price signal", 3, 4, indent = FALSE, 
+            bold = FALSE, italic = TRUE) %>% 
+  pack_rows("the four years preceding price signal", 5, 6, indent = FALSE, 
+            bold = FALSE, italic = TRUE) %>% 
+  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              width = "15em",
+              latex_valign = "m") 
+
+rm(ape_mat)
+
+## Table A.12 ALTERNATIVE LEGAL & ILLEGAL DEFINITIONS #### 
+res_data_list_illrob <- list()
+elm <- 1
+
+isl_list <- list("both")#"Sumatra", "Kalimantan", 
+ISL <- "both"
+
+size_list <- list("i","unr", "a")
+
+# legality definition
+for(ILL in c("in_concession", "legal2", "either_concession", "ill2", "out_concession", "ill2_2020")){
+  res_data_list_illrob[[elm]] <- make_base_reg(island = ISL,
+                                               outcome_variable = paste0("lucpfip_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                               illegal = ILL,
+                                               offset = FALSE)
+  names(res_data_list_illrob)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+  elm <- elm + 1
+}
+
+
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_illrob)){
+  # get estimation results and data
+  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+  res_data <- res_data_list_illrob[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+lapply(reg_res_list, FUN = function(x) x$convStatus)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "c",
+      caption = "Price elasticities of illegal deforestation according to 2020 concession map") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c("Deforestation for:" = 1,
+                     "Legal industrial plantations" = 1,
+                     "Illegal industrial plantations" = 1, 
+                     "All" = 1),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1),
+                   align = "c") %>%pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
+            bold = FALSE, italic = TRUE) %>% 
+  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              width = "10em",
+              latex_valign = "m")
+
+rm(ape_mat)
+
+
+## Table A.12. INTERACTION BY N REACHABLE -------------------------------------------------------------
+res_data_list_interact <- list()
+elm <- 1
+
+size_list <- list("i","sm", "unr", "a")
+
+# legality definition
+ill_def <- 2
+ill_status <- c("in_concession", paste0("ill",ill_def), "all")
+
+for(SIZE in size_list){
+  if(SIZE == "i"){
+    # Industrial by illegal status
+    for(ILL in ill_status){
+      res_data_list_interact[[elm]] <- make_base_reg(island = ISL,
+                                                     outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                     interaction_terms = c("n_reachable_uml"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                     fe = "subdistrict + district_year", # do not capture away size of set of reachable mills 
+                                                     illegal = ILL,
+                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                     offset = FALSE)
+      names(res_data_list_interact)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+      elm <- elm + 1
+    }
+  } else {
+    # If size == sm or a, we do want to include all legal statuses.
+    # If size == unr, the selection of illegal indus is handled in make_base_reg 
+    ILL <- "all"
+    res_data_list_interact[[elm]] <- make_base_reg(island = ISL,
+                                                   outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                   interaction_terms = c("n_reachable_uml"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   fe = "subdistrict + district_year", # do not capture away size of set of reachable mills 
+                                                   illegal = ILL,
+                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                   offset = FALSE)
+    names(res_data_list_interact)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    elm <- elm + 1
+  }}
+
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_interact)){
+  # get estimation results and data
+  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+  res_data <- res_data_list_interact[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat1 <- make_APEs() # and for the same reason, this cannot be wrapped in other functions
+
+  # here we are interested in the coefficient of interaction, i.e. how n_reachable changes the elasticity -
+  # we are not interested in the total partial effect of n_reachable. 
+  ape_mat1[3,] <- reg_res$coefficients[grep("n_reachable_umlX", names(reg_res$coefficients))] %>% round(3) %>% as.character()
+  ape_mat1[4,] <-  etable(reg_res,
+                          coefstat = "confint",
+                          tex = F, 
+                          se.below = TRUE,
+                          digits = "s3",
+                          signif.code=NA,
+                          depvar = FALSE)[6,2] %>% as.character()
+  ape_mat[[REGELM]] <- ape_mat1
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+# ape_mat <- lapply(res_data_list_interact, FUN = make_APEs) # this was the way to do it until it stopped working, on R 4.5 
+lapply(reg_res_list, FUN = function(x) x$convStatus)
+
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+# for(SIZE in size_list){
+#   for(ILL in ill_status){
+#     res_data_list_interact[[elm]] <- make_base_reg(island = "both",
+#                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+#                                                    interaction_terms = c("n_reachable_uml"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                    illegal = ILL,
+#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                    offset = FALSE)
+#     names(res_data_list_interact)[elm] <- paste0("both_",SIZE,"_",ILL)
+#     elm <- elm + 1
+#   }
+# }
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "c",
+      caption = "Price elasticity heterogeneity across ownership and local market development") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1, 
+                     " " = 3),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c("Deforestation for:" = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 1, 
+                     "Unregulated plantations" = 1, 
+                     "All" = 1),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1),
+                   align = "c") %>%
+  pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
+            bold = FALSE, italic = TRUE) %>% 
+  
+  pack_rows("Regression coefficient of:", 3, 4, 
+            bold = TRUE, italic = FALSE)  %>%
+  pack_rows("# reachable mills", 3, 4, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              width = "13em",
+              latex_valign = "m")
+
+
+rm(res_data_list_interact)
+
+## Table A.13. ISLAND BREAKDOWN ----------------------------------------------------
+# For temporal breakdown, check github before 30/06/2025 but even there it is old code that was not used at that time. 
+ape_mat_list <- list()
+isl_list <- list("Sumatra", "Kalimantan") 
+for(ISL in isl_list){
+  res_data_list_bd <- list()
+  elm <- 1
+  
+  size_list <- list("i","sm", "unr", "a")
+  
+  # legality definition
+  ill_def <- 2
+  ill_status <- c("in_concession", paste0("ill",ill_def), "all")
+  
+  for(SIZE in size_list){
+    if(SIZE == "i"){
+      # Industrial by illegal status
+      for(ILL in ill_status){
+        res_data_list_bd[[elm]] <- make_base_reg(island = ISL,
+                                                 outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                 illegal = ILL,
+                                                 n_iter_glm = 2000,
+                                                 offset = FALSE)
+        names(res_data_list_bd)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+        elm <- elm + 1
+      }
+    } else {
+      # If size == sm or a, we do want to include all legal statuses.
+      # If size == unr, the selection of illegal indus is handled in make_base_reg 
+      ILL <- "all"
+      res_data_list_bd[[elm]] <- make_base_reg(island = ISL,
+                                               outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                               illegal = ILL,
+                                               n_iter_glm = 2000,
+                                               offset = FALSE)
+      names(res_data_list_bd)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+      elm <- elm + 1
+    }}
+  
+  ## PARTIAL EFFECTS
+  # Collect partial effects for this island
+  rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+  ape_mat = list()
+  reg_res_list = list()
+  for(REGELM in 1:length(res_data_list_bd)){
+    # get estimation results and data
+    # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+    res_data <- res_data_list_bd[[REGELM]]
+    reg_res <- res_data[[1]]
+    d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+    rm(res_data)
+    ape_mat[[REGELM]] <- make_APEs() # and for the same reason, this cannot be wrapped in other functions
+    reg_res_list[[REGELM]] <- reg_res
+    rm(d_clean, reg_res)
+  }
+  lapply(reg_res_list, FUN = function(x) x$convStatus) %>% print()
+  
+  ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+  row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+  ape_mat
+  colnames(ape_mat) <- NULL
+  # Store the island specific results
+  ape_mat_list[[ISL]] <- ape_mat
+}
+
+stacked_ape_mat <- rbind(ape_mat_list[[1]], ape_mat_list[[2]])
+
+options(knitr.table.format = "latex")
+kable(stacked_ape_mat, booktabs = T, align = "c",
+      caption = "Price elasticities of deforestation across the oil palm sector, by island") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1, 
+                     " " = 3),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c("Deforestation for:" = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 1, 
+                     "Unregulated plantations" = 1, 
+                     "All" = 1),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1),
+                   align = "c") %>%
+  pack_rows("Sumatra elasticity to:", 1, 4, bold = TRUE)  %>% 
+  pack_rows("CPO price signal", 1, 4, indent = FALSE, 
+            bold = FALSE, italic = TRUE) %>% 
+  pack_rows(" ", 3, 4, indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  
+  pack_rows("Kalimantan elasticity to:", 5, 8, bold = TRUE)  %>%
+  pack_rows("CPO price signal", 5, 8, indent = FALSE, 
+            bold = FALSE, italic = TRUE) %>% 
+  pack_rows(" ", 7, 8, indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              width = "14em",
+              latex_valign = "m") 
+
+
+# Differential coverage of geolocalized mills 
+d_50_suma %>% mutate(coverage = if_else(n_reachable_uml > 0, n_reachable_ibs/n_reachable_uml, NA)) %>% pull(coverage) %>% summary()
+d_30_suma %>% mutate(coverage = if_else(n_reachable_uml > 0, n_reachable_ibs/n_reachable_uml, NA)) %>% pull(coverage) %>% summary()
+d_50_kali %>% mutate(coverage = if_else(n_reachable_uml > 0, n_reachable_ibs/n_reachable_uml, NA)) %>% pull(coverage) %>% summary()
+
+## Table A.14. SECONDARY FORESTS -----------------------
+
+# infrastructure to store results
+res_data_list_full_2ndry <- list()
+elm <- 1
+
+isl_list <- list("both")#"Sumatra", "Kalimantan", 
+ISL <- "both"
+
+size_list <- list("i","sm", "unr", "a")
+
+# legality definition
+ill_def <- 2
+ill_status <- c("in_concession", paste0("ill",ill_def), "all")
+
+for(SIZE in size_list){
+  if(SIZE == "i"){
+    # Industrial by illegal status
+    for(ILL in ill_status){
+      res_data_list_full_2ndry[[elm]] <- make_base_reg(island = ISL,
+                                                       outcome_variable = paste0("lucf",SIZE,"p_pixelcount"),
+                                                       illegal = ILL,
+                                                       offset = FALSE)
+      names(res_data_list_full_2ndry)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+      elm <- elm + 1
+    }
+  } else {
+    # If size == sm or a, we do want to include all legal statuses.
+    # If size == unr, the selection of illegal indus is handled in make_base_reg 
+    ILL <- "all"
+    res_data_list_full_2ndry[[elm]] <- make_base_reg(island = ISL,
+                                                     outcome_variable = paste0("lucf",SIZE,"p_pixelcount"),
+                                                     illegal = ILL,
+                                                     offset = FALSE)
+    names(res_data_list_full_2ndry)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    elm <- elm + 1
+  }}
+
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_full_2ndry)){
+  # get estimation results and data
+  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+  res_data <- res_data_list_full_2ndry[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+# ape_mat <- lapply(res_data_list_full_2ndry, FUN = make_APEs) # this was the way to do it until it stopped working, on R 4.5 
+lapply(reg_res_list, FUN = function(x) x$convStatus)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+# for(SIZE in size_list){
+#   for(ILL in ill_status){
+#     res_data_list_full_2ndry[[elm]] <- make_base_reg(island = ISL,
+#                                                      outcome_variable = paste0("lucf",SIZE,"p_pixelcount"), # note the absence of "p": it is not primary forest data. 
+#                                                      illegal = ILL,
+#                                                      offset = FALSE)
+#     names(res_data_list_full_2ndry)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+#     elm <- elm + 1
+#   }
+# }
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "c",
+      caption = "Price elasticities of secondary forest loss, across the Indonesian oil palm sector") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1, 
+                     " " = 3),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c("Secondary forest loss for:" = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 1, 
+                     "Unregulated plantations" = 1, 
+                     "All" = 1),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1),
+                   align = "c") %>%
+  pack_rows("Elasticity to:", 1, 2, # indent = FALSE,
+            bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              width = "12em",
+              latex_valign = "m")
+
+# Check that estimate for smallholder plantations is indeed significant at 10%: 
+res_data_list_full_2ndry[["both_sm_all"]][[1]]
+
+rm(ape_mat)
+
+
+
+## MOVE TO SPEC CHART INTENSIVE MARGIN ROBUSTNESS -------------------------------------
+
+# infrastructure to store results
+res_data_list_intensive <- list()
+elm <- 1
+
+isl_list <- list("both")#"Sumatra", "Kalimantan", 
+ISL <- "both"
+
+size_list <- list("i","sm", "unr", "a")
+
+# legality definition
+ill_def <- 2
+ill_status <- c("in_concession", paste0("ill",ill_def), "all")
+
+for(SIZE in size_list){
+  if(SIZE == "i"){
+    # Industrial by illegal status
+    for(ILL in ill_status){
+      if(ILL == "in_concession"){# this is necessary to handle some convergence issue
+        higher_iter_glm <- 2000 
+      } else {
+        higher_iter_glm <- 200
+      } 
+      res_data_list_intensive[[elm]] <- make_base_reg(island = ISL,
+                                                      outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                      illegal = ILL,
+                                                      margin = "intensive",
+                                                      n_iter_glm = higher_iter_glm,
+                                                      offset = FALSE)
+      names(res_data_list_intensive)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+      elm <- elm + 1
+    }
+  } else {
+    # If size == sm or a, we do want to include all legal statuses.
+    # If size == unr, the selection of illegal indus is handled in make_base_reg 
+    ILL <- "all"
+    higher_iter_glm <- 200
+    res_data_list_intensive[[elm]] <- make_base_reg(island = ISL,
+                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                    illegal = ILL,
+                                                    margin = "intensive",
+                                                    n_iter_glm = higher_iter_glm,
+                                                    offset = FALSE)
+    names(res_data_list_intensive)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+    elm <- elm + 1
+  }}
+
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_intensive)){
+  # get estimation results and data
+  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+  res_data <- res_data_list_intensive[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+lapply(reg_res_list, FUN = function(x) x$convStatus)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+ape_mat
+colnames(ape_mat) <- NULL
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "c",
+      caption = "CPO price elasticity of deforestation across Indonesian oil palm plantations, away from direct mill vicinity") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c(" " = 1,
+                     "Legal" = 1,
+                     "Illegal" = 1,
+                     "All" = 1, 
+                     " " = 3),
+                   bold = F,
+                   align = "c") %>%
+  add_header_above(c("Deforestation for:" = 1,
+                     "Industrial plantations" = 3,
+                     "Smallholder plantations" = 1, 
+                     "Unregulated plantations" = 1, 
+                     "All" = 1),
+                   align = "c",
+                   strikeout = F) %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1),
+                   align = "c") %>%
+  pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
+  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
+            bold = FALSE, italic = TRUE) %>% 
+  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              width = "10em",
+              latex_valign = "m") 
+
+rm(ape_mat)
+
+
+
+
+
 # SPECIFICATION CHARTS -------------------------------------------------------------
+
 
 
 # These charts compare coefficients from a single dependent variable across different models/specifications
@@ -6053,7 +5643,7 @@ schart <- function(data, labels=NA, highlight=NA, n=1, index.est=1, index.se=2, 
   
 } 
 
-
+## Figures B4. - B6. ------------------------
 ## We now produce the "data" argument for the function schart, i.e. we run one regression, and bind in a dataframe 
 # the coefficients, the SE, and indicator variables for the correponding specifications. 
 make_spec_chart_df <- function(island,
@@ -6084,7 +5674,7 @@ make_spec_chart_df <- function(island,
                                interacted = "regressors",
                                interact_regressors = TRUE, # if there are two regressors (e.g. ffb and cpo), should their interaction be included in the model? 
                                pya_ov = FALSE, # logical, whether the pya (defined by x_pya) of the outcome_variable should be added in controls
-                               illegal = "all", # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
+                               illegal = "all", # the default, "all" includes all data in the regression. "in_concession" for legal plantations.  "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
                                min_forest_2000 = 0, 
                                min_coverage = 0, # fraction, from 0 to 1. Minimum share of reachable IBS over all reachable (UML), for an obs.to be included in sample. 
                                weights = FALSE, # logical, should obs. be weighted by the share of our sample reachable mills in all (UML) reachable mills. 
@@ -6122,7 +5712,7 @@ make_spec_chart_df <- function(island,
                                        interacted = interacted,
                                        interact_regressors = interact_regressors, # if there are two regressors (e.g. ffb and cpo), should their interaction be included in the model? 
                                        pya_ov = pya_ov, 
-                                       illegal = illegal, # the default, "all" includes all data in the regression. "ill1" and "ill2" (resp. "no_ill1" and "no_ill2") include only illegal (resp legal) lucfp (two different definitions, see add_parcel_variables.R)
+                                       illegal = illegal, # the default, "all" includes all data in the regression. 
                                        min_forest_2000 = min_forest_2000, 
                                        min_coverage = min_coverage,
                                        weights = weights)
@@ -6159,7 +5749,7 @@ make_spec_chart_df <- function(island,
     "PS_5KM" = FALSE,
     ## Catchment model
     #"nearest_mill" = FALSE,
-    #"intensive_only" = FALSE,
+    "intensive_only" = FALSE,
     "alt_cr" = FALSE,
     "CA" = FALSE,
     # Price signal past year average
@@ -6229,7 +5819,7 @@ make_spec_chart_df <- function(island,
   # nearest mill rather than inverse-distance weighted average
   if(nearest_mill){ind_var[,"nearest_mill"] <- TRUE}
   # margin
-  #if(margin == "intensive"){ind_var[,"intensive_only"] <- TRUE}
+  if(margin == "intensive"){ind_var[,"intensive_only"] <- TRUE}
   # Catchment 
   if(alt_cr){ind_var[,"alt_cr"] <- TRUE} 
   if(catchment == "CA"){ind_var[,"CA"] <- TRUE} 
@@ -6390,10 +5980,10 @@ for(XPYA in c(2, 4)){
 # i <- i+1
 
 # For intensive margin only
-# reg_stats_indvar_list[["margin"]] <- make_spec_chart_df(island = ISL, illegal = ILL,
-#                                                         outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
-#                                                         margin = "intensive") 
-# i <- i+1
+reg_stats_indvar_list[["margin"]] <- make_spec_chart_df(island = ISL, illegal = ILL,
+                                                        outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+                                                        margin = "intensive")
+i <- i+1
 
 # For alternative catchment radius
 reg_stats_indvar_list[["alt_cr"]] <- make_spec_chart_df(island = ISL, illegal = ILL,
@@ -6690,7 +6280,7 @@ schart_labels <- list(#"Dependent variable:" = c("Larger forest definition"),
                              "5x5 km"),
   
   "Catchment model" = c(#"Nearest mill",
-    #"Intensive margin expansion only",
+    "Intensive margin expansion only",
     "Alternative catchment radius",
     "2-hour driving catchment area"), 
   
@@ -6753,7 +6343,7 @@ a <- a[#a$larger_forest_def==FALSE &
     a$PS_3km & 
     
     #a$nearest_mill == FALSE & 
-    #a$intensive_only == FALSE & 
+    a$intensive_only == FALSE &
     a$alt_cr == FALSE &
     a$CA == FALSE &
     
@@ -6817,9 +6407,7 @@ schart(scdf,
 
 
 
-
-
-# COUNTERFACTUAL APPLICATION ---------------------------------------------------
+# Table 5. COUNTERFACTUAL APPLICATION ---------------------------------------------------
 
 # Produce the approximate population sample
 
@@ -7227,3 +6815,490 @@ kable(cf_mat, booktabs = T, align = "c",
               latex_valign = "m")
 
 rm(cf_mat)
+
+
+
+# OLD CODE FOR HETEROGENEITY ANALYSIS ---------------------------------------------------------------
+# compare_APEs_across_groups <- function(group1, group2, m0 = 0, alternative = "two.sided") { 
+#   # important that it's selecting the "1" (resp. 2) row, and not the "Estimate" (resp. "SE") row in cases where there are several 
+#   # rows with the same names, i.e. if APEs of interaction effects have been computed as well. 
+#   ape1 <- ape_mat[1,group1] 
+#   ape2 <- ape_mat[1,group2]
+#   # # n1 <- ape_mat["Observations","Sumatra industrial"]
+#   # # n2 <- ape_mat["Observations","Sumatra smallholders"]
+#   sigma1 <- ape_mat[2,group1]^2
+#   sigma2 <- ape_mat[2,group2]^2
+#   
+#   statistic <- (ape1 - ape2 - m0) / sqrt(sigma1 + sigma2)
+#   
+#   pval <- if (alternative == "two.sided") { 
+#     2 * pnorm(abs(statistic), lower.tail = FALSE) 
+#   } else if (alternative == "less") { 
+#     pnorm(statistic, lower.tail = TRUE) 
+#   } else { 
+#     pnorm(statistic, lower.tail = FALSE) 
+#   } 
+#   # LCL <- (M1 - M2 - S * qnorm(1 - alpha / 2)) UCL <- (M1 - M2 + S * qnorm(1 - alpha / 2)) value <- list(mean1 = M1, mean2 = M2, m0 = m0, sigma1 = sigma1, sigma2 = sigma2, S = S, statistic = statistic, p.value = p, LCL = LCL, UCL = UCL, alternative = alternative) 
+#   # print(sprintf("P-value = %g",p)) # print(sprintf("Lower %.2f%% Confidence Limit = %g", 
+#   # alpha, LCL)) # print(sprintf("Upper %.2f%% Confidence Limit = %g", # alpha, UCL)) return(value) } test <- t.test_knownvar(dat1$sample1, dat1$sample2, V1 = 1, V2 = 1 )
+#   return(pval)
+# }
+
+compare_coeffs_across_groups <- function(group1, group2, m0 = 0, alternative = "two.sided") { 
+  # important that it's selecting the "1" (resp. 2) row, and not the "Estimate" (resp. "SE") row in cases where there are several 
+  # rows with the same names, i.e. if APEs of interaction effects have been computed as well. 
+  reg_sum1 <- res_data_list_full[[group1]][[1]] %>% summary()
+  reg_sum2 <- res_data_list_full[[group2]][[1]] %>% summary()
+  
+  coeff1 <- reg_sum1$coefficients[1]
+  coeff2 <- reg_sum2$coefficients[1]
+  
+  sigma1 <- reg_sum1$se[1]^2
+  sigma2 <- reg_sum2$se[1]^2
+  
+  statistic <- (coeff1 - coeff2 - m0) / sqrt(sigma1 + sigma2)
+  
+  pval <- if (alternative == "two.sided") { 
+    2 * pnorm(abs(statistic), lower.tail = FALSE) 
+  } else if (alternative == "less") { 
+    pnorm(statistic, lower.tail = TRUE) 
+  } else { 
+    pnorm(statistic, lower.tail = FALSE) 
+  } 
+  # LCL <- (M1 - M2 - S * qnorm(1 - alpha / 2)) UCL <- (M1 - M2 + S * qnorm(1 - alpha / 2)) value <- list(mean1 = M1, mean2 = M2, m0 = m0, sigma1 = sigma1, sigma2 = sigma2, S = S, statistic = statistic, p.value = p, LCL = LCL, UCL = UCL, alternative = alternative) 
+  # print(sprintf("P-value = %g",p)) # print(sprintf("Lower %.2f%% Confidence Limit = %g", 
+  # alpha, LCL)) # print(sprintf("Upper %.2f%% Confidence Limit = %g", # alpha, UCL)) return(value) } test <- t.test_knownvar(dat1$sample1, dat1$sample2, V1 = 1, V2 = 1 )
+  return(pval)
+}
+# fill the matrix of p values of equality tests BY ROW
+
+# comp_ape_mat["industrial = smallholders",paste0("both_a_all")] 
+i_vs_sm <- compare_APEs_across_groups(group1 = paste0("both_i_all"), 
+                                      group2 = paste0("both_sm_all")) 
+
+# notill_vs_ill <- compare_APEs_across_groups(group1 = paste0("both_i_no_ill2"), 
+#                                             group2 = paste0("both_i_ill2")) 
+
+leg_vs_ill <- compare_APEs_across_groups(group1 = paste0("both_i_in_concession"), 
+                                         group2 = paste0("both_i_ill2")) 
+
+
+illindus_vs_sm <- compare_APEs_across_groups(group1 = paste0("both_i_ill2"), 
+                                             group2 = paste0("both_sm_all")) 
+
+# Old code to produce former table of p-values. 
+# groups <- c("both_i_no_ill2", "both_i_ill2",
+#             "both_i_all",
+#             "both_sm_all")
+# 
+# comparisons <- c("industrial = smallholders",
+#                  "legal indus. = illegal indus.")#,"primary forest = broadly def. forest"
+# 
+# comp_ape_mat <- matrix(ncol = length(groups), nrow = length(comparisons), data = NA)
+# colnames(comp_ape_mat) <- groups
+# row.names(comp_ape_mat) <- comparisons
+# 
+# for(SIZE in size_list){
+#   comp_ape_mat["legal = illegal",paste0("both_",SIZE,"_all")] <- compare_APEs_across_groups(group1 = paste0("both_",SIZE,"_no_ill2"), 
+#                                                                                             group2 = paste0("both_",SIZE,"_ill2")) 
+# }
+# 
+# comp_ape_mat <- comp_ape_mat %>% formatC(digits = 4, format = "f")
+# comp_ape_mat[comp_ape_mat=="   NA"] <- "" 
+# comp_ape_mat
+# colnames(comp_ape_mat) <- NULL
+# 
+# options(knitr.table.format = "latex")
+# kable(comp_ape_mat, booktabs = T, align = "c",
+#       caption = "p-values from equality tests of price elasticities") %>% #of 1 percentage change in medium-run price signal
+#   kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+#   add_header_above(c("Ho" = 1,
+#                      "Legal" = 1,
+#                      "Illegal" = 1,
+#                      "All" = 1,
+#                      " " = 1,
+#                      " " = 1),
+#                    bold = F,
+#                    align = "c") %>%  
+#   add_header_above(c("Deforestation for:" = 1,
+#                      "All plantations" = 3,
+#                      "Industrial plantations" = 1,
+#                      "Smallholder plantations" = 1),
+#                    bold = F,
+#                    align = "c") %>%
+#   column_spec(column = 1,
+#               width = "13em",
+#               latex_valign = "m") %>% 
+#   column_spec(column = c(2:(ncol(comp_ape_mat))),
+#               width = "5em",
+#               latex_valign = "m")
+
+
+
+# ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## 
+
+## infrastructure to store results
+ape_mat_list <- list()
+elm <- 1
+
+# make the APE. Note the difference: Standard errors are returnd with make_APEs_1regr, not CI95. 
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_full)){
+  res_data <- res_data_list_full[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat[[REGELM]] <- make_APEs_1regr(res_data = res_data_list_full[[REGELM]]) # and for the same reason, this cannot be wrapped in other functions
+  rm(d_clean, reg_res, res_data)
+}
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_full)){
+  res_data <- res_data_list_full[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat[[REGELM]] <- make_APEs() # and for the same reason, this cannot be wrapped in other functions
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+colnames(ape_mat) <- names(res_data_list_full)
+# keep ape_mat like this for later comparisons between APEs
+
+# Code to extract regression coefficients
+table_names = c("Estimate", 
+                "95% CI", 
+                "Estimate Interaction",
+                "95% CI Interaction",
+                "Estimate # reachable mills",
+                "95% CI # reachable mills",
+                "Estimate Initial forest cover (%)",
+                "95% CI Initial forest cover (%)",
+                "Estimate Mill ownership dom. private (%)",
+                "95% CI Mill ownership dom. private (%)",
+                "Estimate Mill ownership foreign (%)",
+                "95% CI Mill ownership foreign (%)",
+                "Estimate Mill CPO exports (%)",
+                "95% CI Mill CPO exports (%)",
+                "p-value",
+                "Observations", 
+                "Clusters")
+tab_df = matrix(ncol = length(res_data_list_byplantation), 
+                nrow = length(table_names)) 
+row.names(tab_df) <- table_names
+
+REGELM <- elm -1 
+
+cluster_level <-  "reachable^illegal2" #  "reachable" #
+
+for(REGELM in 1:length(res_data_list_byplantation)){
+  reg_name <- res_data_list_byplantation[REGELM] %>% names() %>% print()
+  if(cluster_level == "reachable^illegal2" & grepl("ill_or_concession", reg_name)){
+    cluster_level <- "reachable^ill_or_concession"
+  }
+  d_clean = res_data_list_byplantation[[REGELM]][[2]]
+  reg_res = res_data_list_byplantation[[REGELM]][[1]] #%>% summary(cluster = cluster_level) 
+  
+  CI_table =  etable(reg_res,
+                     coefstat = "confint",
+                     tex = F, 
+                     se.below = TRUE,
+                     digits = "s3",
+                     signif.code=NA,
+                     depvar = FALSE)
+  
+  row.names(CI_table) = CI_table[,1]
+  # APE elasticity 
+  ape_mat1 <- make_APEs(rounding = 3)
+  # Works but useless.. 
+  # if(nrow(ape_mat1)==6){row.names(ape_mat1)  = table_names[c(1:4, 10,11)]}
+  # if(nrow(ape_mat1)==8){row.names(ape_mat1)  = table_names[c(1:6, 10,11)]}
+  # if(nrow(ape_mat1)==10){row.names(ape_mat1) = table_names[c(1:8, 10,11)]}
+  
+  # Main price elasticity estimate and sample sizes
+  tab_df[1:2,REGELM] <- ape_mat1[1:2]
+  tab_df[(nrow(tab_df)-1):nrow(tab_df),REGELM] <- ape_mat1[(nrow(ape_mat1)-1):nrow(ape_mat1)] 
+  
+  
+  # identify illegal var used 
+  illegal_vars <- grep("ill", names(reg_res$coefficients), value = TRUE)
+  illegal_var <- illegal_vars[1]
+  illint_var <- illegal_vars[2]
+  # Coefficients
+  tab_df["Estimate Illegality", REGELM] <- reg_res$coefficients[illint_var] %>% round(3)
+  tab_df["95% CI Illegality",   REGELM] <- CI_table[match(illint_var, row.names(CI_table))+1,"reg_res"] %>% str_squish()
+  
+  tab_df["Estimate Illegality", REGELM] <- reg_res$coefficients[illint_var] %>% round(3)
+  tab_df["95% CI Illegality",   REGELM] <- CI_table[match(illint_var, row.names(CI_table))+1,"reg_res"] %>% str_squish()
+  
+  tab_df["Estimate # reachable mills", REGELM] <- reg_res$coefficients["n_reachable_umlXln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
+  tab_df["95% CI # reachable mills",   REGELM] <- CI_table[match("n_reachable_umlXln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
+  
+  tab_df["Estimate Initial forest cover (%)", REGELM] <- reg_res$coefficients["pct_pfc2000_totalXln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
+  tab_df["95% CI Initial forest cover (%)",   REGELM] <- CI_table[match("pct_pfc2000_totalXln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
+  
+  tab_df["Estimate Mill ownership dom. private (%)", REGELM] <- reg_res$coefficients["wa_pct_own_nat_priv_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
+  tab_df["95% CI Mill ownership dom. private (%)",   REGELM] <- CI_table[match("wa_pct_own_nat_priv_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
+  
+  tab_df["Estimate Mill ownership foreign (%)", REGELM] <- reg_res$coefficients["wa_pct_own_for_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
+  tab_df["95% CI Mill ownership foreign (%)",   REGELM] <- CI_table[match("wa_pct_own_for_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
+  
+  tab_df["Estimate Mill CPO exports (%)", REGELM] <- reg_res$coefficients["wa_prex_cpo_imp1Xln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
+  tab_df["95% CI Mill CPO exports (%)",   REGELM] <- CI_table[match("wa_prex_cpo_imp1Xln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
+  
+  # Equal variance tests
+  d_clean$resid = reg_res$residuals
+  # unclustered test
+  res_variance <- d_clean %>%
+    group_by(lonlat, year, !!as.symbol(illegal_var)) %>% 
+    summarise(var_resid = mean(resid^2), .groups = "drop")
+  t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
+  
+  # clustered test
+  res_variance <- d_clean %>%
+    group_by(reachable, !!as.symbol(illegal_var)) %>% # reachable, 
+    summarise(var_resid = mean(resid^2), .groups = "drop")
+  eqvars_clust_test <- t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
+  
+  # save p-value of clustered test 
+  tab_df["p-value", REGELM] =  eqvars_clust_test$p.value %>% round(3)
+}
+
+tab_df
+
+
+
+
+REGELM <- elm - 1
+res_data <- res_data_list_byplantation[[REGELM]]
+reg_res <- res_data[[1]]
+d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+rm(res_data)
+ape_mat1 <- make_APEs(rounding = 3) # and for the same reason, this cannot be wrapped in other functions
+reg_res %>% summary(cluster = "reachable")
+
+res_data_list_byplantation[[REGELM]][[1]]$coeftable
+## PARTIAL EFFECTS
+# rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_byplantation)){
+  # get estimation results and data
+  # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+  res_data <- res_data_list_byplantation[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat1 <- make_APEs(rounding = 3) # and for the same reason, this cannot be wrapped in other functions
+  reg_res %>% summary(cluster = "reachable")
+  # arrange depending on interaction set - must make 12 rows in sum 
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUS"){ 
+    # This has 6 rows. Add 6 rows after 4th one. 
+    ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 6, data = ""), 
+                      matrix(ape_mat1[5:6,]))
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUSandIFC"){ 
+    # This has 8 rows. Add 4 rows after 4th one (4 last rows are IFC and N)
+    ape_mat1 <- rbind(matrix(ape_mat1[1:4,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
+                      matrix(ape_mat1[5:8,]))
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUSandILL"){ 
+    # This has 8 rows. Add 4 rows after 6th one (2 last rows are N)
+    ape_mat1 <- rbind(matrix(ape_mat1[1:6,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
+                      matrix(ape_mat1[7:8,]))
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byINDUSandILLandIFC"){ 
+    # This has 10 rows. Add 2 rows after 6th one (4 last rows are IFC and N)
+    ape_mat1 <- rbind(matrix(ape_mat1[1:6,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""), 
+                      matrix(ape_mat1[7:10,]))
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLINDUS"){ 
+    # This has 6 rows. Add 4 rows after 2nd one, and 2 rows after the 4th one.  
+    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
+                      matrix(ape_mat1[3:4,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 2, data = ""),
+                      matrix(ape_mat1[5:6,])
+    )
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byILLINDUSandIFC"){ 
+    # This has 8 rows. Add 4 rows after 2nd one
+    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 4, data = ""), 
+                      matrix(ape_mat1[3:8,])
+    )
+  }
+  if(names(res_data_list_byplantation[REGELM]) == "both_a_byIFC"){ 
+    # This has 6 rows. Add 6 rows after 2nd one
+    ape_mat1 <- rbind(matrix(ape_mat1[1:2,]), 
+                      matrix(ncol = ncol(ape_mat1), nrow = 6, data = ""), 
+                      matrix(ape_mat1[3:6,])
+    )
+  }
+  ape_mat[[REGELM]] <- ape_mat1
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+lapply(reg_res_list, FUN = function(x) x$convStatus)
+
+
+
+rm(res_data_list_byplantation)
+
+
+# 1. by INDUS 
+res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+                                                   outcome_variable = paste0("lucpfap_pixelcount"),
+                                                   interaction_terms =           c("share_indus"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_indus"),
+                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                   offset = FALSE)
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUS")
+elm <- elm + 1
+
+# 2. by INDUS and IFC
+res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+                                                   outcome_variable = paste0("lucpfap_pixelcount"),
+                                                   interaction_terms =           c("share_indus", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                   controls = c("n_reachable_uml", "share_indus", "pct_pfc2000_total"),
+                                                   n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                   offset = FALSE)
+names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandIFC")
+elm <- elm + 1
+
+
+# # 3. by INDUSxILL
+# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+#                                                    outcome_variable = paste0("lucpfip_pixelcount"),
+#                                                    interaction_terms =           c("share_illindus"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                    controls = c("n_reachable_uml", "share_illindus"),
+#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                    offset = FALSE)
+# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLINDUS_inINDUS")
+# elm <- elm + 1
+# # 4. by INDUSxILL and IFC, controlling for indus
+# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+#                                                    outcome_variable = paste0("lucpfip_pixelcount"),
+#                                                    interaction_terms =           c("share_illindus", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                    controls = c("n_reachable_uml", "share_illindus", "pct_pfc2000_total", "share_indus"),
+#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                    offset = FALSE)
+# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLINDUSandIFC_ctrlINDUS")
+# elm <- elm + 1
+
+# # 3. by INDUS and ILL
+# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+#                                                    outcome_variable = paste0("lucpfap_pixelcount"),
+#                                                    interaction_terms =           c("share_indus", "illegal2"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                    controls = c("n_reachable_uml", "share_indus", "illegal2"),
+#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                    offset = FALSE)
+# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandILL")
+# elm <- elm + 1
+# 
+# # 4. by INDUS and ILL and IFC
+# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+#                                                    outcome_variable = paste0("lucpfap_pixelcount"),
+#                                                    interaction_terms =           c("share_indus", "illegal2", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                    controls = c("n_reachable_uml", "share_indus", "illegal2", "pct_pfc2000_total"),
+#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                    offset = FALSE)
+# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byINDUSandILLandIFC")
+# elm <- elm + 1
+# 
+# # 5. by INDUSxILL
+# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+#                                                    outcome_variable = paste0("lucpfap_pixelcount"),
+#                                                    interaction_terms =           c("share_illindus"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                    controls = c("n_reachable_uml", "share_illindus"),
+#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                    offset = FALSE)
+# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLINDUS")
+# elm <- elm + 1
+# 
+# # 6. by INDUSxILL and IFC
+# res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = ILL,
+#                                                    outcome_variable = paste0("lucpfap_pixelcount"),
+#                                                    interaction_terms =           c("share_illindus", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                    controls = c("n_reachable_uml", "share_illindus", "pct_pfc2000_total"),
+#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                    offset = FALSE)
+# names(res_data_list_byplantation)[elm] <- paste0(ISL,"_a_byILLINDUSandIFC")
+# elm <- elm + 1
+
+
+# # OR 
+# ### For each plantation type 
+# res_data_list_interact_ifc <- list()
+# elm <- 1
+# 
+# size_list <- list("i","sm", "unr", "a")
+# 
+# # legality definition
+# ill_def <- 2
+# ill_status <- c("in_concession", paste0("ill",ill_def), "all")
+# 
+# for(SIZE in size_list){
+#   if(SIZE == "i"){
+#     # Industrial by illegal status
+#     for(ILL in ill_status){
+#       res_data_list_interact_ifc[[elm]] <- make_base_reg(island = ISL,
+#                                                      outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+#                                                      interaction_terms = c("pfc2000_total_pixelcount"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                      controls = c("n_reachable_uml", "pfc2000_total_pixelcount"),
+#                                                      illegal = ILL,
+#                                                      n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                      offset = FALSE)
+#       names(res_data_list_interact_ifc)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+#       elm <- elm + 1
+#     }
+#   } else {
+#     # If size == sm or a, we do want to include all legal statuses.
+#     # If size == unr, the selection of illegal indus is handled in make_base_reg 
+#     ILL <- "all"
+#     res_data_list_interact_ifc[[elm]] <- make_base_reg(island = ISL,
+#                                                    outcome_variable = paste0("lucpf",SIZE,"p_pixelcount"),
+#                                                    interaction_terms = c("pfc2000_total_pixelcount"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+#                                                    controls = c("n_reachable_uml", "pfc2000_total_pixelcount"),
+#                                                    illegal = ILL,
+#                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+#                                                    offset = FALSE)
+#     names(res_data_list_interact_ifc)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+#     elm <- elm + 1
+#   }}
+# 
+# ## PARTIAL EFFECTS
+# rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+# ape_mat = list()
+# reg_res_list = list()
+# for(REGELM in 1:length(res_data_list_interact_ifc)){
+#   # get estimation results and data
+#   # this is done outside the function now (R >= 4.5), otherwise not working (an environment problem)
+#   res_data <- res_data_list_interact_ifc[[REGELM]]
+#   reg_res <- res_data[[1]]
+#   d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+#   rm(res_data)
+#   ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM, rounding = 7) # and for the same reason, this cannot be wrapped in other functions
+#   reg_res_list[[REGELM]] <- reg_res
+#   rm(d_clean, reg_res)
+# }
+# # ape_mat <- lapply(res_data_list_interact_ifc, FUN = make_APEs) # this was the way to do it until it stopped working, on R 4.5 
+# lapply(reg_res_list, FUN = function(x) x$convStatus)
+# 
+# ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+# row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+# ape_mat
+# colnames(ape_mat) <- NULL
+

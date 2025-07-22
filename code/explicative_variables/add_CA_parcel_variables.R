@@ -745,7 +745,12 @@ for(travel_time in c(2)){ #, 4, 6 is too heavy for now
                                                         llu == "KSAL" |
                                                         llu == "HP" |
                                                         llu == "HPT" |
-                                                        llu == "HL")))
+                                                        llu == "HL")), 
+                           ill_or_concession = case_when(
+                             illegal2 & !is.na(illegal2) ~ TRUE, 
+                             concession & !is.na(concession) ~ FALSE, # this is parcels in concessions in 2010
+                             TRUE ~ NA
+                           )) 
   rm(llu)
   # yields many missing in illegal because many grid cells are within a mising land use legal classification
   # parcels[!duplicated(parcels$lonlat) & !is.na(parcels$llu), c("lonlat", "concession", "llu", "illegal1", "illegal2")]
