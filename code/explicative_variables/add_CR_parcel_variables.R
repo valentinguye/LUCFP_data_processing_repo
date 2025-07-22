@@ -291,7 +291,7 @@ district_sf <- st_read(file.path("temp_data/processed_indonesia_spatial/district
 district_sf_prj <- st_transform(district_sf, crs = indonesian_crs)
 
 #sub-district
-subdistrict <- st_read(file.path("input_data/indonesia_spatial/podes_bps2014"))
+subdistrict <- st_read(file.path("input_data/indonesia_spatial/subdistrict_shapefiles/podes_bps2014.shp"))
 subdistrict_prj <- st_transform(subdistrict, crs = indonesian_crs)
 
 catchment_radiuseS <- c(1e4, 3e4, 5e4)#

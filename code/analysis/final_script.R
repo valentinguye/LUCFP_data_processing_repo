@@ -502,7 +502,7 @@ make_base_reg <- function(island,
       d %>% 
       mutate(ill_or_concession = case_when(
         illegal2 & !is.na(illegal2) ~ 1, 
-        !illegal2010 & !is.na(illegal2010) ~ 0, # this is parcels in concessions in 2020
+        !illegal2010 & !is.na(illegal2010) ~ 0, # this is parcels in concessions in 2010
         TRUE ~ NA
       ))
     # d$ill_or_concession %>% summary()
@@ -512,13 +512,27 @@ make_base_reg <- function(island,
       d %>% 
       mutate(ill_or_leg = case_when(
         illegal2 & !is.na(illegal2) ~ 1, 
-        legal2 & !is.na(legal2) ~ 0, # this is parcels in concessions in 2020
+        legal2 & !is.na(legal2) ~ 0, # this is parcels in concessions or in designated land
         TRUE ~ NA
       ))
     # d$ill_or_leg %>% summary()
   }
-
-
+  if("ill_or_all" %in% controls){
+    d = 
+      d %>% 
+      mutate(ill_or_all = case_when(
+        illegal2 & !is.na(illegal2) ~ 1, 
+        !illegal2 | is.na(illegal2) ~ 0, 
+        TRUE ~ NA
+      ))
+    # d$ill_or_all %>% summary()
+  }
+  
+  if("wa_prex_cpo_imp1" %in% controls){
+    d = 
+      d %>% 
+      mutate(wa_prex_cpo_imp1 = 100 * wa_prex_cpo_imp1)
+  }
   # add lagged outcome variable 
   #if(pya_ov){controls <- c(controls, paste0(outcome_variable,"_",x_pya,"pya"))}
   # for 1 year lag
@@ -910,7 +924,7 @@ make_base_reg <- function(island,
       pdf %>% dplyr::select(lonlat, year),
       by = c("lonlat", "year")
     )
-    stopifnot(nrow(d_clean) == nrow(pdf))
+    # stopifnot(nrow(d_clean) == nrow(pdf))
     rm(pdf)
   }  
 
@@ -1041,20 +1055,21 @@ make_base_reg <- function(island,
 # for the K first regressors in the models fitted by make_base_reg 
 # If there are interactions in the models, the APEs (and SEs) of the interaction effects are computed (may not work if K > 1 then)
 
-# res_data <- res_data_list_byplantation[[3]]
+# res_data <- res_data_list_byplantation[[1]]
 # reg_res <- res_data[[1]]
 # d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
 # rm(res_data)
-k = 1
-K=1
-cumulative <- TRUE
-controls_pe = FALSE
-# SE = "cluster"
-CLUSTER = "reachable"
-stddev = FALSE
-rel_price_change = 0.01 # sd/m #
-abs_price_change = 1
-rounding = 2
+# k = 1
+# K=1
+# cumulative <- TRUE
+# controls_pe = FALSE
+# # SE = "cluster"
+# CLUSTER = "reachable"
+# stddev = FALSE
+# rel_price_change = 0.01 # sd/m #
+# abs_price_change = 1
+# rounding = 2
+# interaction_dummy = "illegal2"
 
 make_APEs <- function(#res_data, 
                       reg_elm = 1,
@@ -1193,9 +1208,12 @@ make_APEs <- function(#res_data,
                            coeff_names[coeff_names==interaction_terms[i]]," + ",
                            iei,"*",reg_bar,")")#
         
-        # paste everything together; divide by 100 to approximate the log transformation of regressor of interest if it's in the log scale
+        # paste everything together; 
         if(grepl("ln_", coeff_names[k])){
-          ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*0.01")#,"*",fv_bar,"*",pixel_area_ha)
+          # before we divided by 100 to approximate the log transformation of regressor of interest if it's in the log scale, 
+          # but I am not sure now. The formula is not divided by P, which means that it should be interpreted as the marginal change for a 
+          # relative change in price (derivative of the log) which is consistent with the rest of the study. 
+          ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")")#,"*",fv_bar,"*",pixel_area_ha) 
           
         } else{
           ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")")#,"*",fv_bar,"*",pixel_area_ha)
@@ -1548,6 +1566,257 @@ make_APEs_1regr <- function(res_data,
   return(mat)
 }
 
+make_APEs_discrete_interaction <- function(#res_data, 
+                                            interaction_dummy = "illegal2",
+                                            K=1, 
+                                            controls_pe = TRUE, 
+                                            #SE = "cluster", 
+                                            CLUSTER = paste0("reachable_",interaction_dummy),#"subdistrict",
+                                            stddev = TRUE,
+                                            rel_price_change = 0.01, 
+                                            abs_price_change = 1, 
+                                            rounding = 2){
+  
+  # store APEs and their deltaMethod statistics in this list 
+  dM_ape_roi_list <- list()
+  
+  ## Redefine changes in regressor to one standard deviation if asked 
+  if(stddev){
+    # remove fixed effect variations from the regressor
+    reg_sd <- fixest::feols(fml = as.formula(paste0(
+      names(reg_res$coefficients)[1],
+      " ~ 1 | ", 
+      paste0(reg_res$fixef_vars, collapse = "+"))),
+      data = d_clean)
+    
+    # and take the remaining standard deviation
+    rel_price_change <- sd(reg_sd$residuals)
+    abs_price_change <- sd(reg_sd$residuals)
+  }
+  
+  # Make the adjusted clustering level
+  d_clean = 
+    d_clean %>% 
+    mutate(!!as.symbol(paste0("reachable_",interaction_dummy)) := paste0(reachable, !!as.symbol(interaction_dummy)))
+
+  # identify the nature of different variables
+  coeff_names <- names(coef(reg_res))
+  # define actual interaction terms (possibly lagged)
+  interaction_effects <- coeff_names[grepl(pattern = "X", names(coef(reg_res)))]
+  others <- coeff_names[!(grepl(pattern = "X", coeff_names))]
+  interaction_terms <- others[paste0(others,"X",coeff_names[1]) %in% interaction_effects]
+  
+  # data POINTS that deltaMethod will grab 
+  # average of the regressor of interest
+  reg_bar <- mean(d_clean[,coeff_names[1]]) 
+  
+  # averages of the interaction terms -the controls that we interacted with the regressor of interest) 
+  int_term_avg <- list()
+  if(length(interaction_terms) >0){
+    for(i in 1:length(interaction_terms)){
+      int_term_avg[[i]] <- mean(d_clean[,interaction_terms[i]])
+    }
+  }
+  
+  # averages of dep. variable are not necessary
+  
+  ## repeat the following for the K regressors of interest 
+  linear_ape_fml_list <- list() # to store some results, see at end of loop
+
+  ### COMPUTE PARTIAL EFFECTS OF INTERACTION TERMS 
+  dM_ape_roi_list[[1]] <- list()
+  
+  # EFFECT OF A RELATIVE PRICE CHANGE ON THE PERCENTAGE CHANGE ACROSS THE INTERACTION DUMMY CONTRAST (ILLEGAL VS NOT)
+  
+  # WHEN RELATIVE PRICE CHANGE IS THE PARTIAL DERIVATIVE OF PRICE APPROXIMATELY TAKEN TO PERCENTAGE POINT (by multiplying the denominator by 100) 
+  interaction_name = paste0(interaction_dummy, "X", coeff_names[1])
+  # ape_fml_dit = paste0(interaction_name, "*exp(",interaction_dummy,"+",interaction_name,"*",reg_bar,")*100/100")
+  
+  # WHEN RELATIVE PRICE CHANGE IS A FULL 1% PRICE INCREASE 
+  # for this formula we need to recover the average of the regressor in level 
+  Pbar = exp(d_clean$ln_wa_cpo_price_imp1_4ya_lag1) %>% mean()
+  
+  ape_fml_dit = paste0("exp(",interaction_dummy,")*",Pbar,"^(",interaction_name,")*(",1+rel_price_change,"^(",interaction_name,") - 1)*100")
+  # This is exp(beta2)*Pbar^(beta3)*(1.01^(beta3)-1)*100
+  
+  # This is exactly equal to the unsimplified formula: 
+  # ape_fml_dit = paste0("(exp(",interaction_dummy,"+",interaction_name,"*log(1.01*",reg_bar,")) - exp(",interaction_dummy,"+",interaction_name,"*log(",reg_bar,")))*100")
+  
+  dM <- deltaMethod(object = coef(reg_res), 
+                    vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE,
+                    g. = ape_fml_dit, 
+                    rhs = 0)
+  
+  row.names(dM) <- NULL
+  dM <- as.matrix(dM)
+  dM <- dM[,c("Estimate","2.5 %","97.5 %")]
+  dM_ape_roi_list[[1]][[1]] <- dM # IN FIRST POSITION
+  
+  # # REPEAT FOR EFFECT IN THE OTHER DIRECTION 
+  # ape_fml_dit = paste0("-",interaction_name, "*exp(-(",interaction_dummy,"+",interaction_name,"*",reg_bar,"))*100")
+  # 
+  # dM <- deltaMethod(object = coef(reg_res), 
+  #                   vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE,
+  #                   g. = ape_fml_dit, 
+  #                   rhs = 0)
+  # 
+  # row.names(dM) <- NULL
+  # dM <- as.matrix(dM)
+  # dM <- dM[,c("Estimate","2.5 %","97.5 %")]
+  # dM_ape_roi_list[[K + 1]][[2]] <- dM # NOTE THE SECOND POSITION HERE
+  
+  # other_interactions <- interaction_terms[interaction_terms != interaction_dummy]
+  # if(length(other_interactions) > 0){
+  #   for(i in 1:length(other_interactions)){
+  #     # there are several parts 
+  #     # 1. the coeff of the interaction effect of interest
+  #     iei <- paste0(other_interactions[i], "X", coeff_names[1])
+  #     ape_fml1 <- paste0(iei," + ") 
+  #     
+  #     # 2. the linear expression derivative wrt. the regressor of interest 
+  #     ape_fml2 <- paste0("(",linear_ape_fml,")")
+  #     
+  #     # 3. the derivative of the linear expression wrt. the interaction term; that multiplies the previous linear expression
+  #     ape_fml3 <- paste0("*(",
+  #                        coeff_names[coeff_names==other_interactions[i]]," + ",
+  #                        iei,"*",reg_bar,")")#
+  #     
+  #     # paste everything together; 
+  #     # before we divided by 100 to approximate the log transformation of regressor of interest if it's in the log scale, 
+  #     # but I am not sure now. The formula of the second order cross-derivative is the same whether the regressor of interest is in log or not, 
+  #     # it is just to interpret differently, (for a level or a relative change), i.e. the LHS is divided by P or not. 
+  #     # Moreover we can multiply by 100 to take the percentage scale, consistently with the elasticity estimates.  
+  #     ape_fml_it <- paste0("(",ape_fml1,ape_fml2, ape_fml3,  ")*100")
+  #   
+  #     
+  #     dM <- deltaMethod(object = coef(reg_res), 
+  #                       vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE,
+  #                       g. = ape_fml_it, 
+  #                       rhs = 0)
+  #     
+  #     row.names(dM) <- NULL
+  #     dM <- as.matrix(dM)
+  #     dM <- dM[,c("Estimate","2.5 %","97.5 %")]
+  #     
+  #     dM_ape_roi_list[[K + 1]][[1+i]] <- dM # NOTE THE 1+ here 
+  #     
+  #   } # closes loop on i (interaction terms)
+  # 
+  # } # closes condition on length(interaction_terms) > 0
+  
+  ### COMPUTE THE PARTIAL EFFECTS of the INTERACTION DUMMY
+  
+  # make the linear formula 
+  ape_fml_coi <- paste0("(exp(",interaction_dummy,"+",interaction_name,"*",reg_bar,") - 1)*100")
+  
+  dM_ape_coi <- deltaMethod(object = coef(reg_res), 
+                            vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE, 
+                            g. = ape_fml_coi, 
+                            rhs = 0)   
+  
+  row.names(dM_ape_coi) <- NULL
+  dM_ape_coi <- as.matrix(dM_ape_coi)
+  dM_ape_coi <- dM_ape_coi[,c("Estimate","2.5 %","97.5 %")]
+  
+  dM_ape_roi_list[[length(dM_ape_roi_list) + 1]] <- dM_ape_coi    
+    
+  ## FORMULA FOR APE OF REGRESSOR OF INTEREST 
+  
+  # add interaction term and average of the other regressor of interest if there are several (K == 2 only for now)
+  if(K == 1){
+    interaction_terms_k <- interaction_terms
+    int_term_avg_k <- int_term_avg
+  }
+  
+  linear_ape_fml <- paste0(coeff_names[1])
+  
+  # if there are interactions, the partial effect formula needs to be appended.
+  i_t <- 1
+  while(i_t<=length(interaction_terms_k)){
+    linear_ape_fml <- paste0(linear_ape_fml," + ", interaction_effects[grepl(coeff_names[1],interaction_effects)][i_t],"*",int_term_avg_k[[i_t]])
+    i_t <- i_t +1
+  }
+  rm(i_t)
+  
+  # the final formula is different depending on the regressor of interest being in the log scale or not. 
+  if(grepl("ln_",coeff_names[1])){
+    ape_fml_roi <- paste0("((",1+rel_price_change,")^(",linear_ape_fml,") - 1)*100")#*fv_bar*",pixel_area_ha)
+  } else{
+    ape_fml_roi <- paste0("(exp(",linear_ape_fml,"*",abs_price_change,") - 1)*100")#*fv_bar*",pixel_area_ha)
+  } 
+  
+  dM_ape_roi <- deltaMethod(object = coef(reg_res),
+                            vcov. = vcov(reg_res, cluster = CLUSTER), #se = SE,
+                            g. = ape_fml_roi,
+                            rhs = 0)
+  
+  # dM_ape_roi <- matrix(c(1,1,3), 1)
+  # colnames(dM_ape_roi) = c("Estimate","2.5 %","97.5 %")
+  
+  row.names(dM_ape_roi) <- NULL
+  dM_ape_roi <- as.matrix(dM_ape_roi)
+  dM_ape_roi <- dM_ape_roi[,c("Estimate","2.5 %","97.5 %")]
+  # dM_ape_roi_list[[1]]
+  
+  dM_ape_roi_list[[length(dM_ape_roi_list) + 1]] <- dM_ape_roi
+  
+  
+  # make a one column matrix with all computed APEs' estimates, LB and HB values. 
+  mat <- matrix(ncol = 1, 
+                nrow = length(unlist(dM_ape_roi_list)), 
+                data = unlist(dM_ape_roi_list))  
+  
+  mat <- round(mat, digits = rounding)
+  
+  k  <- 1
+  while(k < nrow(mat)){
+    mat[k+1,] <- paste0("[",mat[k+1,],"; ",mat[k+2,],"]")
+    k <- k + 3
+  } 
+  row.names(mat) <- c(rep(c("Estimate","CI","delete"), nrow(mat)/3))
+  mat <- mat[row.names(mat)!="delete",] %>% as.matrix()
+  
+  # add a row to indicate controls
+  mat <- rbind(mat, reg_res$nobs)
+  row.names(mat)[nrow(mat)] <- "Controls"
+  mat[row.names(mat)=="Controls",] <- if_else(length(interaction_terms)>1, "X", " ")
+  
+  # add a row to indicate FE 1 
+  mat <- rbind(mat, reg_res$nobs)
+  row.names(mat)[nrow(mat)] <- "Set of reachable mills"
+  mat[row.names(mat)=="Set of reachable mills",] <- if_else("reachable" %in% reg_res$fixef_vars, "X", " ")
+  
+  # add a row to indicate FE 2
+  mat <- rbind(mat, reg_res$nobs)
+  row.names(mat)[nrow(mat)] <- "Subdistrict"
+  mat[row.names(mat)=="Subdistrict",] <- if_else("subdistrict" %in% reg_res$fixef_vars, "X", " ")
+  
+  # add a row to indicate FE 3 
+  mat <- rbind(mat, reg_res$nobs)
+  row.names(mat)[nrow(mat)] <- "District-year"
+  mat[row.names(mat)=="District-year",] <- if_else("district_year" %in% reg_res$fixef_vars, "X", " ")
+  
+  # add a row for p-value of equal variance test
+  mat <- rbind(mat, reg_res$nobs)
+  row.names(mat)[nrow(mat)] <- "p-value"
+  mat[row.names(mat)=="p-value",] <- NA
+  
+  # add a row with the number of observations
+  mat <- rbind(mat, reg_res$nobs)
+  row.names(mat)[nrow(mat)] <- "Observations"
+  mat[row.names(mat)=="Observations",] <- mat[row.names(mat)=="Observations",] %>% formatC(digits = 0, format = "f")
+  
+  # add a row with the number of clusters
+  mat <- rbind(mat, length(unique(d_clean[,CLUSTER])))
+  row.names(mat)[nrow(mat)] <- "Clusters"
+  mat[row.names(mat)=="Clusters",] <- mat[row.names(mat)=="Clusters",] %>% formatC(digits = 0, format = "f")
+  
+  rm(coeff_names, interaction_effects, others, interaction_terms, d_clean, int_term_avg, 
+     ape_fml_roi, dM_ape_roi, ape_fml_it, dM_ape_roi_list, linear_ape_fml_list)
+  return(mat)
+}
+
+
 ## DESCRIPTIVE FUNCTIONS -------------------------------------------- 
 make_desstats <- function(sample_1, sample_2){
   
@@ -1749,19 +2018,26 @@ make_desstats_simple <- function(sample_1){
   other_vars <- c("wa_cpo_price_imp1_4ya_lag1",
                   "wa_ffb_price_imp1_4ya_lag1", 
                    # do NOT include ownership actually, because not a main control variable, and not very relevant at pixel level. 
-                   # "wa_pct_own_gov_imp_lag1", "wa_pct_own_nat_priv_imp_lag1", "wa_pct_own_for_imp_lag1",
                   "n_reachable_uml",
                   "pfc2000_total_pixelcount", 
-                  "fc2000_30th_pixelcount", 
-                  "lucfip_pixelcount",
-                  "lucfsmp_pixelcount"
-                   ) 
+                  # "fc2000_30th_pixelcount", 
+                  # "lucfip_pixelcount",
+                  # "lucfsmp_pixelcount"
+                  "wa_pct_own_gov_imp_lag1", 
+                  "wa_pct_own_nat_priv_imp_lag1", 
+                  "wa_pct_own_for_imp_lag1", 
+                  "wa_prex_cpo_imp1"
+                  ) 
   
   # add variables that were not used in the regressions
-  d_all <- rbind(d_30_suma, d_50_kali) %>% dplyr::select(lonlat, year, all_of(other_vars))
-  # group public ownership
-  #d_all$wa_pct_own_gov_imp_lag1 <- d_all$wa_pct_own_loc_gov_imp_lag1 + d_all$wa_pct_own_cent_gov_imp_lag1
-  # d_all$wa_pct_own_gov_imp_lag1 <- d_all$wa_pct_own_loc_gov_imp_lag1 + d_all$wa_pct_own_cent_gov_imp_lag1
+  d_all = 
+    rbind(
+    d_30_suma, 
+    d_50_kali) %>% 
+    # group public ownership
+    mutate(wa_pct_own_gov_imp_lag1 = wa_pct_own_loc_gov_imp_lag1 + wa_pct_own_cent_gov_imp_lag1,
+           wa_prex_cpo_imp1 = 100 * wa_prex_cpo_imp1) %>% 
+    dplyr::select(lonlat, year, all_of(other_vars))
   
   sample_1 <- left_join(sample_1[,c("lonlat","year", dep_var_1)], 
                         d_all, 
@@ -1772,9 +2048,9 @@ make_desstats_simple <- function(sample_1){
   # pixelcount to hectares
   sample_1[,dep_var_1] <- sample_1[,dep_var_1]*pixel_area_ha
   sample_1[,"pfc2000_total_pixelcount"] <- sample_1[,"pfc2000_total_pixelcount"]*pixel_area_ha
-  sample_1[,"fc2000_30th_pixelcount"]   <- sample_1[,"fc2000_30th_pixelcount"]*pixel_area_ha
-  sample_1[,"lucfip_pixelcount"]   <- sample_1[,"lucfip_pixelcount"]*pixel_area_ha
-  sample_1[,"lucfsmp_pixelcount"]   <- sample_1[,"lucfsmp_pixelcount"]*pixel_area_ha
+  # sample_1[,"fc2000_30th_pixelcount"]   <- sample_1[,"fc2000_30th_pixelcount"]*pixel_area_ha
+  # sample_1[,"lucfip_pixelcount"]   <- sample_1[,"lucfip_pixelcount"]*pixel_area_ha
+  # sample_1[,"lucfsmp_pixelcount"]   <- sample_1[,"lucfsmp_pixelcount"]*pixel_area_ha
   
   statistics <- c("mean", "std.dev", "median", "min", "max")
   
@@ -2533,12 +2809,13 @@ row.names(des_table) <- c("Deforestation (ha)",
                           "FFB price signal (USD/ton)", 
                           "# reachable UML mills", 
                           "Primary forest cover 2000 (ha)",
-                          "Secondary forest cover 2000 (ha)",
-                          "Secondary forest loss for industrial",
-                          "Secondary forest loss for smallholders"
-                          # "Public ownership (%)", 
-                          # "Domestic private ownership (%)", 
-                          # "Foreign ownership (%)", 
+                          # "Secondary forest cover 2000 (ha)",
+                          # "Secondary forest loss for industrial",
+                          # "Secondary forest loss for smallholders"
+                          "Mill public ownership (%)",
+                          "Mill domestic private ownership (%)",
+                          "Mill foreign ownership (%)", 
+                          "Mill CPO exports (%)"
                           #"Competition", 
                           # "# reachable mills"
                           )
@@ -2573,7 +2850,7 @@ kable(des_table, booktabs = T, align = "c",
                    align = "c",
                    strikeout = F) %>% 
   add_header_above(c(" " = 1,
-                     "Legal" = 2,
+                     "Not illegal" = 2,
                      "Illegal" = 2, 
                      "All" = 2,
                      " " = 6), 
@@ -2588,7 +2865,10 @@ kable(des_table, booktabs = T, align = "c",
                    bold = FALSE,
                    align = "c",
                    strikeout = F) %>% 
-  row_spec(1:2, extra_latex_after = "\\\\") 
+  row_spec(1, extra_latex_after = "\\\\") %>% 
+  row_spec(3, extra_latex_after = "\\\\") %>% 
+  row_spec(5, extra_latex_after = "\\\\") 
+
 
 
 ## Table A.1. Accumulated deforestation in different catchment radius / sample ------------------------------------------------------------------------
@@ -4076,46 +4356,140 @@ kable(df, booktabs = T, align = "c",
 # Check whether this is the case with the level of clustering used in the main analysis (reachable): 
 
 # First, get the pooled data and the residuals from the pooled regression
-# For the three levels of heterogeneity, 
 # Not for immediate conversion only, because in this case the equal variance assumption is not satisfied. 
+
+# FOR CLUSTER AT reachable^illegal2 THIS NEEDS TO BE PRODUCED IN THE DATA 
 res_data_list_byplantation <- list()
 elm <- 1
 ISL <- "both"
-for(illegal_var in c("illegal2", "ill_or_concession", "ill_or_leg")){
-  # if(Y == "lucpfip_rapid_pixelcount"){ends = 2010}else{ends = 2014}
+illegal_var <- "ill_or_concession" # "illegal2"
+FE = "reachable + district_year"
+
+for(FE in c("reachable + district_year", "subdistrict + district_year", "district_year")){
   res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
                                                      outcome_variable = "lucpfip_pixelcount",
                                                      interaction_terms = c(illegal_var),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
                                                      controls          = c(illegal_var, "n_reachable_uml"), #
+                                                     fe = FE,
                                                      n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
                                                      offset = FALSE)
   names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILL")
   elm <- elm + 1
   
-  res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
-                                                     outcome_variable = "lucpfip_pixelcount",
-                                                     interaction_terms = c(illegal_var, "n_reachable_uml", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                     controls =          c(illegal_var, "n_reachable_uml", "pct_pfc2000_total"),
-                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-                                                     offset = FALSE)
-  names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILLandIFCandNREACH")
-  elm <- elm + 1
+  # res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
+  #                                                    outcome_variable = "lucpfip_pixelcount",
+  #                                                    interaction_terms = c(illegal_var, "n_reachable_uml", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+  #                                                    controls =          c(illegal_var, "n_reachable_uml", "pct_pfc2000_total"),
+  #                                                    fe = FE,
+  #                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+  #                                                    offset = FALSE)
+  # names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILLandIFCandNREACH")
+  # elm <- elm + 1
   
   res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
                                                      outcome_variable = "lucpfip_pixelcount",
-                                                     interaction_terms = c(illegal_var, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                     controls =          c(illegal_var, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp"),
-                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
+                                                     interaction_terms = c(illegal_var, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "wa_prex_cpo_imp1"), # # "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                     controls =          c(illegal_var, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "wa_prex_cpo_imp1"), # 
+                                                     fe = FE,
+                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. _imp1
                                                      offset = FALSE)
-  names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILLandIFCandNREACHandOWN")
+  names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILLandIFCandNREACHandOWN2")
   elm <- elm + 1
-  
+ 
 }
 
+REGELM <- elm - 1
+ape_mat <- list()
+# Code to extract partial effects on discrete change and of controls
+for(REGELM in 1:length(res_data_list_byplantation)){
+  reg_name <- res_data_list_byplantation[REGELM] %>% names() %>% print()
+  
+  d_clean = res_data_list_byplantation[[REGELM]][[2]]
+  reg_res = res_data_list_byplantation[[REGELM]][[1]] 
+  
+  illegal_vars <- grep("ill", names(reg_res$coefficients), value = TRUE)
+  illegal_var <- illegal_vars[1]
+  illint_var <- illegal_vars[2]
+  
+  # Make the adjusted clustering level
+  d_clean = 
+    d_clean %>% 
+    mutate(!!as.symbol(paste0("reachable_",illegal_var)) := paste0(reachable, !!as.symbol(illegal_var)))
+  
+  ape_mat1 <- make_APEs_discrete_interaction(interaction_dummy = illegal_var,
+                                             CLUSTER = "reachable",
+                                             controls_pe = TRUE,
+                                             stddev = FALSE,
+                                             rounding = 2)
+  
+  # Equal variance tests
+  d_clean$resid = reg_res$residuals
+  # unclustered test
+  res_variance <- d_clean %>%
+    group_by(lonlat, year, !!as.symbol(illegal_var)) %>% 
+    summarise(var_resid = mean(resid^2), .groups = "drop")
+  t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
+  
+  # clustered test
+  res_variance <- d_clean %>%
+    group_by(reachable, !!as.symbol(illegal_var)) %>% # reachable, 
+    summarise(var_resid = mean(resid^2), .groups = "drop")
+  eqvars_clust_test <- t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
+  
+  # save p-value of clustered test 
+  ape_mat1["p-value",] =  eqvars_clust_test$p.value %>% round(3)
+  
+  # save row names (same for all iterations)
+  rownames_ape_mat <- row.names(ape_mat1)
+  ape_mat[[REGELM]] <- ape_mat1
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+lapply(reg_res_list, FUN = function(x) x$convStatus)
+
+ape_mat 
+
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <-rownames_ape_mat
+ape_mat
+colnames(ape_mat) <- NULL
+
+
+options(knitr.table.format = "latex")
+kable(ape_mat, booktabs = T, align = "c",
+      caption = "Price elasticity heterogeneity by plantation types") %>% #of 1 percentage change in medium-run price signal
+  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
+  add_header_above(c("Deforestation for:" = 1,
+                     "Industrial plantations" = 6),
+                   align = "c") %>%
+  add_header_above(c(" " = 1,
+                     "(1)" = 1,
+                     "(2)" = 1, 
+                     "(3)" = 1, 
+                     "(4)" = 1,
+                     "(5)" = 1, 
+                     "(6)" = 1),
+                   align = "c") %>%
+  pack_rows("Partial effect of:", 1, 6, 
+            bold = TRUE, italic = FALSE)  %>%
+  pack_rows("Illegality*CPO price signal", 1, 2, indent = FALSE, 
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows("Illegality", 3, 4, indent = FALSE,
+            bold = FALSE, italic = TRUE)  %>%
+  pack_rows("CPO price signal", 5, 6, indent = FALSE, 
+            bold = FALSE, italic = TRUE) %>% 
+  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
+  column_spec(column = 1,
+              width = "12em",
+              latex_valign = "m") 
+
+# ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## # ## ## ## 
+
+# Code to extract regression coefficients
 table_names = c("Estimate", 
                 "95% CI", 
-                "Estimate Illegality",
-                "95% CI Illegality",
+                "Estimate Interaction",
+                "95% CI Interaction",
                 "Estimate # reachable mills",
                 "95% CI # reachable mills",
                 "Estimate Initial forest cover (%)",
@@ -4124,21 +4498,28 @@ table_names = c("Estimate",
                 "95% CI Mill ownership dom. private (%)",
                 "Estimate Mill ownership foreign (%)",
                 "95% CI Mill ownership foreign (%)",
+                "Estimate Mill CPO exports (%)",
+                "95% CI Mill CPO exports (%)",
                 "p-value",
                 "Observations", 
                 "Clusters")
-
 tab_df = matrix(ncol = length(res_data_list_byplantation), 
                 nrow = length(table_names)) 
-
 row.names(tab_df) <- table_names
+
 REGELM <- elm -1 
+
+cluster_level <-  "reachable^illegal2" #  "reachable" #
+
 for(REGELM in 1:length(res_data_list_byplantation)){
   reg_name <- res_data_list_byplantation[REGELM] %>% names() %>% print()
-  reg_res = res_data_list_byplantation[[REGELM]][[1]]
+  if(cluster_level == "reachable^illegal2" & grepl("ill_or_concession", reg_name)){
+    cluster_level <- "reachable^ill_or_concession"
+  }
   d_clean = res_data_list_byplantation[[REGELM]][[2]]
+  reg_res = res_data_list_byplantation[[REGELM]][[1]] #%>% summary(cluster = cluster_level) 
   
-  coeff_table =  etable(reg_res,
+  CI_table =  etable(reg_res,
                         coefstat = "confint",
                         tex = F, 
                         se.below = TRUE,
@@ -4146,7 +4527,7 @@ for(REGELM in 1:length(res_data_list_byplantation)){
                         signif.code=NA,
                         depvar = FALSE)
   
-  row.names(coeff_table) = coeff_table[,1]
+  row.names(CI_table) = CI_table[,1]
   # APE elasticity 
   ape_mat1 <- make_APEs(rounding = 3)
   # Works but useless.. 
@@ -4158,27 +4539,32 @@ for(REGELM in 1:length(res_data_list_byplantation)){
   tab_df[1:2,REGELM] <- ape_mat1[1:2]
   tab_df[(nrow(tab_df)-1):nrow(tab_df),REGELM] <- ape_mat1[(nrow(ape_mat1)-1):nrow(ape_mat1)] 
   
-  # Coefficients 
-  illegal_vars <- grep("ill", row.names(reg_res$coeftable), value = TRUE)
+
+  # identify illegal var used 
+  illegal_vars <- grep("ill", names(reg_res$coefficients), value = TRUE)
   illegal_var <- illegal_vars[1]
   illint_var <- illegal_vars[2]
-  tab_df["Estimate Illegality", REGELM] <- reg_res$coeftable[illint_var,"Estimate"] %>% round(3)
-  tab_df["95% CI Illegality",   REGELM] <- coeff_table[match(illint_var, row.names(coeff_table))+1,"reg_res"] %>% str_squish()
+  # Coefficients
+  tab_df["Estimate Illegality", REGELM] <- reg_res$coefficients[illint_var] %>% round(3)
+  tab_df["95% CI Illegality",   REGELM] <- CI_table[match(illint_var, row.names(CI_table))+1,"reg_res"] %>% str_squish()
 
-  tab_df["Estimate Illegality", REGELM] <- reg_res$coeftable[illint_var,"Estimate"] %>% round(3)
-  tab_df["95% CI Illegality",   REGELM] <- coeff_table[match(illint_var, row.names(coeff_table))+1,"reg_res"] %>% str_squish()
+  tab_df["Estimate Illegality", REGELM] <- reg_res$coefficients[illint_var] %>% round(3)
+  tab_df["95% CI Illegality",   REGELM] <- CI_table[match(illint_var, row.names(CI_table))+1,"reg_res"] %>% str_squish()
   
-  tab_df["Estimate # reachable mills", REGELM] <- reg_res$coeftable["n_reachable_umlXln_wa_cpo_price_imp1_4ya_lag1" ,"Estimate"] %>% round(3)
-  tab_df["95% CI # reachable mills",   REGELM] <- coeff_table[match("n_reachable_umlXln_wa_cpo_price_imp1_4ya_lag1", row.names(coeff_table))+1,"reg_res"] %>% str_squish()
+  tab_df["Estimate # reachable mills", REGELM] <- reg_res$coefficients["n_reachable_umlXln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
+  tab_df["95% CI # reachable mills",   REGELM] <- CI_table[match("n_reachable_umlXln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
   
-  tab_df["Estimate Initial forest cover (%)", REGELM] <- reg_res$coeftable["pct_pfc2000_totalXln_wa_cpo_price_imp1_4ya_lag1" ,"Estimate"] %>% round(3)
-  tab_df["95% CI Initial forest cover (%)",   REGELM] <- coeff_table[match("pct_pfc2000_totalXln_wa_cpo_price_imp1_4ya_lag1", row.names(coeff_table))+1,"reg_res"] %>% str_squish()
+  tab_df["Estimate Initial forest cover (%)", REGELM] <- reg_res$coefficients["pct_pfc2000_totalXln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
+  tab_df["95% CI Initial forest cover (%)",   REGELM] <- CI_table[match("pct_pfc2000_totalXln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
   
-  tab_df["Estimate Mill ownership dom. private (%)", REGELM] <- reg_res$coeftable["wa_pct_own_nat_priv_impXln_wa_cpo_price_imp1_4ya_lag1" ,"Estimate"] %>% round(3)
-  tab_df["95% CI Mill ownership dom. private (%)",   REGELM] <- coeff_table[match("wa_pct_own_nat_priv_impXln_wa_cpo_price_imp1_4ya_lag1", row.names(coeff_table))+1,"reg_res"] %>% str_squish()
+  tab_df["Estimate Mill ownership dom. private (%)", REGELM] <- reg_res$coefficients["wa_pct_own_nat_priv_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
+  tab_df["95% CI Mill ownership dom. private (%)",   REGELM] <- CI_table[match("wa_pct_own_nat_priv_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
   
-  tab_df["Estimate Mill ownership foreign (%)", REGELM] <- reg_res$coeftable["wa_pct_own_for_impXln_wa_cpo_price_imp1_4ya_lag1" ,"Estimate"] %>% round(3)
-  tab_df["95% CI Mill ownership foreign (%)",   REGELM] <- coeff_table[match("wa_pct_own_for_impXln_wa_cpo_price_imp1_4ya_lag1", row.names(coeff_table))+1,"reg_res"] %>% str_squish()
+  tab_df["Estimate Mill ownership foreign (%)", REGELM] <- reg_res$coefficients["wa_pct_own_for_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
+  tab_df["95% CI Mill ownership foreign (%)",   REGELM] <- CI_table[match("wa_pct_own_for_imp_lag1Xln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
+  
+  tab_df["Estimate Mill CPO exports (%)", REGELM] <- reg_res$coefficients["wa_prex_cpo_imp1Xln_wa_cpo_price_imp1_4ya_lag1"] %>% round(3)
+  tab_df["95% CI Mill CPO exports (%)",   REGELM] <- CI_table[match("wa_prex_cpo_imp1Xln_wa_cpo_price_imp1_4ya_lag1", row.names(CI_table))+1,"reg_res"] %>% str_squish()
   
   # Equal variance tests
   d_clean$resid = reg_res$residuals
@@ -4186,19 +4572,19 @@ for(REGELM in 1:length(res_data_list_byplantation)){
   res_variance <- d_clean %>%
     group_by(lonlat, year, !!as.symbol(illegal_var)) %>% 
     summarise(var_resid = mean(resid^2), .groups = "drop")
-  t.test(var_resid ~ as.symbol(illegal_var), data = res_variance) %>% print()
+  t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
 
   # clustered test
   res_variance <- d_clean %>%
-    group_by(reachable, as.symbol(illegal_var)) %>% # reachable, 
+    group_by(reachable, !!as.symbol(illegal_var)) %>% # reachable, 
     summarise(var_resid = mean(resid^2), .groups = "drop")
-  eqvars_clust_test <- t.test(var_resid ~ as.symbol(illegal_var), data = res_variance) %>% print()
+  eqvars_clust_test <- t.test(as.formula(paste0("var_resid ~ ",illegal_var)), data = res_variance) %>% print()
   
   # save p-value of clustered test 
   tab_df["p-value", REGELM] =  eqvars_clust_test$p.value %>% round(3)
 }
 
-
+tab_df
 
 
 
@@ -4279,45 +4665,6 @@ for(REGELM in 1:length(res_data_list_byplantation)){
 }
 lapply(reg_res_list, FUN = function(x) x$convStatus)
 
-ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
-ape_mat
-colnames(ape_mat) <- NULL
-
-
-options(knitr.table.format = "latex")
-kable(ape_mat, booktabs = T, align = "c",
-      caption = "Price elasticity heterogeneity by plantation types") %>% #of 1 percentage change in medium-run price signal
-  kable_styling(latex_options = c("scale_down", "hold_position")) %>%
-  add_header_above(c("Deforestation for:" = 1,
-                     "All plantations" = 6),
-                   align = "c") %>%
-  add_header_above(c(" " = 1,
-                     "(1)" = 1,
-                     "(2)" = 1, 
-                     "(3)" = 1, 
-                     "(4)" = 1,
-                     "(5)" = 1, 
-                     "(6)" = 1),
-                   align = "c") %>%
-  pack_rows("Elasticity to:", 1, 2, bold = TRUE)  %>% # pack_rows(start_row =  nrow(ape_mat)-1, end_row = nrow(ape_mat),  latex_gap_space = "0.5em", hline_before = FALSE) %>% 
-  pack_rows("CPO price signal", 1, 2, indent = FALSE, 
-            bold = FALSE, italic = TRUE) %>% 
-  
-  pack_rows("Moderation effect of:", 3, 10, 
-            bold = TRUE, italic = FALSE)  %>%
-  pack_rows("Share of industrial", 3, 4, indent = FALSE,
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows("Illegal", 5, 6, indent = FALSE,
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows("Share of industrial illegal", 7, 8, indent = FALSE,
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows("Share of initial forest cover", 9, 10, indent = FALSE,
-            bold = FALSE, italic = TRUE)  %>%
-  pack_rows(" ", nrow(ape_mat)-1, nrow(ape_mat), indent = FALSE, latex_align = "l", latex_gap_space = "0em")  %>%
-  column_spec(column = 1,
-              width = "12em",
-              latex_valign = "m") 
 
 
 rm(res_data_list_byplantation)
