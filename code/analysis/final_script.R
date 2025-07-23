@@ -126,14 +126,14 @@ distribution = "quasipoisson"
 fe = "reachable + district_year"#
 offset = FALSE
 lag_or_not = "_lag1"
-controls = c("n_reachable_uml", "ill_or_concession")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
+controls = c("n_reachable_uml", "released_or_not_in_concession")#, "wa_prex_cpo_imp1""wa_pct_own_loc_gov_imp",
 remaining_forest = FALSE
 control_lncpo = FALSE # should the CPO price treatment of interest be included in the controls (for regressions on FFB price)
-interaction_terms = c("ill_or_concession") #  NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
+interaction_terms = c("released_or_not_in_concession") #  NULL # "illegal2"  #c("wa_pct_own_nat_priv_imp","wa_pct_own_for_imp","n_reachable_uml", "wa_prex_cpo_imp1")
 interact_regressors = TRUE
 interacted = "regressors"
 pya_ov = FALSE
-illegal = "all"# "ill2" #
+illegal = "released_or_not_in_concession"# "ill2" #
 weights = FALSE
 min_forest_2000 = 0
 min_coverage = 0
@@ -256,7 +256,7 @@ make_base_reg <- function(island,
   
   # Build the outcome and sample of unregulated deforestation, i.e. illegal indus or smallholder
   if(grepl("lucpfunrp", outcome_variable)){
-    if(illegal %in% c("all", "illegal2")){
+    if(illegal %in% c("all")){
     d <- 
       d %>% 
       dplyr::mutate(
@@ -290,25 +290,6 @@ make_base_reg <- function(island,
     # d %>% filter(illegal2) %>% pull(lucpfunrp_pixelcount) %>% summary()
     # d %>% filter(illegal2) %>% pull(lucpfap_pixelcount) %>% summary()
     
-    if(illegal == "illegal1"){
-      d <- 
-        d %>% 
-        dplyr::mutate(
-          lucpfunrp_pixelcount = if_else(
-            # in illegal pixels, count indus + smallholders (all)
-            (!is.na(illegal1) & illegal1),
-            lucpfap_pixelcount,
-            # otherwise (legal or unknown legal status), count only smallholders
-            lucpfsmp_pixelcount
-          )) %>% 
-        # AND REMOVE OBS. WITH NO SMALLHOLDERS NOR ILLEGAL 
-        # i.e. keep obs either illegal, or legal but with smallholders
-        group_by(lonlat) %>% 
-        mutate(any_sm_in_cell = any(lucpfsmp_pixelcount>0)) %>% 
-        ungroup() %>% 
-        filter((!is.na(illegal1) & illegal1) | (!is.na(illegal1) & !illegal1 & any_sm_in_cell)) %>% 
-        as.data.frame()
-    }
     if(illegal == "alt"){
       d <- 
         d %>% 
@@ -490,49 +471,7 @@ make_base_reg <- function(island,
   }
   
   ## CONTROLS
-  # Make illegal-legal dummies
-  # The main one, ill_or_concession, is defined as:  
-  # TRUE = illegal = illegal2 (off concession & in forest zone)
-  # FALSE = legal = in concession
-  # NA otherwise 
-  if("ill_or_concession" %in% controls){
-    d = 
-      d %>% 
-      mutate(ill_or_concession = case_when(
-        illegal2 & !is.na(illegal2) ~ 1, 
-        !illegal2010 & !is.na(illegal2010) ~ 0, # this is parcels in concessions in 2010
-        TRUE ~ NA
-      ))
-    # d$ill_or_concession %>% table()
-    # d$illegal2 %>% table()
-  }
-  if("illegal2"%in%controls){
-    d = d %>% mutate(illegal2 = if_else(illegal2, 1, 0))
-  }
-  if("illegal1"%in%controls){
-    d = d %>% mutate(illegal1 = if_else(illegal1, 1, 0))
-  }
-  if("ill_or_leg" %in% controls){
-    d = 
-      d %>% 
-      mutate(ill_or_leg = case_when(
-        illegal2 & !is.na(illegal2) ~ 1, 
-        legal2 & !is.na(legal2) ~ 0, # this is parcels in concessions or in designated land
-        TRUE ~ NA
-      ))
-    # d$ill_or_leg %>% summary()
-  }
-  if("ill_or_all" %in% controls){
-    d = 
-      d %>% 
-      mutate(ill_or_all = case_when(
-        illegal2 & !is.na(illegal2) ~ 1, 
-        !illegal2 | is.na(illegal2) ~ 0, 
-        TRUE ~ NA
-      ))
-    # d$ill_or_all %>% summary()
-  }
-  
+
   if("wa_prex_cpo_imp1" %in% controls){
     d = 
       d %>% 
@@ -659,34 +598,6 @@ make_base_reg <- function(island,
   if("pct_pfc2000_total" %in% c(interaction_terms, controls)){
     d = d %>% mutate(pct_pfc2000_total = 100 * pfc2000_total_pixelcount*pixel_area_ha/900)
   }
-  
-  # INTERACTING OUTCOME SHARES 
-  if("share_indus" %in% controls | "share_illindus" %in% controls){
-    d = 
-      d %>% 
-      mutate(share_indus_wna = 100 * lucpfip_pixelcount / lucpfap_pixelcount) %>% 
-      group_by(reachable, district_year) %>% 
-      mutate(feavg_share_indus = mean(share_indus_wna, na.rm = TRUE)) %>% 
-      ungroup() %>% 
-      as.data.frame() %>% 
-      mutate(share_indus = if_else(lucpfap_pixelcount > 0, share_indus_wna, feavg_share_indus))  # & !is.na(illegal2)
-    
-    d = 
-      d %>% 
-      mutate(share_illindus = if_else(lucpfap_pixelcount > 0 | is.na(illegal2), illegal2*share_indus_wna, illegal2*feavg_share_indus)) # & !is.na(illegal2)
-    # This means: if share_indus_wna is defined, then either illegal2 is not missing and share_illindus is defined, or illegal2 is missing and share_illindus will be NA. 
-    # If share_indus_wna is not defined and illegal2 is not missing, then attribute the average of indus share interacted by illegal. 
-    
-    # d$share_indus_wna %>% summary()
-    # d$feavg_share_indus %>% summary()
-    # d$share_indus %>% summary()
-    # d$share_illindus %>% summary()
-  }
-  # if("share_sm" %in% controls){
-  #   d = 
-  #     d %>% 
-  #     mutate(share_sm = if_else(lucpfap_pixelcount > 0, lucpfsmp_pixelcount / lucpfap_pixelcount, 0))
-  # }
 
   ### SELECT DATA FOR REGRESSION
   
@@ -798,42 +709,95 @@ make_base_reg <- function(island,
   d <- dplyr::filter(d, rspo_cert == FALSE)
   #d <- d[d$rspo_cert==FALSE,]
   
-  # main legal
+  
+  ###  ###  ### FILTER ON LEGAL VARIABLES ### ###  ###
+  
+  # MAIN LEGAL
   if(illegal == "in_concession"){
-    d <- d[!is.na(d$illegal2010) & d$illegal2010 == FALSE, ]
+    d <- d[d$concession == TRUE, ] # there is no NA in concession anyway
   }
-  # Alternative definitions used in RC 
-  # if(illegal == "legal2"){
-  #   d <- d[!is.na(d$legal2) & d$legal2 == TRUE, ]
-  # }
-  if(illegal == "no_ill2"){
-    d <- d[!is.na(d$illegal2) & d$illegal2 == FALSE, ]
-  }
+  # Alternative definitions used in RC
   if(illegal == "either_concession"){
-    d <- d[!is.na(d$concession_2020) & (d$concession == TRUE | d$concession_2020 == TRUE), ]
+    d <- d[(d$concession == TRUE | d$concession_2020 == TRUE), ]
   }
-  # main illegal
-  if(illegal == "ill2"){
-    d <- d[!is.na(d$illegal2) & d$illegal2 == TRUE, ]
+
+  # LEGAL BREAKDOWN WITH NEW LLU MAP
+  # !is.na(d$APL) ensures that we pick things based on known LLC (it could be another LLC variable thus.)
+  # in part of concession known for being APL in 2010, i.e. land that in 2010 was classified as non-forest land where OP is legal.  
+  if(illegal == "released_inconces"){
+    d <- d[d$legal2 & !is.na(d$APL), ] # legal2 = concession & APL
   }
-  # Alternative definitions used in RC 
-  if(illegal == "out_concession"){
-    d <- d[!is.na(d$illegal2010) & d$illegal2010 == TRUE, ] # this is !concession in 2010
+  # in part of concession known for being APL and in years when it is sure that re-classigication to APL (i.e. land release) is already obtained
+  if(illegal == "released_inconces_sure"){
+    d <- d[d$legal2 & d$year > 2010 & !is.na(d$APL), ]
   }
-  if(illegal == "ill2_2020"){
-    d <- d[!is.na(d$illegal2_2020) & d$illegal2_2020 == TRUE, ]
+  # in part of concession known for being illegal, i.e. either in protected forest. or land not declassified from HPK to APL at time of HGU.  
+  if(illegal == "unreleased_inconces"){
+    d <- d[d$unreleased_inconces & !is.na(d$APL), ] # unreleased_inconces concession & !APL
+  }
+  # Details: 
+  # in part of concession known for being forest designated for OP land use provided it is reclassified into APL 
+  # (which it was not in 2010, since it is hpk, and if this hpk was released after 2010, there is still doubtfull process because the hgu in 2010 requires that it was APL in theory). 
+  if(illegal == "concession_hpk"){
+    d <- d[d$concession == TRUE & !is.na(d$APL) & d$is_hpk == TRUE, ]
+  }
+  # in part of concession known for being protected forest, so forest that cannot be declassified to production forest a priori
+  if(illegal == "concession_pf"){
+    d <- d[d$concession == TRUE & !is.na(d$APL) & d$protected_forest == TRUE, ]
+  }
+  # in part of concession under no specific LU zoning, i.e. where llu designation is missing. This is supposed to include areas not designated for something in particular, i.e. not protected by legal LU designation. 
+  if(illegal == "concession_LLCNA"){
+    d <- d[d$concession == TRUE & is.na(d$APL), ] # it can be either of LLC variables
   }
   
-  # others, not used. 
-  if(illegal == "no_ill1"){
-    d <- d[!is.na(d$illegal1) & d$illegal1 == FALSE, ]
+  # ILLEGAL 
+  # Outside of concession, on land known for being protected forest, i.e. explicitly not zoned for OP
+  if(illegal == "ill2"){
+    d <- d[d$illegal2 & !is.na(d$APL), ] # illegal2 = !concession & APL
   }
-  if(illegal == "no_ill2"){
-    d <- d[!is.na(d$illegal2) & d$illegal2 == FALSE, ]
+  # In regularization: not in a concession in 2010, but in a concession in 2020 and with possibly legal land class. 
+  if(illegal == "inregul"){ 
+    d <- d[d$inregul & !is.na(d$APL), ] # inregul = !concession & concession_2020 & !protected_forest
   }
-  if(illegal == "ill1"){
-    d <- d[!is.na(d$illegal2) & d$illegal1 == TRUE, ]
-  }  
+  if(illegal == "illegal2_both"){
+    d <- d[d$illegal2_both & !is.na(d$APL), ]  # illegal2_both =!concession & !concession_2020 & !APL this is equivalent to illegal2 & !concession_2020
+  }
+
+  # Filter for heterogeneity tests and produce the interacting dummy here 
+  # in these cases, the interaction term is named as illegal:
+  if(illegal == "released_or_not_in_concession"){
+    d <- d[d$concession == TRUE & !is.na(d$APL), ]
+    
+    d[,illegal] <- d$legal2
+  }
+  if(illegal == "released_in_concession_or_inregul"){
+    d <- d[(d$legal2 | d$inregul) & !is.na(d$APL), ]
+    
+    d[,illegal] <- d$legal2
+  }
+  if(illegal == "released_in_concession_or_illegal2"){
+    d <- d[(d$legal2 | d$illegal2) & !is.na(d$APL), ]
+    
+    d[,illegal] <- d$legal2
+  }
+
+  # DEFINITIONS WITH OLD LLU MAP
+  # in part of concession known for being explicitly designated (authorized) for OP land use 
+  # if(illegal == "concession_lluok"){
+  #   d <- d[d$concession == TRUE & !is.na(d$illegal1) & d$illegal1 == FALSE, ]
+  # }
+  # # in part of concession known for being protected, i.e. not zoned for OP (neeading land release)
+  # if(illegal == "concession_llunotok"){
+  #   d <- d[d$concession == TRUE & !is.na(d$illegal1) & d$illegal1 == TRUE, ]
+  # }
+  # # in part of concession under no specific LU zoning, i.e. where llu designation (illegal1) is missing. This is supposed to include areas not designated for something in particular, i.e. not protected by legal LU designation. 
+  # if(illegal == "concession_lluNA"){
+  #   d <- d[d$concession == TRUE & is.na(d$illegal1), ]
+  # }
+  # # others, not used. 
+  # if(illegal == "no_ill2"){
+  #   d <- d[!is.na(d$illegal2) & d$illegal2 == FALSE, ]
+  # }
 
   
   # make the sample comparable, by requiring that the main regressor be not missing either 
@@ -894,6 +858,13 @@ make_base_reg <- function(island,
   
   # here we produce the names of the actual interaction variables
   if(length(interaction_terms)>0){
+    
+    # Turn logical interaction terms to integer for fixest to not rename them  
+    for(IT in interaction_terms){
+      if(is.logical(d[,IT])){
+        d[,IT] <- as.integer(d[,IT])
+    }}
+    
     # unless variables of interest to be interacted are specified, they are all the presently defined regressors
     if(interacted == "regressors"){interacted <- regressors}
     # this function selects the actual controls (lagged if necessary) into the interaction terms
@@ -925,31 +896,7 @@ make_base_reg <- function(island,
     #d_clean[,paste0(regressors[2],"X",regressors[1])] <- d_clean[,regressors[2]]*d_clean[,regressors[1]]
   }
   
-  # If this is the pooled regression with interaction by illegal, then use exactly the same samples: 
-  if("ill_or_concessionXln_wa_cpo_price_imp1_4ya_lag1" %in% interaction_vars){
-    # Pooled data 
-    if(outcome_variable == "lucpfip_pixelcount"){
-      pdf <- rbind(
-        res_data_list_full[["both_i_in_concession"]][[2]],
-        res_data_list_full[["both_i_ill2"]][[2]])
-    }
-    # Requires to have already run the regressions to work; 
-    if(outcome_variable == "lucpfip_rapid_pixelcount"){
-      pdf <- rbind(
-        res_data_list_dyn[["both_rapid_in_concession"]][[2]],
-        res_data_list_dyn[["both_rapid_ill2"]][[2]])
-    }
-    d_clean = 
-      d_clean %>% 
-      inner_join(
-      pdf %>% dplyr::select(lonlat, year),
-      by = c("lonlat", "year")
-    )
-    # stopifnot(nrow(d_clean) == nrow(pdf))
-    rm(pdf)
-  }  
 
-  
   ### REGRESSIONS
   
   # Model specification
@@ -1041,9 +988,11 @@ make_base_reg <- function(island,
     }
   }
   
-  # reg_res <- fixest::feglm(lucpfip_pixelcount ~ ln_wa_cpo_price_imp1_4ya_lag1 + n_reachable_uml + illegal2 + i(illegal2, ln_wa_cpo_price_imp1_4ya_lag1, ref = 0) | reachable + district_year,
-  #                          data = d_clean, 
-  #                          family = distribution, 
+  names(reg_res$coefficients) <- gsub(x = names(reg_res$coefficients), pattern = "TRUE", replacement = "")
+  
+  # reg_res <- fixest::feglm(lucpfip_pixelcount ~ ln_wa_cpo_price_imp1_4ya_lag1 + n_reachable_uml + released_or_not_in_concession  + i(released_or_not_in_concession, ln_wa_cpo_price_imp1_4ya_lag1, ref = 0) | reachable + district_year,
+  #                          data = d_clean,
+  #                          family = distribution,
   #                          glm.iter = n_iter_glm,
   #                          #fixef.iter = 100000,
   #                          notes = TRUE)
@@ -2415,6 +2364,7 @@ rm(ape_mat)
 
 ## Table 3. INTERACTION BY ILLEGALITY -------------------------------------------------------------
 
+### Break down legal ------------------------
 # To do pooled regression with interaction, we need the residuals' variance to be the same across groups made by the interaction term. 
 # Check whether this is the case with the level of clustering used in the main analysis (reachable): 
 
@@ -2422,45 +2372,73 @@ rm(ape_mat)
 # Not for immediate conversion only, because in this case the equal variance assumption is not satisfied. 
 
 # FOR CLUSTER AT reachable^illegal2 THIS NEEDS TO BE PRODUCED IN THE DATA 
-res_data_list_byplantation <- list()
+
+            # "unreleased_inconces", "inregul", "illegal2", "illegal2_both")
+  # c("in_concession", "either_concession", "released_inconces", "released_inconces_sure", 
+            # "unreleased_inconces", "inregul", "illegal2", "illegal2_both")
+
+res_data_list_illrob <- list()
 elm <- 1
 ISL <- "both"
-illegal_var <- "ill_or_concession" # "illegal2"# 
-FE = "reachable + district_year"
 
-for(FE in c("reachable + district_year", "subdistrict + district_year", "district_year")){
-  res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
-                                                     outcome_variable = "lucpfip_pixelcount",
-                                                     interaction_terms = c(illegal_var),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                     controls          = c(illegal_var, "n_reachable_uml"), #
-                                                     fe = FE,
-                                                     n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-                                                     offset = FALSE)
-  names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILL")
+samples = c("released_inconces", "concession_hpk", "concession_pf", "unreleased_inconces", "inregul")
+for(ILL in samples){
+  res_data_list_illrob[[elm]] <- make_base_reg(island = ISL,
+                                               outcome_variable = paste0("lucpfip_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
+                                               illegal = ILL,
+                                               offset = FALSE)
   elm <- elm + 1
-  
-  # res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
-  #                                                    outcome_variable = "lucpfip_pixelcount",
-  #                                                    interaction_terms = c(illegal_var, "n_reachable_uml", "pct_pfc2000_total"),# "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-  #                                                    controls =          c(illegal_var, "n_reachable_uml", "pct_pfc2000_total"),
-  #                                                    fe = FE,
-  #                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. 
-  #                                                    offset = FALSE)
-  # names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILLandIFCandNREACH")
-  # elm <- elm + 1
-  
-  res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, illegal = "all",
+}
+
+## PARTIAL EFFECTS
+rm(ape_mat, d_clean) # it's necessary that no object called d_clean be in memory at this point, for vcov.fixest to fetch the correct data. 
+ape_mat = list()
+reg_res_list = list()
+for(REGELM in 1:length(res_data_list_illrob)){
+  res_data <- res_data_list_illrob[[REGELM]]
+  reg_res <- res_data[[1]]
+  d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
+  rm(res_data)
+  ape_mat1 <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+  Ybar = d_clean %>% dplyr::pull(starts_with("lucpfip_")) %>% mean()
+  ape_mat1 <- rbind(ape_mat1, round(Ybar*pixel_area_ha, 3))
+  ape_mat[[REGELM]] <- ape_mat1
+  reg_res_list[[REGELM]] <- reg_res
+  rm(d_clean, reg_res)
+}
+lapply(reg_res_list, FUN = function(x) x$convStatus)
+ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters", "Average deforestation (ha)") 
+colnames(ape_mat) <- samples
+ape_mat
+
+### Interaction analysis ---------------
+illegal_var <- "released_or_not_in_concession" # "illegal2"# 
+FE = "lonlat + district_year" # "subdistrict + district_year"# 
+for(FE in c("reachable + district_year", "subdistrict + district_year", "district_year")){
+
+int_samples <- c("released_or_not_in_concession", "released_in_concession_or_inregul", "released_in_concession_or_illegal2")
+for(ILL in int_samples){
+  res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, 
                                                      outcome_variable = "lucpfip_pixelcount",
-                                                     interaction_terms = c(illegal_var, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "wa_prex_cpo_imp1"), # # "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
-                                                     controls =          c(illegal_var, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "wa_prex_cpo_imp1"), # 
+                                                     illegal           = c(ILL),
+                                                     interaction_terms = c(ILL, "n_reachable_uml", "pct_pfc2000_total"), # # "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+                                                     controls =          c(ILL, "n_reachable_uml", "pct_pfc2000_total"), # 
                                                      fe = FE,
                                                      n_iter_glm = 2000,  # this is going to be long, but it's necessary. _imp1
                                                      offset = FALSE)
-  names(res_data_list_byplantation)[elm] <- paste0(ISL,"_",illegal_var,"_i_byILLandIFCandNREACHandOWN2")
   elm <- elm + 1
-  
+  # res_data_list_byplantation[[elm]] <- make_base_reg(island = ISL, 
+  #                                                    outcome_variable = "lucpfip_pixelcount",
+  #                                                    illegal           = c(ILL),
+  #                                                    interaction_terms = c(ILL, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "wa_prex_cpo_imp1"), # # "wa_pct_own_nat_priv_imp","wa_pct_own_for_imp",
+  #                                                    controls =          c(ILL, "n_reachable_uml", "pct_pfc2000_total", "wa_pct_own_nat_priv_imp", "wa_pct_own_for_imp", "wa_prex_cpo_imp1"), # 
+  #                                                    fe = FE,
+  #                                                    n_iter_glm = 2000,  # this is going to be long, but it's necessary. _imp1
+  #                                                    offset = FALSE)
+  # elm <- elm + 1
 }
-
+}
 REGELM <- elm - 1
 ape_mat <- list()
 # Code to extract partial effects on discrete change and of controls
@@ -2470,20 +2448,20 @@ for(REGELM in 1:length(res_data_list_byplantation)){
   d_clean = res_data_list_byplantation[[REGELM]][[2]]
   reg_res = res_data_list_byplantation[[REGELM]][[1]] 
   
-  illegal_vars <- grep("ill", names(reg_res$coefficients), value = TRUE)
+  illegal_vars <- grep("released", names(reg_res$coefficients), value = TRUE)
+  illegal_var <- illegal_vars[1]
   illint_var <- illegal_vars[2]
   
-  # Make the adjusted clustering level
-  d_clean = 
-    d_clean %>% 
-    mutate(!!as.symbol(paste0("reachable_",illegal_var)) := paste0(reachable, !!as.symbol(illegal_var)))
-  
-  ape_mat1 <- make_APEs_discrete_interaction(interaction_dummy = illegal_var,
-                                             CLUSTER = "reachable",
-                                             controls_pe = TRUE,
-                                             stddev = FALSE,
-                                             rounding = 2)
-  
+  if(length(illegal_vars)>1){
+    ape_mat1 <- make_APEs_discrete_interaction(interaction_dummy = illegal_var,
+                                               CLUSTER = "reachable",
+                                               controls_pe = TRUE,
+                                               stddev = FALSE,
+                                               rounding = 2)
+  }else{
+    ape_mat1
+  }
+
   # Equal variance tests
   d_clean$resid = reg_res$residuals
   # unclustered test
@@ -2501,6 +2479,9 @@ for(REGELM in 1:length(res_data_list_byplantation)){
   # save p-value of clustered test 
   ape_mat1["Residual variance equality",] =  eqvars_clust_test$p.value %>% round(3)
   
+  Ybar = d_clean %>% dplyr::pull(starts_with("lucpfip_")) %>% mean()
+  ape_mat1 <- rbind(ape_mat1, round(Ybar*pixel_area_ha, 3))
+  row.names(ape_mat1)[nrow(ape_mat1)] <- "Average deforestation (ha)"
   # save row names (same for all iterations)
   rownames_ape_mat <- row.names(ape_mat1)
   ape_mat[[REGELM]] <- ape_mat1
@@ -4902,18 +4883,28 @@ rm(ape_mat)
 res_data_list_illrob <- list()
 elm <- 1
 
-isl_list <- list("both")#"Sumatra", "Kalimantan", 
 ISL <- "both"
 
-size_list <- list("i","unr", "a")
+# no_ill1 = not in protected forest = in land zoned for PO more precisely. 
+# This is not a good measure of legality because it includes any PO without license but simply in a zoned area. 
+
+# legal2 is only the part of concessions that are in land zoned for PO. So the most legal land bank, 
+# while in_concession is all the land in concession, including places for which a "land release" is needed. 
+# 
 
 # legality definition
-for(ILL in c("in_concession", "legal2", "either_concession", "ill2", "out_concession", "ill2_2020")){
+leg_types_old <- c("in_concession", "either_concession", "concession_lluok", "concession_llunotok", "concession_lluNA") # , 
+               # "ill2", "out_concession", "ill2_bothconcesssion")
+samples = c("in_concession", "either_concession", "released_inconces", "released_inconces_sure", 
+            "unreleased_inconces", "inregul", "ill2", "illegal2_both")
+
+for(ILL in samples){
   res_data_list_illrob[[elm]] <- make_base_reg(island = ISL,
                                                outcome_variable = paste0("lucpfip_pixelcount"), # or can be  lucpf",SIZE,"p_pixelcount"
                                                illegal = ILL,
+                                               n_iter_glm = 2000,
                                                offset = FALSE)
-  names(res_data_list_illrob)[elm] <- paste0(ISL,"_",SIZE, "_",ILL)
+  names(res_data_list_illrob)[elm] <- paste0(ISL,"_i_",ILL)
   elm <- elm + 1
 }
 
@@ -4929,13 +4920,17 @@ for(REGELM in 1:length(res_data_list_illrob)){
   reg_res <- res_data[[1]]
   d_clean <- res_data[[2]] # it's necessary that the object is named equally to the data that was used in estimation.
   rm(res_data)
-  ape_mat[[REGELM]] <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+  ape_mat1 <- make_APEs(reg_elm = REGELM) # and for the same reason, this cannot be wrapped in other functions
+  Ybar = d_clean %>% dplyr::pull(starts_with("lucpfip_")) %>% mean()
+  ape_mat1 <- rbind(ape_mat1, round(Ybar*pixel_area_ha, 3))
+  ape_mat[[REGELM]] <- ape_mat1
   reg_res_list[[REGELM]] <- reg_res
   rm(d_clean, reg_res)
 }
 lapply(reg_res_list, FUN = function(x) x$convStatus)
 ape_mat <- bind_cols(ape_mat)  %>% as.matrix()
-row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters") 
+row.names(ape_mat) <- c(rep(c("Estimate","95% CI"), ((nrow(ape_mat)/2)-1)), "Observations", "Clusters", "Average deforestation (ha)") 
+colnames(ape_mat) <- samples
 ape_mat
 colnames(ape_mat) <- NULL
 
@@ -6421,7 +6416,7 @@ schart(scdf,
 # Or the annual average number of grid cells. The former is better in line with the idea of effect on Indonesian oil palm sector as it was at the end of the study period. 
 
 
-# Grid cells within 50km of a known (UML) mill. 
+# Grid cells within 82 km of a known (UML) mill. 
 lucpfip <- readRDS(file.path(paste0("temp_data/processed_parcels/lucpfip_panel_",
                                     parcel_size/1000,"km_",
                                     "82km_UML_CR.rds")))
@@ -6474,8 +6469,6 @@ row.names(d) <- seq(1,nrow(d))
 
 ## to islands of interest 
 # d has no island variable so far. But it is the merger of prepare_ scripts run over Sumatra and Kalimantan, which are the islands of interest. 
-
-
 
 ## to within 50km a UML mill
 uml <- read.dta13(file.path("temp_data/processed_UML/UML_valentin_imputed_est_year.dta"))
@@ -6567,110 +6560,6 @@ d <- d[d$rspo_cert==FALSE,]
 # before RSPO started
 n_with_rspo - nrow(d)
 gc_with_rspo - length(unique(d$lonlat))
-
-
-
-## And finally identify illegal deforestation in this population, but do not restrict the sample to it yet. 
-# OIL PALM CONCESSIONS
-cns <- st_read(file.path("input_data/oil_palm_concessions"))
-cns <- st_transform(cns, crs = indonesian_crs)
-
-# LEGAL LAND USE 
-llu <- st_read(file.path("input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp"))
-llu <- st_transform(llu, crs = indonesian_crs)
-unique(llu$Fungsi)
-names(llu)[names(llu) == "Fungsi"] <- "llu"
-
-# restrict llu to provinces of interest
-llu <- llu[llu$Province == "Sumatra Utara" |
-             llu$Province == "Riau" |
-             llu$Province == "Sumatra Selantan" |
-             llu$Province == "Papua Barat" |
-             llu$Province == "Kalimantan Timur" |
-             llu$Province == "Kalimantan Selatan" |
-             llu$Province == "Kalimantan Tengah" |
-             llu$Province == "Kalimantan Barat" |
-             llu$Province == "Bengkulu" |
-             llu$Province == "Lampung" |
-             llu$Province == "Jambi" |
-             llu$Province == "Bangka Belitung" |
-             llu$Province == "Kepuluan Riau" |
-             llu$Province == "Sumatra Barat" |
-             llu$Province == "Aceh", ]
-
-
-# OIL PALM CONCESSIONS
-# We do not observe whether a grid cell is within a concession annually. 
-# Therefore we only proceed with a cross section
-d_cs <- d[!duplicated(d$lonlat),]
-sgbp <- st_within(d_cs, cns)
-d_cs$concession <- rep(FALSE, nrow(d_cs))
-d_cs$concession[lengths(sgbp) > 0] <- TRUE
-
-d_cs <- st_drop_geometry(d_cs)
-
-d <- left_join(d, d_cs[,c("lonlat", "concession")], by = "lonlat")
-
-# note that some d fall within more than one concession record. There may be several reasons for concession overlaps 
-# like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
-# concession record. 
-
-
-# LEGAL LAND USE 
-# this is quite long (~5min)
-d_cs <- d[!duplicated(d$lonlat),] # the point of this is to give back spatial class to d_cs
-d_cs <- st_join(x = d_cs, 
-                y = st_make_valid(llu[,"llu"]), # st_make_valid bc thrown error otherwise 
-                join = st_within, 
-                left = TRUE)
-
-# some grid cells seem to fall within overlapping llu shapes though. 
-# It's really marginal (12 instances). Just remove the duplicates it produces.
-d_cs <- d_cs[!duplicated(d_cs$lonlat),]
-
-# merge back with panel 
-d <- st_drop_geometry(d)
-d_cs <- st_drop_geometry(d_cs)
-
-d <- left_join(d, d_cs[,c("lonlat", "llu")], by = "lonlat")
-
-unique(d$llu)
-
-# ILLEGAL LUCFP 
-# one possible link to shed light on accronyms http://documents1.worldbank.org/curated/pt/561471468197386518/pdf/103486-WP-PUBLIC-DOC-107.pdf
-
-d <- dplyr::mutate(d,
-                   illegal1 = (!concession & (llu != "HPK" )), # it's not in concession and not in a convertible forest zone. Don't add the following code, because these NAs are for all places outside the forest estate, and it changes exactly nothing to add this condition | llu == "<NA>"
-                   illegal2 = (!concession & (llu == "HL" | # it's not in concession and it's in a permanent forest zone designation
-                                                
-                                                llu == "HP" | # production forest : " these areas may be selectively logged in a normal manner".
-                                                llu == "HPT" | # limited production forest : "These areas be logged less intensively than is permitted in the Permanent Production Forest" 
-                                                
-                                                llu=="HK" | # below are all categories of HK
-                                                llu=="KSA/KPA" |
-                                                llu=="KSA" | 
-                                                llu=="CA" | 
-                                                llu=="SM" | 
-                                                llu=="KPA" | 
-                                                llu=="TN" | 
-                                                llu=="TWA" | 
-                                                llu=="Tahura" | 
-                                                llu=="SML" | 
-                                                llu=="CAL" | 
-                                                llu=="TNL" | 
-                                                llu=="TWAL" | 
-                                                llu=="KSAL" | 
-                                                llu=="TB" | 
-                                                llu=="Hutan Cadangan")))
-
-# yields many missing in illegal because many grid cells are within a mising land use legal classification
-# parcels[!duplicated(parcels$lonlat) & !is.na(parcels$llu), c("lonlat", "concession", "llu", "illegal1", "illegal2")]
-
-# restrict the sample to the pre-defined legal status 
-
-
-
-
 
 
 ### COUNT THE AVERAGE ANNUAL NUMBER OF GRID CELLS ###
