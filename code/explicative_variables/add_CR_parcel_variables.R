@@ -888,9 +888,16 @@ rspo$year <- rspo$year +1
 ### OIL PALM CONCESSIONS
 cns <- st_read(file.path("input_data/oil_palm_concessions"))
 cns <- st_transform(cns, crs = indonesian_crs)
-
+cns <- cns %>% mutate(group_company = paste0(group_comp, "_", company)) %>% 
+  rename(group = group_comp)
+cns$concession_id <- 1:nrow(cns)
+  
 cns20 <- st_read(file.path("input_data/Greenpeace_Indonesia_Oil_Palm_Concessions_Map_Nov_2020"))
 cns20 <- st_transform(cns20, crs = indonesian_crs)
+cns20 <- cns20 %>% mutate(group_company_2020 = paste0(PO_GROUP, "_", PO_COM)) %>% 
+  rename(group_2020 = PO_GROUP, 
+         company_2020 = PO_COM)
+cns20$concession_id_2020 <- 1:nrow(cns20)
 
 ### LEGAL LAND USE 
 llu <- st_read(file.path("input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp"))
@@ -904,6 +911,24 @@ llu_ha = summarise(llu %>% st_drop_geometry(),
                    area = sum(area)) %>% 
   mutate(area_ha = as.integer(area/1e4)) %>% 
   arrange(desc(area_ha))
+
+
+# restrict llu to provinces of interest
+llu <- llu[llu$Province == "Sumatra Utara" |
+             llu$Province == "Riau" |
+             llu$Province == "Sumatra Selantan" |
+             llu$Province == "Papua Barat" |
+             llu$Province == "Kalimantan Timur" |
+             llu$Province == "Kalimantan Selatan" |
+             llu$Province == "Kalimantan Tengah" |
+             llu$Province == "Kalimantan Barat" |
+             llu$Province == "Bengkulu" |
+             llu$Province == "Lampung" |
+             llu$Province == "Jambi" |
+             llu$Province == "Bangka Belitung" |
+             llu$Province == "Kepuluan Riau" |
+             llu$Province == "Sumatra Barat" |
+             llu$Province == "Aceh", ]
 
 
 LLC <- st_read(file.path("input_data/Indonesia_legal_classification/Indonesia_legal_classification.shp"))
@@ -930,23 +955,6 @@ llbigclass_ha
 LLC = LLC %>% filter(legal_clas != "Water bodies")
 LLC$legal_clas %>% unique()
 
-
-# restrict llu to provinces of interest
-llu <- llu[llu$Province == "Sumatra Utara" |
-             llu$Province == "Riau" |
-             llu$Province == "Sumatra Selantan" |
-             llu$Province == "Papua Barat" |
-             llu$Province == "Kalimantan Timur" |
-             llu$Province == "Kalimantan Selatan" |
-             llu$Province == "Kalimantan Tengah" |
-             llu$Province == "Kalimantan Barat" |
-             llu$Province == "Bengkulu" |
-             llu$Province == "Lampung" |
-             llu$Province == "Jambi" |
-             llu$Province == "Bangka Belitung" |
-             llu$Province == "Kepuluan Riau" |
-             llu$Province == "Sumatra Barat" |
-             llu$Province == "Aceh", ]
 
 
 
@@ -986,16 +994,23 @@ for(catchment_radius in catchment_radiuseS){
   # Therefore we only proceed with a cross section
   parcels_cs <- parcels[!duplicated(parcels$lonlat),]
   
-  sgbp <- st_within(parcels_cs, cns)
-  parcels_cs$concession <- rep(FALSE, nrow(parcels_cs))
-  parcels_cs$concession[lengths(sgbp) > 0] <- TRUE
-  rm(sgbp)
+  parcels_cs <- st_join(x = parcels_cs, 
+                        y = st_make_valid(cns[,c("concession_id", "group_company", "group", "company")]), # st_make_valid bc thrown error otherwise 
+                        join = st_within, 
+                        left = TRUE)
+  parcels_cs <- parcels_cs %>% mutate(concession = if_else(is.na(concession_id), FALSE, TRUE))
+  # some grid cells fall within several concessions, keep just one row 
+  parcels_cs <- parcels_cs[!duplicated(parcels_cs$lonlat),]
   
   # repeat for 2020 concession map
-  sgbp <- st_within(parcels_cs, cns20)
-  parcels_cs$concession_2020 <- rep(FALSE, nrow(parcels_cs))
-  parcels_cs$concession_2020[lengths(sgbp) > 0] <- TRUE
-  rm(sgbp)
+  parcels_cs <- st_join(x = parcels_cs, 
+                        y = st_make_valid(cns20[,c("concession_id_2020", "group_company_2020", "group_2020", "company_2020")]), # st_make_valid bc thrown error otherwise 
+                        join = st_within, 
+                        left = TRUE)
+  parcels_cs <- parcels_cs %>% mutate(concession_2020 = if_else(is.na(concession_id_2020), FALSE, TRUE))
+  # some grid cells fall within several concessions, keep just one row 
+  parcels_cs <- parcels_cs[!duplicated(parcels_cs$lonlat),]
+  
 
   # note that some parcels fall within more than one concession record. There may be several reasons for concession overlaps 
   # like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
@@ -1004,7 +1019,11 @@ for(catchment_radius in catchment_radiuseS){
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "concession", "concession_2020")], by = "lonlat")
+  parcels <- left_join(parcels, 
+                       parcels_cs[,c("lonlat", "concession", "concession_2020", 
+                                    "concession_id", "group_company", "group", "company",
+                                    "concession_id_2020", "group_company_2020", "group_2020", "company_2020")], 
+                       by = "lonlat")
   
 
   ### LEGAL LAND USE 
@@ -1074,6 +1093,10 @@ for(catchment_radius in catchment_radiuseS){
                            unreleased_inconces = concession & !APL,
                            legal2              = concession & APL
                            )
+  stopifnot(
+    parcels %>% mutate(test = if_else(!is.na(APL), is_hpk + protected_forest + APL, TRUE)) %>% 
+      pull(test) %>% mean() == 1
+  )
 
   
   # parcels <- dplyr::mutate(parcels,
@@ -1137,7 +1160,11 @@ for(catchment_radius in c(3e4, 5e4)){ # 1e4,
   
   parcels <- inner_join(parcels, 
                         land_des[,c("lonlat","year",
-                                    "rspo_cert", "concession", "concession_2020", "llu", # "illegal1", "illegal2010", "illegal2_2020", 
+                                    "rspo_cert", "concession", "concession_2020", 
+                                    
+                                    "concession_id", "group_company", "group", "company",
+                                    "concession_id_2020", "group_company_2020", "group_2020", "company_2020", 
+                                    "llu", # "illegal1", "illegal2010", "illegal2_2020", 
                                     "not_hpk", "is_hpk", "protected_forest", "APL", 
                                     
                                     "illegal2_both",
@@ -1152,8 +1179,7 @@ for(catchment_radius in c(3e4, 5e4)){ # 1e4,
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
                                     parcel_size/1000,"km_",
                                     catchment_radius/1000,"CR.rds")))
-  
-  
+
 }
 
 rm(reachable, geovars, extmar, time_dyna, land_des, parcels)

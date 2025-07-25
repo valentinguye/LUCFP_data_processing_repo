@@ -497,15 +497,30 @@ rspo$year <- rspo$year +1
 ### OIL PALM CONCESSIONS
 cns <- st_read(file.path("input_data/oil_palm_concessions"))
 cns <- st_transform(cns, crs = indonesian_crs)
+cns <- cns %>% mutate(group_company = paste0(group_comp, "_", company)) %>% 
+  rename(group = group_comp)
+cns$concession_id <- 1:nrow(cns)
 
 cns20 <- st_read(file.path("input_data/Greenpeace_Indonesia_Oil_Palm_Concessions_Map_Nov_2020"))
 cns20 <- st_transform(cns20, crs = indonesian_crs)
+cns20 <- cns20 %>% mutate(group_company_2020 = paste0(PO_GROUP, "_", PO_COM)) %>% 
+  rename(group_2020 = PO_GROUP, 
+         company_2020 = PO_COM)
+cns20$concession_id_2020 <- 1:nrow(cns20)
 
 ### LEGAL LAND USE 
 llu <- st_read(file.path("input_data/kawasan_hutan/Greenorb_Blog/final/KH-INDON-Final.shp"))
 llu <- st_transform(llu, crs = indonesian_crs)
 unique(llu$Fungsi)
 names(llu)[names(llu) == "Fungsi"] <- "llu"
+
+llu <- llu %>% mutate(area = st_area(geometry))
+llu_ha = summarise(llu %>% st_drop_geometry(), 
+                   .by = llu, 
+                   area = sum(area)) %>% 
+  mutate(area_ha = as.integer(area/1e4)) %>% 
+  arrange(desc(area_ha))
+
 
 # restrict llu to provinces of interest
 llu <- llu[llu$Province == "Sumatra Utara" |
@@ -524,6 +539,30 @@ llu <- llu[llu$Province == "Sumatra Utara" |
              llu$Province == "Sumatra Barat" |
              llu$Province == "Aceh", ]
 
+
+LLC <- st_read(file.path("input_data/Indonesia_legal_classification/Indonesia_legal_classification.shp"))
+LLC <- st_transform(LLC, crs = indonesian_crs)
+unique(LLC$kh_fungsi_)
+names(LLC)[names(LLC) == "kh_fungsi_"] <- "llu" 
+
+LLC <- LLC %>% mutate(area = st_area(geometry))
+LLC_ha = summarise(LLC %>% st_drop_geometry(), 
+                   .by = llu, 
+                   area = sum(area)) %>% 
+  mutate(area_ha = as.integer(area/1e4)) %>% 
+  arrange(desc(area_ha))
+LLC_ha
+
+llbigclass_ha = summarise(LLC %>% st_drop_geometry(), 
+                          .by = legal_clas, 
+                          area = sum(area)) %>% 
+  mutate(area_ha = as.integer(area/1e4)) %>% 
+  arrange(desc(area_ha))
+llbigclass_ha
+
+# Remove this for clarity
+LLC = LLC %>% filter(legal_clas != "Water bodies")
+LLC$legal_clas %>% unique()
 
 
 catchment_radiuseS <- c(3e4) 
@@ -558,16 +597,23 @@ for(catchment_radius in catchment_radiuseS){
   # Therefore we only proceed with a cross section
   parcels_cs <- parcels[!duplicated(parcels$lonlat),]
   
-  sgbp <- st_within(parcels_cs, cns)
-  parcels_cs$concession <- rep(FALSE, nrow(parcels_cs))
-  parcels_cs$concession[lengths(sgbp) > 0] <- TRUE
-  rm(sgbp)
+  parcels_cs <- st_join(x = parcels_cs, 
+                        y = st_make_valid(cns[,c("concession_id", "group_company", "group", "company")]), # st_make_valid bc thrown error otherwise 
+                        join = st_within, 
+                        left = TRUE)
+  parcels_cs <- parcels_cs %>% mutate(concession = if_else(is.na(concession_id), FALSE, TRUE))
+  # some grid cells fall within several concessions, keep just one row 
+  parcels_cs <- parcels_cs[!duplicated(parcels_cs$lonlat),]
   
   # repeat for 2020 concession map
-  sgbp <- st_within(parcels_cs, cns20)
-  parcels_cs$concession_2020 <- rep(FALSE, nrow(parcels_cs))
-  parcels_cs$concession_2020[lengths(sgbp) > 0] <- TRUE
-  rm(sgbp)
+  parcels_cs <- st_join(x = parcels_cs, 
+                        y = st_make_valid(cns20[,c("concession_id_2020", "group_company_2020", "group_2020", "company_2020")]), # st_make_valid bc thrown error otherwise 
+                        join = st_within, 
+                        left = TRUE)
+  parcels_cs <- parcels_cs %>% mutate(concession_2020 = if_else(is.na(concession_id_2020), FALSE, TRUE))
+  # some grid cells fall within several concessions, keep just one row 
+  parcels_cs <- parcels_cs[!duplicated(parcels_cs$lonlat),]
+  
   
   # note that some parcels fall within more than one concession record. There may be several reasons for concession overlaps 
   # like renewal of concession, with our withour aggrandisement. For our purpose, it only matters that there is at least one 
@@ -576,7 +622,11 @@ for(catchment_radius in catchment_radiuseS){
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "concession", "concession_2020")], by = "lonlat")
+  parcels <- left_join(parcels, 
+                       parcels_cs[,c("lonlat", "concession", "concession_2020", 
+                                     "concession_id", "group_company", "group", "company",
+                                     "concession_id_2020", "group_company_2020", "group_2020", "company_2020")], 
+                       by = "lonlat")
   
   
   ### LEGAL LAND USE 
@@ -588,6 +638,11 @@ for(catchment_radius in catchment_radiuseS){
                         join = st_within, 
                         left = TRUE)
   
+  parcels_cs <- st_join(x = parcels_cs, 
+                        y = st_make_valid(LLC[,"legal_clas"]), # st_make_valid bc thrown error otherwise 
+                        join = st_within, 
+                        left = TRUE)
+  
   # some grid cells seem to fall within overlapping llu shapes though. 
   # It's really marginal (12 instances). Just remove the duplicates it produces.
   parcels_cs <- parcels_cs[!duplicated(parcels_cs$lonlat),]
@@ -596,7 +651,7 @@ for(catchment_radius in catchment_radiuseS){
   parcels <- st_drop_geometry(parcels)
   parcels_cs <- st_drop_geometry(parcels_cs)
   
-  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "llu")], by = "lonlat")
+  parcels <- left_join(parcels, parcels_cs[,c("lonlat", "llu", "legal_clas")], by = "lonlat")
   
   unique(parcels$llu)
   ### ILLEGAL LUCFP 
@@ -622,18 +677,37 @@ for(catchment_radius in catchment_radiuseS){
                                                   llu=="TWAL" | 
                                                   llu=="KSAL" | 
                                                   llu=="TB" | 
-                                                  llu=="Hutan Cadangan"))
-  parcels <- dplyr::mutate(parcels,
-                           illegal1 = llu_protectforest, # it is in a protected forest estate
-                           illegal2010 = (!concession), # it's not in concessions as snapshot in 2010   
-                           illegal2_2020 = (!concession_2020 & llu_protectforest), # it's not in concessions, even issued after 2010   
-                           illegal2 = (!concession & llu_protectforest), # it's not in concession and it's in a protected forest zone designation 
-                           legal2 = (concession & !llu_protectforest), # note this is not equivalent to !illegal2
-                           ill_or_concession = case_when(
-                             illegal2 & !is.na(illegal2) ~ TRUE, 
-                             concession & !is.na(concession) ~ FALSE, # this is parcels in concessions in 2010
-                             TRUE ~ NA
-                           ))
+                                                  llu=="Hutan Cadangan"), 
+                           not_hpk = (legal_clas != "Convertible production forest (HPK)"), 
+                           is_hpk  = (legal_clas == "Convertible production forest (HPK)"), 
+                           protected_forest = (legal_clas == "Protected area" |  
+                                                 legal_clas == "Production forest (HP)" | 
+                                                 legal_clas == "Limited production forest (HPT)"), 
+                           APL = (legal_clas == "Non-forest" | 
+                                    legal_clas == "Other"), 
+                           # so is_hpk, protected_forest and APL are mutually exclusive classes and cover all possibilities. 
+                           # NA is when there is no match.                          
+                           
+                           # Then make the illegal vars as combinations of both LLC and concession data 
+                           illegal2_both       = !concession & !concession_2020 & protected_forest,
+                           illegal2_2020       = !concession_2020 & protected_forest, # it's not in concessions, even issued after 2010   
+                           illegal2            = !concession & protected_forest, 
+                           inregul             = !concession & concession_2020 & !protected_forest,
+                           unreleased_inconces = concession & !APL,
+                           legal2              = concession & APL
+  )
+  stopifnot(
+    parcels %>% mutate(test = if_else(!is.na(APL), is_hpk + protected_forest + APL, TRUE)) %>% 
+      pull(test) %>% mean() == 1
+  )
+  
+  
+  # parcels <- dplyr::mutate(parcels,
+  # illegal1 = llu_protectforest, # it is in a protected forest estate
+  # illegal2010 = (!concession), # it's not in concessions as snapshot in 2010   
+  # illegal2 = (!concession & llu_protectforest), # it's not in concession and it's in a protected forest zone designation 
+  # legal2 = (concession & !llu_protectforest) # note this is not equivalent to !illegal2
+  # )
   
   # yields many missing in illegal because many grid cells are within a mising land use legal classification. More precisely: 
   # Places within a concession are considered legal (illegal = FALSE) even if llu is missing (because FALSE & NA = FALSE)
@@ -687,7 +761,20 @@ for(catchment_radius in c(3e4)){ # 1e4, , 5e4
   
   parcels <- inner_join(parcels, 
                         land_des[,c("lonlat","year",
-                                    "rspo_cert", "concession", "llu", "illegal1", "illegal2010", "illegal2_2020", "illegal2")],
+                                    "rspo_cert", "concession", "concession_2020", 
+                                    
+                                    "concession_id", "group_company", "group", "company",
+                                    "concession_id_2020", "group_company_2020", "group_2020", "company_2020", 
+                                    "llu", # "illegal1", "illegal2010", "illegal2_2020", 
+                                    "not_hpk", "is_hpk", "protected_forest", "APL", 
+                                    
+                                    "illegal2_both",
+                                    "illegal2_2020",
+                                    "illegal2",
+                                    "inregul",
+                                    "unreleased_inconces",
+                                    "legal2"
+                        )],
                         by = c("lonlat","year"))
   
   saveRDS(parcels, file.path(paste0("temp_data/processed_parcels/parcels_panel_final_",
