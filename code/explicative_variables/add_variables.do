@@ -132,7 +132,7 @@ sort firm_id year
 rename in_tot_* in_* 
 
 
-save "temp_data/IBS_UML_panel_final.dta", replace 
+* save "temp_data/IBS_UML_panel_final.dta", replace 
 
 
 
@@ -146,19 +146,33 @@ out_ton_rpo out_ton_rpo_imp1 out_ton_rpo_imp2 out_val_rpo out_val_rpo_imp1 out_v
 out_ton_rpko out_ton_rpko_imp1 out_ton_rpko_imp2 out_val_rpko out_val_rpko_imp1 out_val_rpko_imp2 prex_rpko prex_rpko_imp1 prex_rpko_imp2 out_rpko ///
 EKSPOR export_pct export_pct_imp ///
 pct_own_cent_gov_imp pct_own_loc_gov_imp pct_own_nat_priv_imp pct_own_for_imp ///
-revenue_total revenue_total_imp1 revenue_total_imp2 revenue_total_imp3 ///
-value_added_self value_added_self_imp1 value_added_self_imp2 ///
-inv_tot inv_tot_imp fc_add fc_add_imp ///
-materials_tot materials_tot_imp1 materials_tot_imp2 materials_tot_imp3 ///
-elec_qty elec_qty_imp1 elec_qty_imp2 elec_qty_imp3  ///
-workers_total workers_total_imp1 workers_total_imp2 workers_total_imp3 ///
-workers_prod workers_other workers_total_imp1 workers_prod_imp1 workers_other_imp1 workers_total_imp2 workers_prod_imp2 workers_other_imp2 ///
-wage_prod wage_oth wage_prod_imp wage_oth_imp wage_prod_imp1 wage_prod_imp2 wage_oth_imp1 wage_oth_imp2 wage_prod_imp3 wage_oth_imp3 ///
-kbli1 kbli2 ///
-fc_est_tot_imp6co ///
+revenue_total revenue_total_imp3 ///
+value_added_self ///
+inv_tot fc_add ///
+materials_tot materials_tot_imp3 ///
+elec_qty elec_qty_imp3  ///
+workers_total workers_total_imp3 ///
+workers_prod workers_other ///
+wage_prod wage_oth wage_prod_imp3 wage_oth_imp3 ///
 gifts bonus_prod bonus_oth pension_prod pension_oth royalties oth_expenses mfc_services ///
 cif_rtdm_cpo_y fob_blwn_cpo_y dom_blwn_cpo_y export_tax_y ///
 using "temp_data/IBS_UML_panel_final.xlsx", firstrow(variables) replace 
+
+* Below are the other variables cleaned by Sebi. Keep only originals and imp3 
+*revenue_total_imp1 revenue_total_imp2 
+*value_added_self_imp1 value_added_self_imp2 ///
+*inv_tot_imp fc_add_imp ///
+*materials_tot_imp1 materials_tot_imp2 
+*elec_qty_imp1 elec_qty_imp2 
+*workers_total_imp1 workers_total_imp2 
+*workers_total_imp1 workers_prod_imp1 workers_other_imp1 workers_total_imp2 workers_prod_imp2 workers_other_imp2 ///
+*wage_prod_imp wage_oth_imp wage_prod_imp1 wage_prod_imp2 wage_oth_imp1 wage_oth_imp2  ///
+*kbli1 kbli2 ///
+*fc_est_tot_imp6co ///
+
+
+
+
 
 
 
