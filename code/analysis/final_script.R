@@ -48,8 +48,6 @@ lapply(neededPackages, library, character.only = TRUE)
 #   see in particular https://rstudio.github.io/renv/articles/renv.html 
 
 start_time = Sys.time()
-end_time = Sys.time()
-
 
 ### NEW FOLDERS USED IN THIS SCRIPT 
 dir.create("temp_data/reg_results")
@@ -5188,8 +5186,11 @@ make_spec_chart_df <- function(island,
 
 ### COMPUTE THE DATASETS FOR EACH ISLAND, AND COMMODITY OF INTEREST
 
-# There is no loop here, because it makes too much code to repeat. Just change values below and rerun everything. 
+# There is no loop here, because saving to PDF is manual. 
+# Set SIZE to either "a" for deforestation to all plantations, 
+# or "sm" for deforestation for smallholder plantations and rerun everything until the next section. 
 SIZE <- "a" # "sm" # 
+
 ILL <- "all" # 
 ISL <- "both"
 
@@ -5526,7 +5527,7 @@ reg_stats_indvar <- bind_rows(reg_stats_indvar_list)
 
 # save it 
 if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_indvar)+1 == i
-  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_25072025")))
+  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_replication")))
 } else{print(paste0("SOMETHING WENT WRONG in spec_chart_df_",ISL,"_",SIZE,"_",ILL))}
 
 #}else{reg_stats_indvar <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",ISL)))}
@@ -5545,7 +5546,7 @@ if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_
 
 ### PLOTTING 
 ### GIVE HERE THE ISLAND, THE OUTCOME AND THE DATE FOR WHICH YOU WANT THE SPEC CHART TO BE PLOTTED
-scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_25072025")))
+scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_replication")))
 
 # Remove negbin column which didn't get a model because the estimation never converged. 
 scdf <- scdf %>% dplyr::select(-negbin)
@@ -6302,7 +6303,7 @@ reg_stats_indvar <- bind_rows(reg_stats_indvar_list)
 
 # save it 
 if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_indvar)+1 == i
-  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_25072025")))
+  saveRDS(reg_stats_indvar, file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_replication")))
 } else{print(paste0("SOMETHING WENT WRONG in spec_chart_df_",ISL,"_",SIZE,"_",ILL))}
 
 #}else{reg_stats_indvar <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",ISL)))}
@@ -6321,7 +6322,7 @@ if(sum(duplicated(reg_stats_indvar))==0 ){ # i.e. 50 currently & nrow(reg_stats_
 
 ### PLOTTING 
 ### GIVE HERE THE ISLAND, THE OUTCOME AND THE DATE FOR WHICH YOU WANT THE SPEC CHART TO BE PLOTTED
-scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_25072025")))
+scdf <- readRDS(file.path(paste0("temp_data/reg_results/spec_chart_df_",ISL,"_",SIZE,"_",ILL,"_replication")))
 
 # Remove negbin column which didn't get a model because the estimation never converged. 
 scdf <- scdf %>% dplyr::select(-negbin)
@@ -6782,7 +6783,7 @@ kable(cf_mat, booktabs = T, align = "c",
 
 rm(cf_mat)
 
-
+end_time = Sys.time()
 end_time - start_time 
 
 
